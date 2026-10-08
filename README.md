@@ -1,0 +1,140 @@
+# Personal Web OS — Hệ Điều Hành Web Cá Nhân & Không Gian Số Độc Quyền
+
+> **Personal Web OS** là một nền tảng web cá nhân hoàn chỉnh kết hợp **Personal CMS + Private Workspace + Public Website + Knowledge/Resource Organizer** dành cho một chủ sở hữu duy nhất (`Single-Owner`).
+> Được thiết kế theo ngôn ngữ mỹ học **Nolane UI (NUI) "Bàn Giấy"** (Editorial Studio & Archival Craft), chú trọng sự tĩnh lặng, phông chữ thanh lịch, tốc độ cao và kiến trúc bảo mật đa lớp nghiêm ngặt.
+
+---
+
+## 🌟 Tính Năng Cốt Lõi
+
+### 1. Phân Tách Hai Chế Độ Độc Lập (Dual-Mode Separation)
+- **Private Mode (Không gian riêng):** Chỉ chủ nhân truy cập được qua xác thực bảo mật. Quản lý toàn bộ ghi chú, bài viết, dự án, tài nguyên đám mây, các trang dựng Canvas, bộ sưu tập, két sắt bảo mật và nhật ký hệ thống.
+- **Public Mode (Website công khai):** Khách chỉ có thể đọc và tương tác với các nội dung mà chủ nhân đã chủ động bật **Publish** (`visibility = 'PUBLIC' AND status = 'PUBLISHED'`).
+- **Bảo vệ bằng Mật mã Khách (Guest Password):** Tùy chọn đặt mật mã khách cho toàn bộ website công khai, hoàn toàn độc lập với mật khẩu chủ sở hữu.
+
+### 2. Kiến Trúc Bảo Mật Phòng Thủ Đa Lớp (Defense-in-Depth)
+- **Phân tách tuyệt đối tại Backend:** Dữ liệu riêng tư/nháp không bao giờ xuất hiện trong public API, SSR payload, cache hay client JavaScript bundle.
+- **Xác thực tối giản cho người dùng nhưng tối tân ở Backend:** Đăng nhập chỉ bằng **Tên đăng nhập + Mật khẩu** trên bất kỳ thiết bị nào (không ép OTP/MFA/điện thoại).
+- **Mật khẩu an toàn:** Băm bằng thuật toán `Bcrypt` (salt rounds 12).
+- **Phiên làm việc bảo mật:** Token ngẫu nhiên 256-bit được băm SHA-256 trong database và truyền qua Cookie **HttpOnly, Secure, SameSite=Lax**.
+- **Sliding-Window Rate Limiter:** Chống brute-force tự động tại API đăng nhập và các endpoint quan trọng.
+- **Khóa khẩn cấp (Panic Lock):** Phím tắt `Ctrl + Shift + L` che phủ tức thì màn hình tài liệu giả định.
+- **Két Sắt Bí Mật Zero-Knowledge (Vault):** Mã hóa đầu cuối tại trình duyệt bằng **AES-256-GCM + PBKDF2 (100,000 vòng lặp)**. Máy chủ không bao giờ biết mật mã két hay dữ liệu gốc.
+
+### 3. Trình Dựng Trang Dạng Khối (Canvas Block Page Builder)
+- Trình dựng trang trực quan hỗ trợ đa khối: **Heading, Text/Markdown, Code, Quote, Image, Button, Spacer, Divider, Card...**
+- Xem trước thích ứng tức thì theo các khung nhìn: **Desktop, Tablet, Mobile**.
+- Sắp xếp thứ tự khối, nhân bản, xóa khối và chỉnh sửa thuộc tính trực quan.
+
+### 4. Triết Lý Lưu Trữ Liên Kết Trước (Link-First Storage)
+- Quản lý tài nguyên số không làm nặng máy chủ cá nhân thông qua việc lưu trữ metadata và liên kết tới **Google Drive, GitHub, Mega, Notion, Figma...**
+
+### 5. Sao Lưu & Khôi Phục Hoàn Chỉnh (JSON Backup & Restore)
+- Xuất toàn bộ dữ liệu hệ thống ra một tập tin JSON duy nhất để lưu trữ ngoại tuyến và khôi phục lại bất cứ khi nào cần.
+
+---
+
+## 🛠️ Công Nghệ Sử Dụng
+
+- **Frontend & Backend Framework:** [Next.js 16](https://nextjs.org/) (App Router) + [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/) + NUI "Bàn Giấy" Color & Typography Tokens
+- **Database & ORM:** [Drizzle ORM](https://orm.drizzle.team/)
+  - Chế độ tự động: Cơ sở dữ liệu nhúng **PGlite WASM** (lưu tại `./data/webos_pglite`, zero-config)
+  - Chế độ Production: Kết nối **PostgreSQL / Supabase** thông qua biến môi trường `DATABASE_URL`
+- **Mã Hóa & Bảo Mật:** `bcryptjs`, `isomorphic-dompurify`, `Web Crypto API (AES-GCM, PBKDF2)`
+- **Edge Security Gateway:** Cloudflare Worker (tại thư mục `worker/`)
+
+---
+
+## 🚀 Khởi Động Nhanh
+
+### 1. Cài đặt phụ thuộc
+```bash
+npm install
+```
+
+### 2. Khởi chạy môi trường phát triển
+```bash
+npm run dev
+```
+
+Truy cập:
+- **Trang chủ công khai:** [http://localhost:3000](http://localhost:3000)
+- **Cổng đăng nhập chủ sở hữu:** [http://localhost:3000/admin/login](http://localhost:3000/admin/login)
+
+### 3. Tài khoản đăng nhập mặc định (Seed Data)
+- **Tên đăng nhập:** `admin`
+- **Mật khẩu:** `Admin@123456`
+*(Bạn có thể đổi mật khẩu này ngay trong phần Cài đặt hoặc Nhật ký bảo mật sau khi đăng nhập).*
+
+---
+
+## ⌨️ Phím Tắt Tiện Ích
+
+| Phím tắt | Tác vụ |
+| :--- | :--- |
+| **`Ctrl + K`** hoặc **`Cmd + K`** | Mở bảng lệnh điều hướng nhanh (Command Palette) / Tìm kiếm công khai |
+| **`Ctrl + Shift + L`** | Kích hoạt ngay lập tức chế độ Khóa khẩn cấp (Panic Lock) |
+| **`Ctrl + Shift + N`** | Mở nhanh cửa sổ thêm nội dung mới (Quick Add Modal) |
+
+---
+
+## 📁 Cấu Trúc Thư Mục
+
+```
+├── src/
+│   ├── app/
+│   │   ├── (public)/              # Các trang công khai cho khách
+│   │   │   ├── about/             # Giới thiệu & Triết lý
+│   │   │   ├── articles/          # Danh sách & Trình đọc bài viết
+│   │   │   ├── collections/       # Tuyển tập chủ đề
+│   │   │   ├── p/[slug]/          # Trình kết xuất trang Canvas Blocks
+│   │   │   ├── projects/          # Danh sách & Chi tiết dự án
+│   │   │   ├── resources/         # Thư viện tài nguyên Link-First
+│   │   │   ├── share/[token]/     # Xem nội dung chia sẻ Unlisted bí mật
+│   │   │   ├── layout.tsx         # Layout công khai (Header, Footer, Khóa khách)
+│   │   │   └── page.tsx           # Trang chủ công khai (Hero, Dự án, Tài nguyên)
+│   │   ├── admin/                 # Không gian riêng tư (Private Workspace)
+│   │   │   ├── collections/       # Quản lý bộ sưu tập
+│   │   │   ├── content/           # Quản lý ghi chú & bài viết
+│   │   │   ├── login/             # Trang đăng nhập chủ nhân
+│   │   │   ├── pages/             # Trình quản lý & dựng Canvas Page
+│   │   │   ├── projects/          # Quản lý dự án kỹ thuật
+│   │   │   ├── resources/         # Quản lý tài nguyên liên kết
+│   │   │   ├── security/          # Trung tâm bảo mật, phiên làm việc & audit logs
+│   │   │   ├── settings/          # Cài đặt Theme, Hồ sơ, Mật mã khách, Sao lưu
+│   │   │   ├── vault/             # Két sắt mã hóa AES-256-GCM
+│   │   │   ├── layout.tsx         # Layout riêng tư (Sidebar, Header, Panic Screen)
+│   │   │   └── page.tsx           # Bảng điều khiển riêng (Dashboard)
+│   │   ├── api/                   # Hệ thống API phân tách nghiêm ngặt
+│   │   │   ├── admin/             # API riêng tư (Yêu cầu phiên chủ nhân)
+│   │   │   ├── auth/              # API xác thực, đăng nhập, phiên
+│   │   │   └── public/            # API công khai (Chỉ query dữ liệu PUBLISHED)
+│   │   ├── globals.css            # NUI CSS variables & typography tokens
+│   │   └── layout.tsx             # Root Layout
+│   ├── components/
+│   │   ├── layout/                # Sidebar, Admin Header, Public Header, Footer
+│   │   └── ui/                    # Button, Input, Modal, Badge, Dropdown, Panic Lock...
+│   └── lib/
+│       ├── auth/                  # Password hashing, Session engine, Auth guards
+│       ├── db/                    # Drizzle schema, PGlite/Postgres dual-engine, Seed
+│       ├── security/              # Rate limiting, Audit logger, Vault AES-GCM crypto
+│       └── types/                 # TypeScript interfaces
+├── tests/                         # Bộ kiểm thử tự động (Vitest)
+├── worker/                        # Cloudflare Worker Edge Security Gateway
+├── DEPLOYMENT.md                  # Hướng dẫn triển khai Vercel, Docker, VPS, Cloudflare
+├── SECURITY.md                    # Tài liệu chính sách phòng thủ đa lớp
+└── project-manifest.json          # Đặc tả kiến trúc kỹ thuật hệ thống
+```
+
+---
+
+## 🧪 Kiểm Thử Hệ Thống (Testing)
+
+Chạy bộ kiểm thử tự động xác minh tính toàn vẹn của mã hóa, băm mật khẩu, chống rò rỉ dữ liệu Private/Public:
+
+```bash
+npm run test
+```
+
+Tất cả các kiểm thử đều thực hiện với môi trường in-memory độc lập, đảm bảo 100% tỷ lệ vượt qua.

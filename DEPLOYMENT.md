@@ -1,0 +1,99 @@
+# Hướng Dẫn Triển Khai Thực Tế (DEPLOYMENT.md) — Personal Web OS
+
+Hệ thống **Personal Web OS** được thiết kế để triển khai thực tế dễ dàng trên các nền tảng đám mây hiện đại hoặc máy chủ riêng (VPS).
+
+---
+
+## 1. Yêu Cầu Hệ Thống
+
+- **Node.js**: Phiên bản 18.18+ hoặc 20+ (Khuyên dùng LTS).
+- **Cơ sở dữ liệu**:
+  - **Tùy chọn A (Mặc định Zero-Config)**: Tự động sử dụng cơ sở dữ liệu nhúng **PGlite WASM** (lưu trữ cục bộ tại thư mục `./data/webos_pglite`). Không cần cài đặt PostgreSQL máy chủ ngoài.
+  - **Tùy chọn B (Production quy mô lớn)**: PostgreSQL 14+ hoặc dịch vụ cơ sở dữ liệu đám mây như **Supabase**, **Neon**, **Aiven**, **Railway**.
+
+---
+
+## 2. Triển Khai Nhanh Cục Bộ (Local Development)
+
+```bash
+# 1. Cài đặt các gói phụ thuộc
+npm install
+
+# 2. Khởi tạo và nạp dữ liệu mẫu ban đầu (Owner: admin / Admin@123456)
+# Dữ liệu sẽ tự động được khởi tạo khi hệ thống chạy lần đầu tiên
+
+# 3. Khởi chạy máy chủ phát triển
+npm run dev
+```
+
+Mở trình duyệt:
+- Website Công Khai: `http://localhost:3000`
+- Bảng Điều Khiển Riêng: `http://localhost:3000/admin/login`
+
+---
+
+## 3. Triển Khai Lên Vercel (Khuyên dùng)
+
+1. Đẩy mã nguồn lên kho chứa GitHub cá nhân.
+2. Đăng nhập vào [Vercel Dashboard](https://vercel.com/) và bấm **Add New Project**.
+3. Chọn kho chứa GitHub `website-owner`.
+4. Cấu hình biến môi trường (Environment Variables) trong Vercel:
+   - `DATABASE_URL`: Đường dẫn kết nối PostgreSQL (ví dụ Supabase connection string dạng `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres?sslmode=require`).
+   - `NODE_ENV`: `production`
+5. Bấm **Deploy**. Vercel sẽ tự động build và cung cấp tên miền HTTPS bảo mật.
+
+---
+
+## 4. Triển Khai Bằng Docker / VPS Tự Quản Trị
+
+Tạo tập tin `Dockerfile`:
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/data ./data
+
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+Chạy container:
+```bash
+docker build -t personal-webos .
+docker run -d -p 3000:3000 -v $(pwd)/data:/app/data --name webos personal-webos
+```
+
+---
+
+## 5. Triển Khai Cloudflare Worker Edge Gateway (Tùy chọn tăng cường bảo mật)
+
+Cloudflare Worker đóng vai trò là lá chắn phòng thủ tại biên mạng (Edge Shield) trước máy chủ chính:
+
+```bash
+# Di chuyển vào thư mục worker
+cd worker
+
+# Đăng nhập vào Cloudflare
+npx wrangler login
+
+# Cập nhật địa chỉ ORIGIN_URL trong wrangler.jsonc thành tên miền Vercel / VPS của bạn
+# Ví dụ: "ORIGIN_URL": "https://my-personal-webos.vercel.app"
+
+# Triển khai lên mạng biên Cloudflare
+npx wrangler deploy
+```
+
+Sau khi triển khai, tên miền Cloudflare Worker (ví dụ: `https://webos-gateway.your-subdomain.workers.dev`) sẽ tự động bảo vệ hệ thống của bạn chống lại quét bot, brute force và ép buộc tiêu đề bảo mật.

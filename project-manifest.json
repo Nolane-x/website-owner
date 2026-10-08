@@ -1,0 +1,104 @@
+{
+  "name": "personal-webos",
+  "version": "1.0.0",
+  "title": "Personal Web OS — Personal CMS & Private Workspace",
+  "author": "admin",
+  "architecture": {
+    "framework": "Next.js 16 (App Router) + React 19 + TypeScript",
+    "styling": "Tailwind CSS v4 + Nolane UI (NUI) Editorial Bàn Giấy Design Tokens",
+    "orm": "Drizzle ORM",
+    "database": "Dual-Engine (PostgreSQL / Supabase + Zero-Config Embedded PGlite WASM)",
+    "security": {
+      "passwordHashing": "Bcrypt (12 rounds salt)",
+      "sessionTokens": "256-bit cryptographically secure, SHA-256 hashed in DB",
+      "cookiePolicy": "HttpOnly, Secure, SameSite=Lax",
+      "rateLimiter": "In-memory sliding-window limiter on auth and sensitive endpoints",
+      "xssProtection": "isomorphic-dompurify HTML sanitization",
+      "vaultEncryption": "Client-side Web Crypto AES-256-GCM + PBKDF2 (100,000 iterations)",
+      "panicLock": "Global hotkey Ctrl+Shift+L, instant privacy overlay"
+    },
+    "edgeGateway": {
+      "engine": "Cloudflare Worker (Wrangler)",
+      "features": ["Bot Scanner Blocking", "Edge Rate Limiting", "HSTS & Security Headers Injection", "Upstream Proxy"]
+    }
+  },
+  "tables": [
+    "profiles",
+    "auth_credentials",
+    "sessions",
+    "settings",
+    "content_items",
+    "pages",
+    "content_blocks",
+    "folders",
+    "collections",
+    "collection_items",
+    "vault_items",
+    "security_events"
+  ],
+  "apiEndpoints": {
+    "auth": [
+      "/api/auth/login",
+      "/api/auth/logout",
+      "/api/auth/logout-all",
+      "/api/auth/me",
+      "/api/auth/change-password",
+      "/api/auth/sessions"
+    ],
+    "admin": [
+      "/api/admin/content",
+      "/api/admin/content/[id]",
+      "/api/admin/pages",
+      "/api/admin/pages/[id]",
+      "/api/admin/pages/[id]/blocks",
+      "/api/admin/collections",
+      "/api/admin/collections/[id]",
+      "/api/admin/settings",
+      "/api/admin/security-events",
+      "/api/admin/vault",
+      "/api/admin/export",
+      "/api/admin/import"
+    ],
+    "public": [
+      "/api/public/site",
+      "/api/public/content",
+      "/api/public/content/[slug]",
+      "/api/public/pages/[slug]",
+      "/api/public/projects",
+      "/api/public/resources",
+      "/api/public/collections",
+      "/api/public/collections/[slug]",
+      "/api/public/search",
+      "/api/public/unlisted/[shareToken]",
+      "/api/public/verify-password"
+    ]
+  },
+  "routes": {
+    "public": [
+      "/",
+      "/about",
+      "/projects",
+      "/projects/[slug]",
+      "/resources",
+      "/articles",
+      "/articles/[slug]",
+      "/collections",
+      "/collections/[slug]",
+      "/p/[slug]",
+      "/share/[token]"
+    ],
+    "admin": [
+      "/admin",
+      "/admin/login",
+      "/admin/content",
+      "/admin/projects",
+      "/admin/resources",
+      "/admin/pages",
+      "/admin/pages/[id]/builder",
+      "/admin/collections",
+      "/admin/vault",
+      "/admin/security",
+      "/admin/settings"
+    ]
+  }
+}

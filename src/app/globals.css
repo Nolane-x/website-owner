@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-page: #F7F5EE;
+    --bg-surface: #FFFFFF;
+    --bg-surface-subtle: #F0EDE4;
+    --text-primary: #1C1B18;
+    --text-secondary: #6B665C;
+    --text-muted: #8F8A7E;
+    --border-color: #E2DDD2;
+    --border-focus: #B9410C;
+    --accent: #B9410C;
+    --accent-hover: #9E3508;
+    --accent-light: #FDF1EA;
+    --accent-text: #FFFFFF;
+    --danger: #DC2626;
+    --danger-light: #FEF2F2;
+    --success: #15803D;
+    --success-light: #F0FDF4;
+    --radius-sm: 0.375rem;
+    --radius-md: 0.625rem;
+    --radius-lg: 0.875rem;
+  }
+
+  .dark {
+    --bg-page: #121211;
+    --bg-surface: #1B1A18;
+    --bg-surface-subtle: #242320;
+    --text-primary: #ECEAE4;
+    --text-secondary: #A6A297;
+    --text-muted: #736F65;
+    --border-color: #2F2E2A;
+    --border-focus: #F07E3A;
+    --accent: #E66828;
+    --accent-hover: #F27E43;
+    --accent-light: #2C1A11;
+    --accent-text: #FFFFFF;
+    --danger: #EF4444;
+    --danger-light: #2D1414;
+    --success: #22C55E;
+    --success-light: #14281B;
+  }
+}
+
+body {
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Be Vietnam Pro", "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Privacy Blur Effect */
+.privacy-blur {
+  filter: blur(8px);
+  user-select: none;
+  transition: filter 0.2s ease-in-out;
+}
+
+.privacy-blur:hover {
+  filter: blur(0);
+}

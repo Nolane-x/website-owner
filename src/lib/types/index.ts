@@ -1,0 +1,185 @@
+export type Visibility = 'PRIVATE' | 'PUBLIC' | 'UNLISTED';
+export type ContentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+export type ContentType =
+  | 'note'
+  | 'project'
+  | 'article'
+  | 'document'
+  | 'link'
+  | 'resource'
+  | 'gallery'
+  | 'video'
+  | 'code'
+  | 'bookmark'
+  | 'timeline';
+
+export type BlockType =
+  | 'heading'
+  | 'text'
+  | 'markdown'
+  | 'image'
+  | 'gallery'
+  | 'video'
+  | 'button'
+  | 'link'
+  | 'card'
+  | 'project_card'
+  | 'document_card'
+  | 'resource_card'
+  | 'quote'
+  | 'code'
+  | 'divider'
+  | 'spacer'
+  | 'grid'
+  | 'columns'
+  | 'table'
+  | 'timeline'
+  | 'list'
+  | 'embed'
+  | 'collection';
+
+export interface ContentItem {
+  id: string;
+  profileId: string;
+  title: string;
+  slug: string;
+  type: ContentType;
+  description?: string | null;
+  content?: string | null;
+  coverImage?: string | null;
+  icon?: string | null;
+  visibility: Visibility;
+  status: ContentStatus;
+  tags: string[];
+  category?: string | null;
+  metadata?: Record<string, any> | null;
+  sortOrder: number;
+  isFeatured: boolean;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string | null;
+}
+
+export interface ContentBlock {
+  id: string;
+  pageId: string;
+  blockType: BlockType;
+  sortOrder: number;
+  content: Record<string, any>;
+  settings: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PageItem {
+  id: string;
+  profileId: string;
+  title: string;
+  slug: string;
+  description?: string | null;
+  coverImage?: string | null;
+  visibility: Visibility;
+  status: ContentStatus;
+  sortOrder: number;
+  isFeatured: boolean;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string | null;
+  blocks?: ContentBlock[];
+}
+
+export interface CollectionItem {
+  id: string;
+  profileId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  coverImage?: string | null;
+  icon?: string | null;
+  visibility: Visibility;
+  status: ContentStatus;
+  isFeatured: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  items?: ContentItem[];
+}
+
+export interface ResourceLinkItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  url: string;
+  thumbnail?: string | null;
+  provider?: string | null;
+  category?: string | null;
+  tags: string[];
+  visibility: Visibility;
+  downloadAllowed: boolean;
+  openInNewTab: boolean;
+  sortOrder: number;
+  isFeatured: boolean;
+}
+
+export interface Profile {
+  id: string;
+  username: string;
+  displayName: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionInfo {
+  id: string;
+  profileId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  isTrusted: boolean;
+  isCurrent?: boolean;
+  expiresAt: string;
+  createdAt: string;
+  lastActiveAt: string;
+  isRevoked: boolean;
+}
+
+export interface SecurityEvent {
+  id: string;
+  profileId: string;
+  eventType: string;
+  details?: Record<string, any> | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+}
+
+export interface ThemeConfig {
+  mode: 'light' | 'dark' | 'system';
+  fontSans: string;
+  fontSerif: string;
+  fontMono: string;
+  accentColor: string;
+  radius: string;
+  density: 'compact' | 'comfortable' | 'spacious';
+  customTokens?: Record<string, string>;
+}
+
+export interface DashboardWidgetConfig {
+  id: string;
+  type: string;
+  title: string;
+  enabled: boolean;
+  order: number;
+  width?: 'full' | 'half' | 'third';
+}
+
+export interface PublicAccessConfig {
+  requirePassword: boolean;
+  passwordHint?: string;
+  allowCopy: boolean;
+  showSearch: boolean;
+  customHeaderTitle?: string;
+}

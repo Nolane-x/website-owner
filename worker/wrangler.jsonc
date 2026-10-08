@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "webos-security-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-01",
+  "vars": {
+    "ORIGIN_URL": "https://your-domain.com",
+    "ENABLE_RATE_LIMIT": "true"
+  }
+}
