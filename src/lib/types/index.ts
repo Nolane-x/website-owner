@@ -279,3 +279,106 @@ export interface GraphEdge {
   target: string;
   label?: string;
 }
+
+// 5.0 Types
+export type InboxItemKind = 'text' | 'url' | 'task' | 'snippet' | 'file';
+export type InboxItemStatus = 'inbox' | 'converted' | 'archived';
+
+export interface InboxItem {
+  id: string;
+  profileId: string;
+  title: string;
+  kind: InboxItemKind;
+  textPreview?: string | null;
+  sourceUri?: string | null;
+  status: InboxItemStatus;
+  tagsJson: string[];
+  projectId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WallpaperMediaType = 'image' | 'video' | 'shader';
+
+export interface WallpaperFilters {
+  dim?: number;
+  blur?: number;
+  contrast?: number;
+  saturation?: number;
+  vignette?: boolean;
+  scanlines?: boolean;
+}
+
+export interface CustomWallpaper {
+  id: string;
+  profileId: string;
+  title: string;
+  sourceUrl?: string | null;
+  localDataUrl?: string | null;
+  type: WallpaperMediaType;
+  tagsJson: string[];
+  filtersJson: WallpaperFilters;
+  isFavorite: boolean;
+  createdAt: string;
+}
+
+export type ResearchSourceStatus = 'captured' | 'read' | 'annotated';
+
+export interface ResearchSource {
+  id: string;
+  profileId: string;
+  title: string;
+  url?: string | null;
+  author?: string | null;
+  excerpt?: string | null;
+  status: ResearchSourceStatus;
+  tagsJson: string[];
+  createdAt: string;
+}
+
+export type ClaimStatus = 'unreviewed' | 'supported' | 'disputed' | 'refuted';
+
+export interface Claim {
+  id: string;
+  profileId: string;
+  statement: string;
+  status: ClaimStatus;
+  sourceIdsJson: string[];
+  notes?: string | null;
+  createdAt: string;
+}
+
+export type DecisionStatus = 'proposed' | 'accepted' | 'rejected';
+
+export interface DecisionRecord {
+  id: string;
+  profileId: string;
+  projectId?: string | null;
+  title: string;
+  context: string;
+  decision: string;
+  consequences?: string | null;
+  status: DecisionStatus;
+  createdAt: string;
+}
+
+export interface WindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WindowState {
+  id: string;
+  appId: string;
+  title: string;
+  icon?: string;
+  isMinimized: boolean;
+  isMaximized: boolean;
+  isPinned: boolean;
+  zIndex: number;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  prevBounds?: WindowBounds;
+}

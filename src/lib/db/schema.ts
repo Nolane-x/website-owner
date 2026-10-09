@@ -263,6 +263,79 @@ export const contentLinks = pgTable('content_links', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 20. Hộp thư Thu thập Toàn năng (Universal Capture Inbox)
+export const inboxItems = pgTable('inbox_items', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  kind: text('kind').notNull().default('text'), // 'text' | 'url' | 'task' | 'snippet' | 'file'
+  textPreview: text('text_preview'),
+  sourceUri: text('source_uri'),
+  status: text('status').notNull().default('inbox'), // 'inbox' | 'converted' | 'archived'
+  tagsJson: jsonb('tags_json').$type<string[]>().default([]).notNull(),
+  projectId: text('project_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 21. Kho Hình nền Tùy chỉnh & Video Động (Custom Wallpaper Studio)
+export const customWallpapers = pgTable('custom_wallpapers', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  sourceUrl: text('source_url'),
+  localDataUrl: text('local_data_url'),
+  type: text('type').notNull().default('image'), // 'image' | 'video' | 'shader'
+  tagsJson: jsonb('tags_json').$type<string[]>().default([]).notNull(),
+  filtersJson: jsonb('filters_json').$type<{
+    dim?: number;
+    blur?: number;
+    contrast?: number;
+    saturation?: number;
+    vignette?: boolean;
+    scanlines?: boolean;
+  }>().default({}).notNull(),
+  isFavorite: boolean('is_favorite').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 22. Kho Nguồn Nghiên cứu (Research Source Library)
+export const researchSources = pgTable('research_sources', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  url: text('url'),
+  author: text('author'),
+  excerpt: text('excerpt'),
+  status: text('status').notNull().default('captured'), // 'captured' | 'read' | 'annotated'
+  tagsJson: jsonb('tags_json').$type<string[]>().default([]).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 23. Bảng Mệnh đề & Bằng chứng (Claims & Evidence Board)
+export const claims = pgTable('claims', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  statement: text('statement').notNull(),
+  status: text('status').notNull().default('unreviewed'), // 'unreviewed' | 'supported' | 'disputed' | 'refuted'
+  sourceIdsJson: jsonb('source_ids_json').$type<string[]>().default([]).notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 24. Nhật ký Quyết định Dự án (Decision Log / RFC)
+export const decisionRecords = pgTable('decision_records', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  projectId: text('project_id'),
+  title: text('title').notNull(),
+  context: text('context').notNull(),
+  decision: text('decision').notNull(),
+  consequences: text('consequences'),
+  status: text('status').notNull().default('proposed'), // 'proposed' | 'accepted' | 'rejected'
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Relations
 export const pagesRelations = relations(pages, ({ many }) => ({
   blocks: many(contentBlocks),

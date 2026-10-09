@@ -303,6 +303,67 @@ export async function initializeDatabase() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS inbox_items (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'text',
+      text_preview TEXT,
+      source_uri TEXT,
+      status TEXT NOT NULL DEFAULT 'inbox',
+      tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      project_id TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_wallpapers (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      source_url TEXT,
+      local_data_url TEXT,
+      type TEXT NOT NULL DEFAULT 'image',
+      tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      filters_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS research_sources (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      url TEXT,
+      author TEXT,
+      excerpt TEXT,
+      status TEXT NOT NULL DEFAULT 'captured',
+      tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS claims (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      statement TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'unreviewed',
+      source_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      notes TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS decision_records (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      project_id TEXT,
+      title TEXT NOT NULL,
+      context TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      consequences TEXT,
+      status TEXT NOT NULL DEFAULT 'proposed',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_content_vis_status ON content_items(visibility, status);
     CREATE INDEX IF NOT EXISTS idx_content_slug ON content_items(slug);
     CREATE INDEX IF NOT EXISTS idx_pages_vis_status ON pages(visibility, status);
@@ -314,6 +375,9 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_kanban_status ON kanban_tasks(status);
     CREATE INDEX IF NOT EXISTS idx_scratchpads_pinned ON scratchpads(is_pinned, sort_order);
     CREATE INDEX IF NOT EXISTS idx_content_links_target ON content_links(target_id);
+    CREATE INDEX IF NOT EXISTS idx_inbox_status ON inbox_items(status);
+    CREATE INDEX IF NOT EXISTS idx_wallpapers_fav ON custom_wallpapers(is_favorite);
+    CREATE INDEX IF NOT EXISTS idx_claims_status ON claims(status);
   `;
 
   if (pgliteClient) {
