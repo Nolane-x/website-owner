@@ -42,21 +42,33 @@ Personal Web OS là hệ điều hành web cá nhân, kết hợp:
 ```
 
 ### Điểm mấu chốt chống rò rỉ dữ liệu (Anti-Leakage Guarantee):
-1. **Public API tuyệt đối không trả dữ liệu Private**:
+1. **Public API tuyệt đối không trả dữ liệu Private & Public Serializer**:
    - Mọi câu query public ở DB đều có điều kiện cố định:
-     `WHERE status = 'PUBLISHED' AND visibility = 'PUBLIC'`.
-   - Dữ liệu `DRAFT`, `PRIVATE`, `UNLISTED` (không có token) không bao giờ lọt vào response payload, SSR HTML, hay search index công khai.
-2. **Xác thực Owner không cần OTP/MFA**:
+     `WHERE status = 'PUBLISHED' AND visibility = 'PUBLIC' AND deleted_at IS NULL`.
+   - Toàn bộ kết quả public đều đi qua lớp **Public Serializer** (`src/lib/api/public-serializer.ts`), chủ động thanh lọc và loại bỏ: `internalNotes`, `adminOnlyData`, `visibility`, `status`, draft flags trước khi phản hồi JSON.
+   - Dữ liệu `DRAFT`, `PRIVATE`, `UNLISTED` (không có token), hoặc đã đưa vào thùng rác (`deleted_at !== null`) không bao giờ lọt vào response payload, SSR HTML, hay search index công khai.
+2. **Khởi tạo An toàn & Không mật khẩu mặc định (Zero Default Production Credentials)**:
+   - Trong môi trường Production, hệ thống **tuyệt đối không tự động seed** tài khoản mặc định `admin`/`Admin@123456`.
+   - Khởi tạo lần đầu thông qua quy trình **First-Run Bootstrap** (`/admin/bootstrap`). Chủ nhân tự thiết lập tên đăng nhập và mật khẩu an toàn.
+   - Sau khi khởi tạo hoàn tất, cổng bootstrap bị vô hiệu hóa vĩnh viễn (HTTP 403 Forbidden).
+3. **Xác thực Owner không cần OTP/MFA nhưng Phòng thủ Đa tầng**:
    - Đăng nhập chỉ bằng **Tên đăng nhập** và **Mật khẩu**.
    - Phù hợp khi đăng nhập trên máy tính lạ, cơ quan mà không mang điện thoại.
    - Bù đắp bảo mật bằng:
      * Rate limit nghiêm ngặt chống dò mật khẩu (brute-force defense).
-     * Cookie HttpOnly, Secure, SameSite=Lax.
+     * Token ngẫu nhiên 256-bit được băm SHA-256 trong database.
+     * Cookie HttpOnly, Secure (production), SameSite=Lax.
      * Quản lý phiên (Session Management): xem IP, trình duyệt, thời gian hoạt động, nút **Đăng xuất tất cả thiết bị**.
+     * Tự động thu hồi toàn bộ các phiên khác khi đổi mật khẩu (`revokeOtherSessions`).
      * Nút **Khóa khẩn cấp (Panic Lock - Ctrl+Shift+L)**: khóa ngay lập tức giao diện và hủy phiên nếu cần.
-3. **Mật mã khách truy cập (Public Access Password)**:
+4. **Mật mã khách truy cập & Zero-Knowledge Guest Session**:
    - Tùy chọn độc lập với mật khẩu Owner.
-   - Khi bật, chỉ bảo vệ quyền đọc các nội dung công khai, không cấp quyền quản trị và không gọi được bất kỳ private API nào.
+   - Khi xác thực mật khẩu khách thành công, hệ thống cấp một token ngẫu nhiên 256-bit độc lập (`guest_sessions`), chỉ lưu băm SHA-256 trên cơ sở dữ liệu.
+   - Tuyệt đối không lưu bcrypt password hash của mật khẩu khách vào client cookie.
+   - Khách chỉ có quyền đọc các nội dung đã công khai, không cấp quyền quản trị và không gọi được bất kỳ private API nào.
+5. **Thùng Rác Phục Hồi (Soft-Delete) & Lịch Sử Phiên Bản (Content Revisions)**:
+   - Xóa bài viết/trang mặc định là **Soft Delete** (`deleted_at` timestamp). Có thể khôi phục từ Thùng rác (`?trash=true`) hoặc xóa vĩnh viễn (`?permanent=true`).
+   - Mọi lần cập nhật nội dung quan trọng đều tự động lưu vết snapshot vào bảng `content_revisions` cho phép phục hồi hoặc so sánh thay đổi.
 
 ---
 

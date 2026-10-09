@@ -1,0 +1,4 @@
+Contact: mailto:security@localhost
+Expires: 2027-12-31T23:59:59.000Z
+Preferred-Languages: vi, en
+Policy: https://github.com/Nolane-x/website-owner/blob/main/SECURITY.md

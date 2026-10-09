@@ -15,9 +15,17 @@ export async function ensureSeedData() {
     return existingProfiles[0];
   }
 
+  // RULE III: Production KHÔNG tự động bootstrap tài khoản với credential mặc định
+  const isProduction = process.env.NODE_ENV === 'production';
+  const allowDevSeed = process.env.ENABLE_DEV_SEED === 'true' || process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+
+  if (isProduction && !allowDevSeed) {
+    return null;
+  }
+
   const profileId = 'owner-primary-id';
   const initialUsername = process.env.INITIAL_OWNER_USERNAME || 'admin';
-  const initialPassword = process.env.INITIAL_OWNER_PASSWORD || 'Admin@123456';
+  const initialPassword = process.env.INITIAL_OWNER_PASSWORD || 'DevOwner@2026';
 
   const passwordHash = await hashPassword(initialPassword);
 
@@ -91,7 +99,7 @@ export async function ensureSeedData() {
       },
     },
     {
-      key: 'nav_config',
+      key: 'private_navigation',
       valueJson: {
         items: [
           { id: 'home', label: 'Bảng điều khiển', href: '/admin', icon: 'LayoutDashboard', visible: true, pinned: true },
@@ -103,6 +111,19 @@ export async function ensureSeedData() {
           { id: 'vault', label: 'Két bảo mật', href: '/admin/vault', icon: 'ShieldCheck', visible: true, pinned: false },
           { id: 'security', label: 'Nhật ký bảo mật', href: '/admin/security', icon: 'Lock', visible: true, pinned: false },
           { id: 'settings', label: 'Cài đặt hệ thống', href: '/admin/settings', icon: 'Settings', visible: true, pinned: true },
+        ],
+      },
+    },
+    {
+      key: 'public_navigation',
+      valueJson: {
+        items: [
+          { id: 'pub-home', label: 'Trang chủ', href: '/', visible: true },
+          { id: 'pub-about', label: 'Giới thiệu', href: '/about', visible: true },
+          { id: 'pub-projects', label: 'Dự án', href: '/projects', visible: true },
+          { id: 'pub-articles', label: 'Bài viết', href: '/articles', visible: true },
+          { id: 'pub-resources', label: 'Tài nguyên', href: '/resources', visible: true },
+          { id: 'pub-collections', label: 'Bộ sưu tập', href: '/collections', visible: true },
         ],
       },
     },

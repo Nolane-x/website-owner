@@ -40,7 +40,6 @@ const BLOCKED_PATTERNS = [
   /\/phpmyadmin/i,
   /\/\.\./, // Path traversal attempts
   /\/api\/actuator/i,
-  /\/\.well-known\/security\.txt/i,
 ];
 
 export default {

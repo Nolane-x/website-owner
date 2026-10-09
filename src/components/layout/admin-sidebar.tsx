@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { BrandLogo } from '@/components/ui/brand-logo';
 import {
   LayoutDashboard,
   FileText,
@@ -66,22 +67,10 @@ export function AdminSidebar({
       {/* Brand & Workspace Identity */}
       <div className="flex items-center justify-between h-14 px-4 border-b border-[var(--border-color)]">
         {!collapsed ? (
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-[var(--accent)] flex items-center justify-center text-white font-bold text-xs shadow-sm">
-              OS
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-sm text-[var(--text-primary)] tracking-tight leading-none">
-                Web OS
-              </span>
-              <span className="text-[10px] text-[var(--text-muted)] mt-0.5">
-                Private Workspace
-              </span>
-            </div>
-          </div>
+          <BrandLogo size={28} subtitle="Private Workspace" />
         ) : (
-          <div className="w-7 h-7 mx-auto rounded-md bg-[var(--accent)] flex items-center justify-center text-white font-bold text-xs shadow-sm">
-            OS
+          <div className="mx-auto">
+            <BrandLogo size={28} withText={false} />
           </div>
         )}
 

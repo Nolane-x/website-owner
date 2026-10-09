@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Shield, KeyRound, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { DecorativeMesh } from '@/components/ui/decorative-mesh';
+import { BrandLogo } from '@/components/ui/brand-logo';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -13,6 +15,21 @@ export default function AdminLoginPage() {
   const [isTrusted, setIsTrusted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    async function checkBootstrap() {
+      try {
+        const res = await fetch('/api/auth/bootstrap');
+        const data = await res.json();
+        if (data && data.needsBootstrap) {
+          router.replace('/admin/bootstrap');
+        }
+      } catch {
+        // Tiếp tục chế độ login thông thường
+      }
+    }
+    checkBootstrap();
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,19 +67,21 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-[var(--bg-page)] text-[var(--text-primary)]">
-      <div className="w-full max-w-sm p-8 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-xl space-y-6">
+    <div className="relative flex flex-col items-center justify-center min-h-screen p-4 bg-[var(--bg-page)] text-[var(--text-primary)] overflow-hidden">
+      <DecorativeMesh />
+      
+      <div className="w-full max-w-sm p-8 bg-[var(--bg-surface)]/90 backdrop-blur-xl border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-6 relative z-10">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex p-3 rounded-xl bg-[var(--accent)] text-white shadow-md">
-            <Shield size={24} />
+        <div className="flex flex-col items-center text-center space-y-3">
+          <BrandLogo size={48} withText={false} />
+          <div>
+            <h1 className="text-2xl font-serif font-bold tracking-tight text-[var(--text-primary)]">
+              Personal Web OS
+            </h1>
+            <p className="text-xs text-[var(--text-secondary)] mt-1 font-light">
+              Cổng vào không gian số độc quyền của Chủ sở hữu
+            </p>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
-            Personal Web OS
-          </h1>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Đăng nhập vào không gian làm việc cá nhân của Chủ sở hữu
-          </p>
         </div>
 
         {error && (

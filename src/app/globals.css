@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-sans), "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: var(--font-serif), "Newsreader", "Times New Roman", serif;
+  --font-mono: var(--font-mono), "JetBrains Mono", monospace;
+}
+
 @layer base {
   :root {
     --bg-page: #F7F5EE;
@@ -46,7 +52,7 @@
 body {
   background-color: var(--bg-page);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Be Vietnam Pro", "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -77,4 +83,76 @@ body {
 
 .privacy-blur:hover {
   filter: blur(0);
+}
+
+/* Atmospheric Editorial Background Patterns */
+.bg-grid-warm {
+  background-image: 
+    linear-gradient(to right, rgba(185, 65, 12, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(185, 65, 12, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.dark .bg-grid-warm {
+  background-image: 
+    linear-gradient(to right, rgba(230, 104, 40, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(230, 104, 40, 0.07) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.bg-dots-warm {
+  background-image: radial-gradient(rgba(185, 65, 12, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dark .bg-dots-warm {
+  background-image: radial-gradient(rgba(230, 104, 40, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Glassmorphism & High-end Editorial Card */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 221, 210, 0.8);
+}
+
+.dark .glass-panel {
+  background: rgba(27, 26, 24, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(47, 46, 42, 0.8);
+}
+
+.card-hover-glow {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-hover-glow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -10px rgba(185, 65, 12, 0.12), 0 0 0 1px var(--border-focus);
+}
+
+.dark .card-hover-glow:hover {
+  box-shadow: 0 12px 30px -10px rgba(230, 104, 40, 0.18), 0 0 0 1px var(--border-focus);
+}
+
+/* Subtle Shimmer & Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
 }

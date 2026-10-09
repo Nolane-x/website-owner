@@ -3,9 +3,8 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { settings } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPassword } from '@/lib/auth/password';
-import { COOKIE_GUEST_PASSWORD_NAME } from '@/lib/security/constants';
+import { createGuestSession, setGuestSessionCookie } from '@/lib/auth/guest-session';
 import { rateLimiter, getClientIp } from '@/lib/security/rate-limit';
-import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,17 +47,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Mật mã khách không chính xác.' }, { status: 401 });
     }
 
-    // Thiết lập cookie khách truy cập (cookie này CHỈ có quyền mở khóa public content, KHÔNG cấp quyền owner)
-    const cookieStore = await cookies();
-    cookieStore.set({
-      name: COOKIE_GUEST_PASSWORD_NAME,
-      value: config.passwordHash,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60, // 7 ngày
-    });
+    // RULE V: Tuyệt đối không lưu hash mật mã khách vào cookie!
+    // Tạo random 256-bit guest session token và lưu SHA-256 hash tại bảng guest_sessions
+    const userAgent = req.headers.get('user-agent') || 'Unknown';
+    const { token, expiresAt } = await createGuestSession(ip, userAgent);
+    await setGuestSessionCookie(token, expiresAt);
 
     return NextResponse.json({ success: true, message: 'Mở khóa thành công.' });
   } catch (error) {

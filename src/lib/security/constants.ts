@@ -1,5 +1,6 @@
 export const COOKIE_SESSION_NAME = 'webos_session_token';
 export const COOKIE_GUEST_PASSWORD_NAME = 'webos_guest_access_token';
+export const COOKIE_GUEST_SESSION_NAME = 'webos_guest_session_token';
 export const COOKIE_MAX_AGE_DAYS = 30;
 export const COOKIE_MAX_AGE_SECONDS = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
 

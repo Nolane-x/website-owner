@@ -15,11 +15,19 @@
       "rateLimiter": "In-memory sliding-window limiter on auth and sensitive endpoints",
       "xssProtection": "isomorphic-dompurify HTML sanitization",
       "vaultEncryption": "Client-side Web Crypto AES-256-GCM + PBKDF2 (100,000 iterations)",
-      "panicLock": "Global hotkey Ctrl+Shift+L, instant privacy overlay"
+      "panicLock": "Global hotkey Ctrl+Shift+L, instant privacy overlay",
+      "zeroDefaultCredentials": true,
+      "guestSessionZeroKnowledge": true,
+      "contentRevisions": true,
+      "softDeleteTrash": true
     },
     "edgeGateway": {
       "engine": "Cloudflare Worker (Wrangler)",
       "features": ["Bot Scanner Blocking", "Edge Rate Limiting", "HSTS & Security Headers Injection", "Upstream Proxy"]
+    },
+    "ciCd": {
+      "pipeline": ".github/workflows/ci.yml",
+      "edgeDeployment": ".github/workflows/cloudflare-worker.yml"
     }
   },
   "tables": [
@@ -34,10 +42,13 @@
     "collections",
     "collection_items",
     "vault_items",
-    "security_events"
+    "security_events",
+    "guest_sessions",
+    "content_revisions"
   ],
   "apiEndpoints": {
     "auth": [
+      "/api/auth/bootstrap",
       "/api/auth/login",
       "/api/auth/logout",
       "/api/auth/logout-all",
@@ -90,6 +101,7 @@
     "admin": [
       "/admin",
       "/admin/login",
+      "/admin/bootstrap",
       "/admin/content",
       "/admin/projects",
       "/admin/resources",

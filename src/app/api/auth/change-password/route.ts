@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromCookies } from '@/lib/auth/session';
+import { getSessionFromCookies, revokeOtherSessions } from '@/lib/auth/session';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { authCredentials } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -74,11 +74,20 @@ export async function POST(req: NextRequest) {
       })
       .where(eq(authCredentials.profileId, sessionData.profile.id));
 
-    await logSecurityEvent(sessionData.profile.id, SECURITY_EVENT_TYPES.PASSWORD_CHANGED, null, ip, userAgent);
+    // RULE IV: Khi đổi mật khẩu, toàn bộ các session cũ khác phải bị thu hồi ngay lập tức
+    await revokeOtherSessions(sessionData.profile.id, sessionData.session.id);
+
+    await logSecurityEvent(
+      sessionData.profile.id, 
+      SECURITY_EVENT_TYPES.PASSWORD_CHANGED, 
+      { message: 'Mật khẩu đã đổi và tất cả phiên làm việc khác đã bị thu hồi' }, 
+      ip, 
+      userAgent
+    );
 
     return NextResponse.json({
       success: true,
-      message: 'Mật khẩu đã được thay đổi thành công.',
+      message: 'Mật khẩu đã được thay đổi thành công. Các phiên làm việc khác đã được đăng xuất.',
     });
   } catch (error) {
     console.error('Lỗi khi đổi mật khẩu:', error);

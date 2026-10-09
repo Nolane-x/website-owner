@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { getDb, initializeDatabase } from '../db';
 import { sessions, profiles } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ne } from 'drizzle-orm';
 import { COOKIE_SESSION_NAME, COOKIE_MAX_AGE_SECONDS, SESSION_EXPIRY_DAYS } from '../security/constants';
 
 export function hashToken(token: string): string {
@@ -116,6 +116,23 @@ export async function revokeAllSessions(profileId: string): Promise<boolean> {
     .update(sessions)
     .set({ isRevoked: true })
     .where(eq(sessions.profileId, profileId));
+
+  return true;
+}
+
+export async function revokeOtherSessions(profileId: string, currentSessionId: string): Promise<boolean> {
+  await initializeDatabase();
+  const db = getDb();
+
+  await db
+    .update(sessions)
+    .set({ isRevoked: true })
+    .where(
+      and(
+        eq(sessions.profileId, profileId),
+        ne(sessions.id, currentSessionId)
+      )
+    );
 
   return true;
 }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { toPublicResource } from '@/lib/api/public-serializer';
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,29 +21,20 @@ export async function GET(req: NextRequest) {
       or(eq(contentItems.type, 'resource'), eq(contentItems.type, 'link')),
       eq(contentItems.visibility, 'PUBLIC'),
       eq(contentItems.status, 'PUBLISHED'),
+      isNull(contentItems.deletedAt),
     ];
 
     if (category) {
       conditions.push(eq(contentItems.category, category));
     }
 
-    const resources = await db
-      .select({
-        id: contentItems.id,
-        title: contentItems.title,
-        slug: contentItems.slug,
-        type: contentItems.type,
-        description: contentItems.description,
-        coverImage: contentItems.coverImage,
-        tags: contentItems.tags,
-        category: contentItems.category,
-        metadata: contentItems.metadata,
-        isFeatured: contentItems.isFeatured,
-        publishedAt: contentItems.publishedAt,
-      })
+    const rawResources = await db
+      .select()
       .from(contentItems)
       .where(and(...conditions))
       .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt));
+
+    const resources = rawResources.map(toPublicResource).filter(Boolean);
 
     return NextResponse.json({ resources });
   } catch (error) {

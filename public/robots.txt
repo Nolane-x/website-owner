@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /p/
+Allow: /projects
+Allow: /resources
+Disallow: /admin/
+Disallow: /api/
+Disallow: /api/admin/

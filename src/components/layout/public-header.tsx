@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { Search, Sun, Moon, Lock, Menu, X, ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+import { BrandLogo } from '@/components/ui/brand-logo';
+
 interface NavItem {
   label: string;
   href: string;
@@ -51,18 +53,8 @@ export function PublicHeader({
     <header className="sticky top-0 z-40 w-full border-b border-[var(--border-color)] bg-[var(--bg-surface)]/90 backdrop-blur-md transition-colors">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         {/* Brand / Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center text-white font-serif font-bold text-sm shadow-sm group-hover:scale-105 transition-transform">
-            OS
-          </div>
-          <div className="flex flex-col">
-            <span className="font-serif font-bold text-base text-[var(--text-primary)] tracking-tight leading-none">
-              {siteTitle}
-            </span>
-            <span className="text-[10px] text-[var(--text-muted)] mt-0.5 tracking-wider uppercase font-mono">
-              Bản phát hành công khai
-            </span>
-          </div>
+        <Link href="/" className="group">
+          <BrandLogo size={36} subtitle="Bản phát hành công khai" />
         </Link>
 
         {/* Desktop Navigation */}

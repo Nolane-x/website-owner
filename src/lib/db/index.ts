@@ -29,7 +29,12 @@ export function getDb() {
     return dbInstance;
   }
 
-  // Chế độ không cần cài đặt ngoài: PGLite (WASM Postgres 16) lưu tại thư mục data/
+  // RULE XXXVI: Production yêu cầu DATABASE_URL. Không âm thầm chuyển sang PGlite.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Production yêu cầu DATABASE_URL.');
+  }
+
+  // Chế độ phát triển & test: PGLite (WASM Postgres 16) lưu tại thư mục data/
   const dataDir = process.env.NODE_ENV === 'test'
     ? undefined // In-memory cho unit tests
     : path.join(process.cwd(), 'data', 'webos_pglite');
@@ -201,11 +206,41 @@ export async function initializeDatabase() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS guest_sessions (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMP NOT NULL,
+      last_active_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMP,
+      ip_address TEXT,
+      user_agent TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS content_revisions (
+      id TEXT PRIMARY KEY,
+      target_id TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      revision_number INTEGER NOT NULL,
+      title_snapshot TEXT NOT NULL,
+      body_snapshot TEXT,
+      metadata_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+      reason TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    ALTER TABLE content_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+    ALTER TABLE pages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+    ALTER TABLE collections ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
     CREATE INDEX IF NOT EXISTS idx_content_vis_status ON content_items(visibility, status);
     CREATE INDEX IF NOT EXISTS idx_content_slug ON content_items(slug);
     CREATE INDEX IF NOT EXISTS idx_pages_vis_status ON pages(visibility, status);
     CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
     CREATE INDEX IF NOT EXISTS idx_security_events_time ON security_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_guest_sessions_token ON guest_sessions(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_content_revisions_target ON content_revisions(target_id, revision_number);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_profile_key ON settings(profile_id, key);
   `;
 
   if (pgliteClient) {

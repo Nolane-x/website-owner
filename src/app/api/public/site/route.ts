@@ -4,6 +4,7 @@ import { profiles, settings } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { ensureSeedData } from '@/lib/db/seed';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { toPublicSiteSettings } from '@/lib/api/public-serializer';
 
 export async function GET() {
   try {
@@ -31,30 +32,12 @@ export async function GET() {
     }
 
     const publicAccess = await checkPublicAccessProtection();
-
-    const publicTheme = settingsMap['theme_public'] || {
-      mode: 'light',
-      fontSans: 'Be Vietnam Pro',
-      fontSerif: 'Newsreader',
-      accentColor: '#BA4311',
-      radius: '0.625rem',
-    };
-
-    const publicNav = settingsMap['nav_config'] || {
-      items: [
-        { label: 'Trang chủ', href: '/' },
-        { label: 'Giới thiệu', href: '/about' },
-        { label: 'Dự án', href: '/projects' },
-        { label: 'Tài nguyên', href: '/resources' },
-        { label: 'Bài viết', href: '/articles' },
-        { label: 'Bộ sưu tập', href: '/collections' },
-      ],
-    };
+    const siteSettings = toPublicSiteSettings(settingsMap);
 
     return NextResponse.json({
       profile,
-      theme: publicTheme,
-      navigation: publicNav,
+      theme: siteSettings.theme,
+      navigation: siteSettings.navigation,
       accessProtection: {
         requirePassword: publicAccess.requirePassword,
         passwordHint: publicAccess.passwordHint,

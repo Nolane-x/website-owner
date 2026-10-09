@@ -67,6 +67,7 @@ export const contentItems = pgTable('content_items', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   publishedAt: timestamp('published_at'),
+  deletedAt: timestamp('deleted_at'),
 });
 
 // 6. Trang động (Pages)
@@ -85,6 +86,7 @@ export const pages = pgTable('pages', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   publishedAt: timestamp('published_at'),
+  deletedAt: timestamp('deleted_at'),
 });
 
 // 7. Khối nội dung trên trang (Content Blocks cho Page Canvas Builder)
@@ -126,6 +128,7 @@ export const collections = pgTable('collections', {
   shareToken: text('share_token'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at'),
 });
 
 // 10. Liên kết phần tử trong bộ sưu tập (Collection Items)
@@ -162,6 +165,31 @@ export const securityEvents = pgTable('security_events', {
   detailsJson: jsonb('details_json').$type<Record<string, any>>(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 13. Quản lý phiên khách truy cập bảo mật (Guest Sessions - tách biệt mật khẩu hash)
+export const guestSessions = pgTable('guest_sessions', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  lastActiveAt: timestamp('last_active_at').defaultNow().notNull(),
+  revokedAt: timestamp('revoked_at'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+});
+
+// 14. Lịch sử phiên bản nội dung (Version History / Revisions)
+export const contentRevisions = pgTable('content_revisions', {
+  id: text('id').primaryKey(),
+  targetId: text('target_id').notNull(),
+  targetType: text('target_type').notNull(), // 'content' | 'page'
+  revisionNumber: integer('revision_number').notNull(),
+  titleSnapshot: text('title_snapshot').notNull(),
+  bodySnapshot: text('body_snapshot'),
+  metadataSnapshot: jsonb('metadata_snapshot').$type<Record<string, any>>().default({}).notNull(),
+  reason: text('reason'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

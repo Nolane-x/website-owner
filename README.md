@@ -62,10 +62,13 @@ Truy cập:
 - **Trang chủ công khai:** [http://localhost:3000](http://localhost:3000)
 - **Cổng đăng nhập chủ sở hữu:** [http://localhost:3000/admin/login](http://localhost:3000/admin/login)
 
-### 3. Tài khoản đăng nhập mặc định (Seed Data)
-- **Tên đăng nhập:** `admin`
-- **Mật khẩu:** `Admin@123456`
-*(Bạn có thể đổi mật khẩu này ngay trong phần Cài đặt hoặc Nhật ký bảo mật sau khi đăng nhập).*
+### 3. Khởi tạo tài khoản Chủ sở hữu (First-Run Secure Bootstrap)
+- **Môi trường Phát triển (Local Dev):** Có thể bật `ENABLE_DEV_SEED=true` trong `.env` để tạo dữ liệu mẫu kiểm thử ban đầu, hoặc truy cập giao diện khởi tạo `/admin/bootstrap`.
+- **Môi trường Production:** Hệ thống **TUYỆT ĐỐI KHÔNG CÓ mật khẩu mặc định**.
+- Khi triển khai lần đầu, truy cập đường dẫn an toàn:
+  `https://your-domain.com/admin/bootstrap`
+- Chủ sở hữu tự tay thiết lập **Tên đăng nhập** và **Mật khẩu cá nhân**.
+- Sau khi khởi tạo xong, cổng bootstrap (`/api/auth/bootstrap` và `/admin/bootstrap`) sẽ tự động **khóa vĩnh viễn** (HTTP 403 Forbidden).
 
 ---
 

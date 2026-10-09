@@ -3,9 +3,7 @@ import { getSessionFromCookies } from './session';
 import { getDb, initializeDatabase } from '../db';
 import { profiles, sessions, settings } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { COOKIE_GUEST_PASSWORD_NAME } from '../security/constants';
-import { cookies } from 'next/headers';
-import { verifyPassword } from './password';
+import { getGuestSessionFromCookies } from './guest-session';
 
 export type RequireOwnerResult =
   | { authorized: true; profile: typeof profiles.$inferSelect; session: typeof sessions.$inferSelect; response?: never }
@@ -59,11 +57,9 @@ export async function checkPublicAccessProtection(): Promise<{
     return { requirePassword: true, passwordHint: config.passwordHint, hasValidGuestSession: true };
   }
 
-  // Kiểm tra guest cookie
-  const cookieStore = await cookies();
-  const guestToken = cookieStore.get(COOKIE_GUEST_PASSWORD_NAME)?.value;
-
-  if (guestToken && guestToken === config.passwordHash) {
+  // Kiểm tra guest session token (đã tách rời hoàn toàn khỏi password hash)
+  const isGuestValid = await getGuestSessionFromCookies();
+  if (isGuestValid) {
     return { requirePassword: true, passwordHint: config.passwordHint, hasValidGuestSession: true };
   }
 

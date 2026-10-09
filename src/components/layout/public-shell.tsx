@@ -22,6 +22,8 @@ interface SiteData {
   };
 }
 
+import { DecorativeMesh } from '@/components/ui/decorative-mesh';
+
 export function PublicShell({
   children,
 }: {
@@ -64,7 +66,8 @@ export function PublicShell({
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors selection:bg-[var(--accent)] selection:text-white">
+    <div className="relative min-h-screen flex flex-col bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors selection:bg-[var(--accent)] selection:text-white overflow-x-hidden">
+      <DecorativeMesh />
       {/* Public Header wrapped in Suspense for usePathname hook */}
       <Suspense fallback={<div className="h-16 border-b border-[var(--border-color)] bg-[var(--bg-surface)]" />}>
         <PublicHeader

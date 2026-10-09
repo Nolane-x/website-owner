@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems, pages } from '@/lib/db/schema';
-import { eq, and, or, like } from 'drizzle-orm';
+import { eq, and, or, like, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 
 export async function GET(req: NextRequest) {
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const db = getDb();
     const q = `%${query.trim().toLowerCase()}%`;
 
-    // 1. Tìm trong content_items: CHỈ PUBLIC VÀ PUBLISHED
+    // 1. Tìm trong content_items: CHỈ PUBLIC VÀ PUBLISHED VÀ KHÔNG BỊ XÓA (NOT DELETED)
     const matchingItems = await db
       .select({
         id: contentItems.id,
@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
         and(
           eq(contentItems.visibility, 'PUBLIC'),
           eq(contentItems.status, 'PUBLISHED'),
+          isNull(contentItems.deletedAt),
           or(
             like(contentItems.title, q),
             like(contentItems.description, q)
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
       )
       .limit(20);
 
-    // 2. Tìm trong pages: CHỈ PUBLIC VÀ PUBLISHED
+    // 2. Tìm trong pages: CHỈ PUBLIC VÀ PUBLISHED VÀ KHÔNG BỊ XÓA
     const matchingPages = await db
       .select({
         id: pages.id,
@@ -63,6 +64,7 @@ export async function GET(req: NextRequest) {
         and(
           eq(pages.visibility, 'PUBLIC'),
           eq(pages.status, 'PUBLISHED'),
+          isNull(pages.deletedAt),
           or(
             like(pages.title, q),
             like(pages.description, q)

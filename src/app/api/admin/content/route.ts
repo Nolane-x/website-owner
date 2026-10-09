@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, desc, asc, and, like, or } from 'drizzle-orm';
+import { eq, desc, asc, and, like, or, isNull, isNotNull } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizeHtml, sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
@@ -35,6 +35,13 @@ export async function GET(req: NextRequest) {
     const isPinned = searchParams.get('isPinned');
 
     const conditions: any[] = [eq(contentItems.profileId, auth.profile.id)];
+
+    const trash = searchParams.get('trash');
+    if (trash === 'true') {
+      conditions.push(isNotNull(contentItems.deletedAt));
+    } else {
+      conditions.push(isNull(contentItems.deletedAt));
+    }
 
     if (type) conditions.push(eq(contentItems.type, type));
     if (status) conditions.push(eq(contentItems.status, status));

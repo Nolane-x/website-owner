@@ -13,14 +13,15 @@ Hệ thống **Personal Web OS** được thiết kế để triển khai thực
 
 ---
 
-## 2. Triển Khai Nhanh Cục Bộ (Local Development)
+## 2. Khởi tạo & Trải nghiệm Cục Bộ (Local Development)
 
 ```bash
 # 1. Cài đặt các gói phụ thuộc
 npm install
 
-# 2. Khởi tạo và nạp dữ liệu mẫu ban đầu (Owner: admin / Admin@123456)
-# Dữ liệu sẽ tự động được khởi tạo khi hệ thống chạy lần đầu tiên
+# 2. Thiết lập biến môi trường (tùy chọn)
+# Mặc định hệ thống dùng PGlite WASM nhúng tại ./data/webos_pglite
+# Có thể đặt ENABLE_DEV_SEED=true nếu muốn nạp dữ liệu mẫu ban đầu.
 
 # 3. Khởi chạy máy chủ phát triển
 npm run dev
@@ -28,19 +29,23 @@ npm run dev
 
 Mở trình duyệt:
 - Website Công Khai: `http://localhost:3000`
-- Bảng Điều Khiển Riêng: `http://localhost:3000/admin/login`
+- Cổng khởi tạo lần đầu: `http://localhost:3000/admin/bootstrap` (hoặc `/admin/login` sẽ tự chuyển hướng)
 
 ---
 
-## 3. Triển Khai Lên Vercel (Khuyên dùng)
+## 3. Triển Khai Lên Vercel (Production)
 
 1. Đẩy mã nguồn lên kho chứa GitHub cá nhân.
 2. Đăng nhập vào [Vercel Dashboard](https://vercel.com/) và bấm **Add New Project**.
 3. Chọn kho chứa GitHub `website-owner`.
 4. Cấu hình biến môi trường (Environment Variables) trong Vercel:
-   - `DATABASE_URL`: Đường dẫn kết nối PostgreSQL (ví dụ Supabase connection string dạng `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres?sslmode=require`).
+   - `DATABASE_URL`: Đường dẫn kết nối PostgreSQL (ví dụ Supabase connection string dạng `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres?sslmode=require`). **Bắt buộc trong Production**.
    - `NODE_ENV`: `production`
 5. Bấm **Deploy**. Vercel sẽ tự động build và cung cấp tên miền HTTPS bảo mật.
+6. **Khởi tạo tài khoản Chủ sở hữu lần đầu:**
+   Truy cập `https://your-domain.com/admin/bootstrap`.
+   Nhập Tên đăng nhập và Mật khẩu bạn mong muốn.
+   Sau khi hoàn tất, hệ thống sẽ tự động vô hiệu hóa vĩnh viễn giao diện và API bootstrap. Production **hoàn toàn không có tài khoản hoặc mật khẩu mặc định**.
 
 ---
 

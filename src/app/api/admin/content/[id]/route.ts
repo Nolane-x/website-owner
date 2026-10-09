@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
-import { contentItems } from '@/lib/db/schema';
+import { contentItems, contentRevisions } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizeHtml, sanitizePlain } from '@/lib/security/sanitize';
@@ -110,6 +110,24 @@ export async function PUT(
       }
     }
 
+    // Ghi nhận phiên bản trước đó vào content_revisions (Version History)
+    const existingRevs = await db
+      .select()
+      .from(contentRevisions)
+      .where(and(eq(contentRevisions.targetId, id), eq(contentRevisions.targetType, 'content')));
+
+    await db.insert(contentRevisions).values({
+      id: crypto.randomUUID(),
+      targetId: id,
+      targetType: 'content',
+      revisionNumber: existingRevs.length + 1,
+      titleSnapshot: currentItem.title,
+      bodySnapshot: currentItem.content,
+      metadataSnapshot: currentItem.metadata || {},
+      reason: 'Cập nhật trước khi lưu bản mới',
+      createdAt: new Date(),
+    });
+
     await db
       .update(contentItems)
       .set(updates)
@@ -136,6 +154,34 @@ export async function PUT(
   }
 }
 
+export async function PATCH(
+  req: NextRequest,
+  segmentData: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireOwner();
+  if (!auth.authorized) return auth.response;
+
+  try {
+    const { id } = await segmentData.params;
+    const body = await req.json();
+    await initializeDatabase();
+    const db = getDb();
+
+    if (body.action === 'restore') {
+      await db
+        .update(contentItems)
+        .set({ deletedAt: null })
+        .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)));
+
+      return NextResponse.json({ success: true, message: 'Đã khôi phục nội dung từ thùng rác.' });
+    }
+
+    return NextResponse.json({ error: 'Hành động PATCH không hợp lệ.' }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: 'Không thể xử lý yêu cầu.' }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
@@ -158,15 +204,30 @@ export async function DELETE(
       return NextResponse.json({ error: 'Nội dung không tồn tại.' }, { status: 404 });
     }
 
-    await db
-      .delete(contentItems)
-      .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)));
+    const { searchParams } = new URL(req.url);
+    const permanent = searchParams.get('permanent') === 'true';
+
+    if (permanent) {
+      // Xóa vĩnh viễn (Hard delete)
+      await db
+        .delete(contentItems)
+        .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)));
+    } else {
+      // Chuyển vào thùng rác (Soft delete)
+      await db
+        .update(contentItems)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)));
+    }
 
     const ip = getClientIp(req.headers);
     const userAgent = req.headers.get('user-agent') || 'Unknown';
-    await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.CONTENT_DELETED, { id, title: existing[0].title }, ip, userAgent);
+    await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.CONTENT_DELETED, { id, title: existing[0].title, permanent }, ip, userAgent);
 
-    return NextResponse.json({ success: true, message: 'Đã xóa nội dung thành công.' });
+    return NextResponse.json({ 
+      success: true, 
+      message: permanent ? 'Đã xóa vĩnh viễn nội dung.' : 'Đã chuyển nội dung vào thùng rác.' 
+    });
   } catch (error) {
     console.error('Lỗi khi xóa nội dung:', error);
     return NextResponse.json({ error: 'Không thể xóa nội dung.' }, { status: 500 });

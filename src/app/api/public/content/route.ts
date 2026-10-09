@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { toPublicContent } from '@/lib/api/public-serializer';
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,30 +26,19 @@ export async function GET(req: NextRequest) {
     const conditions: any[] = [
       eq(contentItems.visibility, 'PUBLIC'),
       eq(contentItems.status, 'PUBLISHED'),
+      isNull(contentItems.deletedAt),
     ];
 
     if (type) conditions.push(eq(contentItems.type, type));
     if (isFeatured === 'true') conditions.push(eq(contentItems.isFeatured, true));
 
-    const items = await db
-      .select({
-        id: contentItems.id,
-        title: contentItems.title,
-        slug: contentItems.slug,
-        type: contentItems.type,
-        description: contentItems.description,
-        coverImage: contentItems.coverImage,
-        icon: contentItems.icon,
-        tags: contentItems.tags,
-        category: contentItems.category,
-        metadata: contentItems.metadata,
-        isFeatured: contentItems.isFeatured,
-        publishedAt: contentItems.publishedAt,
-        createdAt: contentItems.createdAt,
-      })
+    const rawItems = await db
+      .select()
       .from(contentItems)
       .where(and(...conditions))
       .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt));
+
+    const items = rawItems.map(toPublicContent).filter(Boolean);
 
     return NextResponse.json({ items });
   } catch (error) {
