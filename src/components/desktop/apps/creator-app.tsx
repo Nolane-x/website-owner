@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { PenTool, Sparkles, Send, CheckCircle2, FileText, Layers, RefreshCw, Hash, Sliders } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { PenTool, Sparkles, FileText, RefreshCw, Sliders } from 'lucide-react';
 
 interface ContentItem {
   id: string;
@@ -25,18 +25,17 @@ export function CreatorStudioApp() {
   const [newChannel, setNewChannel] = useState('blog');
 
   // Voice Profile
-  const [voiceTone, setVoiceTone] = useState('Chuyên nghiệp, sâu sắc, thực tiễn');
-  const [voiceAudience, setVoiceAudience] = useState('Kỹ sư phần mềm & Nhà sáng lập');
+  const voiceTone = 'Chuyên nghiệp, sâu sắc, thực tiễn';
+  const voiceAudience = 'Kỹ sư phần mềm & Nhà sáng lập';
 
-  const loadItems = async () => {
+  const loadItems = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch('/api/admin/creator');
       if (res.ok) {
         const data = await res.json();
         setItems(data.items || []);
-        if (data.items?.length > 0 && !selectedItem) {
-          setSelectedItem(data.items[0]);
+        if (data.items?.length > 0) {
+          setSelectedItem((prev) => prev ?? data.items[0]);
         }
       }
     } catch (e) {
@@ -44,11 +43,13 @@ export function CreatorStudioApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadItems();
-  }, []);
+    void Promise.resolve().then(() => {
+      loadItems();
+    });
+  }, [loadItems]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,18 +95,28 @@ export function CreatorStudioApp() {
     }
   };
 
-  const handleAiGenerateOutline = () => {
+  const handleAiGenerateOutline = async () => {
     if (!selectedItem) return;
     setGeneratingAi(true);
-    setTimeout(() => {
+    try {
       const outline = `1. Đặt vấn đề: Tại sao chủ đề "${selectedItem.title}" lại quan trọng trong năm 2026?\n2. Phân tích thực trạng & Thách thức cốt lõi.\n3. Giải pháp công nghệ & Kiến trúc đề xuất.\n4. Thực nghiệm & Số liệu kiểm chứng thực tế.\n5. Kết luận & Các bước triển khai tiếp theo.`;
-      setSelectedItem({
+      const updated = {
         ...selectedItem,
         outline,
         body: selectedItem.body || outline,
+      };
+      setSelectedItem(updated);
+      await fetch('/api/admin/creator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
       });
+      loadItems();
+    } catch (e) {
+      console.error(e);
+    } finally {
       setGeneratingAi(false);
-    }, 800);
+    }
   };
 
   const stages: { key: ContentItem['stage']; label: string }[] = [

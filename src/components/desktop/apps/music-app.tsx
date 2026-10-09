@@ -39,22 +39,24 @@ export function MusicApp() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Audio visualizer bars
-  const [bars, setBars] = useState<number[]>([30, 60, 45, 80, 50, 70, 40, 90, 65, 35, 55, 75]);
+  const [bars, setBars] = useState<number[]>([15, 20, 15, 25, 20, 15, 20, 25, 15, 20, 15, 20]);
 
   useEffect(() => {
-    let animId: number;
-    if (activeSound || isRadioPlaying) {
-      const animate = () => {
-        setBars((prev) =>
-          prev.map(() => Math.floor(20 + Math.random() * 75))
-        );
-        animId = requestAnimationFrame(animate);
-      };
-      animId = requestAnimationFrame(animate);
-    } else {
-      setBars([15, 20, 15, 25, 20, 15, 20, 25, 15, 20, 15, 20]);
+    if (!activeSound && !isRadioPlaying) {
+      return;
     }
-    return () => cancelAnimationFrame(animId);
+    let animId: number;
+    const animate = () => {
+      setBars((prev) =>
+        prev.map(() => Math.floor(20 + Math.random() * 75))
+      );
+      animId = requestAnimationFrame(animate);
+    };
+    animId = requestAnimationFrame(animate);
+    return () => {
+      cancelAnimationFrame(animId);
+      setBars([15, 20, 15, 25, 20, 15, 20, 25, 15, 20, 15, 20]);
+    };
   }, [activeSound, isRadioPlaying]);
 
   const toggleSound = (type: AmbientSoundType) => {

@@ -33,12 +33,13 @@ export function VirtualDesktop({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        onOpenCommandPalette?.();
         setOmniOpen(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setOmniOpen]);
+  }, [setOmniOpen, onOpenCommandPalette]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     // Only open context menu when clicking on desktop canvas itself

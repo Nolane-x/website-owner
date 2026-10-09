@@ -22,49 +22,26 @@ export function SettingsApp() {
       setIsExporting(true);
       setExportSuccess(false);
 
-      // Fetch key collections for full offline backup
-      const [tasksRes, inboxRes, wallpapersRes, researchRes, decisionsRes] = await Promise.all([
-        fetch('/api/admin/tasks'),
-        fetch('/api/admin/inbox'),
-        fetch('/api/admin/wallpapers'),
-        fetch('/api/admin/research'),
-        fetch('/api/admin/decisions'),
-      ]);
+      const res = await fetch('/api/admin/export');
+      if (!res.ok) {
+        throw new Error('Lỗi xuất dữ liệu sao lưu.');
+      }
 
-      const [tasks, inbox, wallpapers, research, decisions] = await Promise.all([
-        tasksRes.ok ? tasksRes.json() : { tasks: [] },
-        inboxRes.ok ? inboxRes.json() : { items: [] },
-        wallpapersRes.ok ? wallpapersRes.json() : { wallpapers: [] },
-        researchRes.ok ? researchRes.json() : { sources: [] },
-        decisionsRes.ok ? decisionsRes.json() : { records: [] },
-      ]);
-
-      const backupData = {
-        version: '5.0.0',
-        exportedAt: new Date().toISOString(),
-        system: 'Personal Web OS 5.0 — Sovereign Digital Workspace',
-        data: {
-          tasks: tasks.tasks,
-          inbox: inbox.items,
-          wallpapers: wallpapers.wallpapers,
-          research: research.sources,
-          decisions: decisions.records,
-        },
-      };
-
-      const jsonStr = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `webos-5.0-backup-${Date.now()}.json`;
+      a.download = `webos-5.0-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 4000);
     } catch (e) {
       console.error('Lỗi sao lưu:', e);
+      alert('Không thể tạo bản sao lưu. Vui lòng thử lại.');
     } finally {
       setIsExporting(false);
     }

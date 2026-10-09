@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { crmContacts } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -44,7 +44,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -75,7 +77,10 @@ export async function POST(req: NextRequest) {
     };
 
     if (body.id) {
-      await db.update(crmContacts).set(contactData).where(eq(crmContacts.id, body.id));
+      await db
+        .update(crmContacts)
+        .set(contactData)
+        .where(and(eq(crmContacts.id, body.id), eq(crmContacts.profileId, auth.profile.id)));
     } else {
       await db.insert(crmContacts).values({
         ...contactData,

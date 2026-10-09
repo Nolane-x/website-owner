@@ -82,28 +82,31 @@ export function WindowManagerProvider({ children }: { children: React.ReactNode 
 
   // Rehydrate safely after mount
   useEffect(() => {
-    try {
-      const savedMode = localStorage.getItem(STORAGE_KEY_MODE) as DesktopMode | null;
-      if (savedMode === 'desktop' || savedMode === 'workspace') {
-        setDesktopModeState(savedMode);
-      }
+    const timer = setTimeout(() => {
+      try {
+        const savedMode = localStorage.getItem(STORAGE_KEY_MODE) as DesktopMode | null;
+        if (savedMode === 'desktop' || savedMode === 'workspace') {
+          setDesktopModeState(savedMode);
+        }
 
-      const savedWindowsRaw = localStorage.getItem(STORAGE_KEY_WINDOWS);
-      if (savedWindowsRaw) {
-        const parsed: WindowState[] = JSON.parse(savedWindowsRaw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setWindows(parsed);
-          const topWindow = parsed.filter((w) => !w.isMinimized).sort((a, b) => b.zIndex - a.zIndex)[0];
-          if (topWindow) {
-            setActiveWindowId(topWindow.id);
+        const savedWindowsRaw = localStorage.getItem(STORAGE_KEY_WINDOWS);
+        if (savedWindowsRaw) {
+          const parsed: WindowState[] = JSON.parse(savedWindowsRaw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setWindows(parsed);
+            const topWindow = parsed.filter((w) => !w.isMinimized).sort((a, b) => b.zIndex - a.zIndex)[0];
+            if (topWindow) {
+              setActiveWindowId(topWindow.id);
+            }
           }
         }
+      } catch (e) {
+        console.warn('Lỗi đọc cấu hình desktop từ localStorage:', e);
+      } finally {
+        setIsHydrated(true);
       }
-    } catch (e) {
-      console.warn('Lỗi đọc cấu hình desktop từ localStorage:', e);
-    } finally {
-      setIsHydrated(true);
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Save to localStorage whenever windows change

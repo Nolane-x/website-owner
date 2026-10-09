@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Target, ShieldAlert, Award, Activity, Plus, CheckCircle2, AlertTriangle, FileText, ChevronRight, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Target, ShieldAlert, Award, Activity, Plus, FileText, RefreshCw } from 'lucide-react';
 
 interface Goal {
   id: string;
@@ -41,9 +41,8 @@ export function ProjectsApp() {
   const [newGoalCategory, setNewGoalCategory] = useState('delivery');
   const [newGoalDate, setNewGoalDate] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch('/api/admin/projects/cockpit');
       if (res.ok) {
         const data = await res.json();
@@ -56,11 +55,13 @@ export function ProjectsApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void Promise.resolve().then(() => {
+      loadData();
+    });
+  }, [loadData]);
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +125,7 @@ export function ProjectsApp() {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'overview' | 'goals' | 'decisions' | 'risks')}
               className={`flex items-center space-x-2 py-3 px-4 border-b-2 font-medium transition ${
                 isActive
                   ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'

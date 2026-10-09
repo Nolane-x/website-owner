@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { learningCards } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -36,7 +36,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -46,11 +48,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // Trường hợp 1: Đánh giá thẻ ôn tập (Review card: Again=1, Hard=2, Good=3, Easy=4)
-    if (body.action === 'review' && body.cardId && body.rating) {
+    if (body.action === 'review' && body.cardId) {
+      const rating = Number(body.rating);
+      if (![1, 2, 3, 4].includes(rating)) {
+        return NextResponse.json({ error: 'Đánh giá ôn tập không hợp lệ (1-4).' }, { status: 400 });
+      }
+
       const existing = await db
         .select()
         .from(learningCards)
-        .where(eq(learningCards.id, body.cardId))
+        .where(and(eq(learningCards.id, body.cardId), eq(learningCards.profileId, auth.profile.id)))
         .limit(1);
 
       if (existing.length === 0) {
@@ -59,7 +66,6 @@ export async function POST(req: NextRequest) {
 
       const card = existing[0];
       let { intervalDays, repetitions, easeFactor } = card;
-      const rating = Number(body.rating);
 
       if (rating === 1) { // Again
         repetitions = 0;
@@ -91,7 +97,7 @@ export async function POST(req: NextRequest) {
           easeFactor,
           nextReviewDate: nextDate,
         })
-        .where(eq(learningCards.id, card.id));
+        .where(and(eq(learningCards.id, card.id), eq(learningCards.profileId, auth.profile.id)));
 
       return NextResponse.json({ success: true, nextReviewDate: nextDate, intervalDays });
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ShieldCheck,
   Lock,
@@ -188,8 +188,12 @@ export function VaultApp() {
   const handleDelete = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa mục này khỏi Vault?')) return;
     try {
-      await fetch(`/api/admin/vault/${id}`, { method: 'DELETE' });
-      setItems((prev) => prev.filter((i) => i.id !== id));
+      const res = await fetch(`/api/admin/vault?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setItems((prev) => prev.filter((i) => i.id !== id));
+      } else {
+        alert('Không thể xóa mục khỏi két bảo mật.');
+      }
     } catch (e) {
       console.error('Lỗi xóa secret:', e);
     }

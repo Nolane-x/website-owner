@@ -7,6 +7,8 @@ import {
   contentPipelines,
   learningCards,
   crmContacts,
+  type WorkflowNode,
+  type WorkflowEdge,
 } from '../src/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
@@ -69,11 +71,11 @@ describe('Web OS 5.0 Extended Domain Tests (Projects, Workflows, Creator, Learni
     }
 
     const wfId = 'wf-' + crypto.randomUUID();
-    const sampleNodes = [
-      { id: 'n1', type: 'trigger', title: 'Inbox Event' },
-      { id: 'n2', type: 'ai', title: 'Summarize Note' },
+    const sampleNodes: WorkflowNode[] = [
+      { id: 'n1', type: 'trigger', title: 'Inbox Event', config: {}, position: { x: 0, y: 0 } },
+      { id: 'n2', type: 'ai', title: 'Summarize Note', config: {}, position: { x: 100, y: 100 } },
     ];
-    const sampleEdges = [{ id: 'e1', source: 'n1', target: 'n2' }];
+    const sampleEdges: WorkflowEdge[] = [{ id: 'e1', source: 'n1', target: 'n2' }];
 
     await db.insert(automationWorkflows).values({
       id: wfId,

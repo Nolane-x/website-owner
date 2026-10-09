@@ -6,7 +6,6 @@ import {
   Inbox,
   Plus,
   Trash2,
-  CheckCircle,
   Archive,
   ArrowRightCircle,
   ExternalLink,
@@ -23,6 +22,7 @@ export function InboxApp() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<InboxItemStatus | 'all'>('inbox');
   const [searchTerm, setSearchTerm] = useState('');
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
   // New item form
   const [title, setTitle] = useState('');
@@ -34,7 +34,6 @@ export function InboxApp() {
 
   const fetchItems = useCallback(async () => {
     try {
-      setLoading(true);
       const url = filterStatus === 'all' ? '/api/admin/inbox' : `/api/admin/inbox?status=${filterStatus}`;
       const res = await fetch(url);
       if (res.ok) {
@@ -49,7 +48,9 @@ export function InboxApp() {
   }, [filterStatus]);
 
   useEffect(() => {
-    fetchItems();
+    void Promise.resolve().then(() => {
+      fetchItems();
+    });
   }, [fetchItems]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -90,7 +91,9 @@ export function InboxApp() {
   };
 
   const handleConvertToTask = async (item: InboxItem) => {
+    if (convertingId) return;
     try {
+      setConvertingId(item.id);
       // 1. Create task in kanban
       const taskRes = await fetch('/api/admin/tasks', {
         method: 'POST',
@@ -106,15 +109,19 @@ export function InboxApp() {
 
       if (taskRes.ok) {
         // 2. Mark inbox item converted
-        await fetch(`/api/admin/inbox/${item.id}`, {
+        const putRes = await fetch(`/api/admin/inbox/${item.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'converted' }),
         });
-        fetchItems();
+        if (putRes.ok) {
+          fetchItems();
+        }
       }
     } catch (e) {
       console.error('Lỗi chuyển thành công việc:', e);
+    } finally {
+      setConvertingId(null);
     }
   };
 
@@ -352,11 +359,16 @@ export function InboxApp() {
               <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
                 {item.status === 'inbox' && (
                   <button
+                    disabled={convertingId === item.id}
                     onClick={() => handleConvertToTask(item)}
                     title="Chuyển mục này thành Thẻ Kanban"
-                    className="p-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-800/80 text-emerald-300 transition flex items-center gap-1 text-[11px]"
+                    className="p-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-900 disabled:opacity-50 border border-emerald-800/80 text-emerald-300 transition flex items-center gap-1 text-[11px]"
                   >
-                    <ArrowRightCircle className="w-3.5 h-3.5" />
+                    {convertingId === item.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <ArrowRightCircle className="w-3.5 h-3.5" />
+                    )}
                     <span className="hidden sm:inline">Chuyển Task</span>
                   </button>
                 )}

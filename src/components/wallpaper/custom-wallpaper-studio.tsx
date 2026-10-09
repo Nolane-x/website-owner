@@ -8,11 +8,9 @@ import {
   Video,
   Sparkles,
   Sliders,
-  Download,
   Trash2,
   Heart,
   Upload,
-  Link as LinkIcon,
   Check,
   Loader2,
   RefreshCw,
@@ -25,17 +23,27 @@ export function CustomWallpaperStudio() {
   const [wallpapers, setWallpapers] = useState<CustomWallpaper[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active current wallpaper selection
+  // Active current wallpaper selection with lazy initializer
   const [currentWallpaper, setCurrentWallpaper] = useState<{
     type: WallpaperMediaType;
     url: string;
     filters: WallpaperFilters;
     shader: ShaderMode;
-  }>({
-    type: 'image',
-    url: '/images/hero-bg.jpg',
-    filters: { dim: 20, blur: 0, contrast: 100, saturation: 100, vignette: false, scanlines: false },
-    shader: 'none',
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('webos_active_wallpaper_v5');
+        if (saved) return JSON.parse(saved);
+      } catch {
+        // Ignore
+      }
+    }
+    return {
+      type: 'image',
+      url: '/images/hero-bg.jpg',
+      filters: { dim: 20, blur: 0, contrast: 100, saturation: 100, vignette: false, scanlines: false },
+      shader: 'none',
+    };
   });
 
   // Upload & URL form
@@ -44,18 +52,6 @@ export function CustomWallpaperStudio() {
   const [inputType, setInputType] = useState<WallpaperMediaType>('image');
   const [localDataUrl, setLocalDataUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Load active wallpaper settings from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('webos_active_wallpaper_v5');
-      if (saved) {
-        setCurrentWallpaper(JSON.parse(saved));
-      }
-    } catch {
-      // Ignore
-    }
-  }, []);
 
   const saveActiveWallpaper = (wp: typeof currentWallpaper) => {
     setCurrentWallpaper(wp);
@@ -69,7 +65,6 @@ export function CustomWallpaperStudio() {
 
   const fetchWallpapers = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch('/api/admin/wallpapers');
       if (res.ok) {
         const data = await res.json();
@@ -83,7 +78,9 @@ export function CustomWallpaperStudio() {
   }, []);
 
   useEffect(() => {
-    fetchWallpapers();
+    void Promise.resolve().then(() => {
+      fetchWallpapers();
+    });
   }, [fetchWallpapers]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

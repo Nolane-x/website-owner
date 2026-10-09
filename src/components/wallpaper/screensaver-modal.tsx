@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CanvasShaders, ShaderMode } from './canvas-shaders';
-import { Clock, Moon } from 'lucide-react';
+import { Moon } from 'lucide-react';
 
 interface ScreensaverModalProps {
   isOpen: boolean;

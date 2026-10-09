@@ -10,7 +10,6 @@ import {
   Edit2,
   Calendar,
   ListTodo,
-  Clock,
   Play,
   Pause,
   AlertCircle,

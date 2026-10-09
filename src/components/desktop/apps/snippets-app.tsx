@@ -36,7 +36,9 @@ export function SnippetsApp() {
   }, [selectedSnippet]);
 
   useEffect(() => {
-    fetchSnippets();
+    void Promise.resolve().then(() => {
+      fetchSnippets();
+    });
   }, [fetchSnippets]);
 
   const handleCreate = async (e: React.FormEvent) => {

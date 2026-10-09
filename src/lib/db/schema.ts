@@ -1,5 +1,7 @@
 import { pgTable, text, timestamp, boolean, integer, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import type { WorkflowNode, WorkflowEdge } from '@/lib/types';
+export type { WorkflowNode, WorkflowEdge };
 
 // 1. Hồ sơ người dùng (Single Owner)
 export const profiles = pgTable('profiles', {
@@ -356,8 +358,8 @@ export const automationWorkflows = pgTable('automation_workflows', {
   name: text('name').notNull(),
   description: text('description'),
   triggerType: text('trigger_type').notNull().default('manual'), // 'manual' | 'schedule' | 'inbox' | 'task_deadline'
-  nodesJson: jsonb('nodes_json').$type<any[]>().default([]).notNull(),
-  edgesJson: jsonb('edges_json').$type<any[]>().default([]).notNull(),
+  nodesJson: jsonb('nodes_json').$type<WorkflowNode[]>().default([]).notNull(),
+  edgesJson: jsonb('edges_json').$type<WorkflowEdge[]>().default([]).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { GraduationCap, RotateCw, Plus, CheckCircle, Brain, BookOpen, Sparkles, Award } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { GraduationCap, RotateCw, Plus, Award } from 'lucide-react';
 
 interface LearningCard {
   id: string;
@@ -28,9 +28,8 @@ export function LearningLabApp() {
   const [newBack, setNewBack] = useState('');
   const [newDeck, setNewDeck] = useState('Kiến trúc Hệ thống');
 
-  const loadCards = async () => {
+  const loadCards = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch('/api/admin/learning');
       if (res.ok) {
         const data = await res.json();
@@ -46,18 +45,20 @@ export function LearningLabApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadCards();
-  }, []);
+    void Promise.resolve().then(() => {
+      loadCards();
+    });
+  }, [loadCards]);
 
   const handleReview = async (rating: number) => {
     const card = dueCards[currentIndex];
     if (!card) return;
 
     try {
-      await fetch('/api/admin/learning', {
+      const res = await fetch('/api/admin/learning', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -66,6 +67,11 @@ export function LearningLabApp() {
           rating,
         }),
       });
+
+      if (!res.ok) {
+        console.error('Không thể lưu kết quả ôn tập');
+        return;
+      }
 
       setIsFlipped(false);
       if (currentIndex < dueCards.length - 1) {

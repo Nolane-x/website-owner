@@ -22,13 +22,18 @@ export default function AdminBootstrapPage() {
     async function checkStatus() {
       try {
         const res = await fetch('/api/auth/bootstrap');
-        const data = await res.json();
-        if (data && !data.needsBootstrap) {
-          // Đã có owner -> Chuyển về login
-          router.replace('/admin/login');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.needsBootstrap === false) {
+            // Đã có owner -> Chuyển về login
+            router.replace('/admin/login');
+            return;
+          }
+        } else {
+          setError('Không thể kết nối đến máy chủ để kiểm tra trạng thái khởi tạo.');
         }
       } catch {
-        // Tiếp tục hiển thị form
+        // Tiếp tục hiển thị form nếu có lỗi mạng
       } finally {
         setChecking(false);
       }

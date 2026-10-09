@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Users, Clock, Shield, Plus, Phone, Mail, Building, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, Shield, Plus, Phone, Mail, Calendar } from 'lucide-react';
 
 interface Contact {
   id: string;
@@ -35,15 +35,14 @@ export function PersonalCrmApp() {
   const [notes, setNotes] = useState('');
   const [neverCloudAi, setNeverCloudAi] = useState(false);
 
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch('/api/admin/crm');
       if (res.ok) {
         const data = await res.json();
         setContacts(data.contacts || []);
-        if (data.contacts?.length > 0 && !selectedContact) {
-          setSelectedContact(data.contacts[0]);
+        if (data.contacts?.length > 0) {
+          setSelectedContact((prev) => prev ?? data.contacts[0]);
         }
       }
     } catch (e) {
@@ -51,11 +50,13 @@ export function PersonalCrmApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadContacts();
-  }, []);
+    void Promise.resolve().then(() => {
+      loadContacts();
+    });
+  }, [loadContacts]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,7 +145,10 @@ export function PersonalCrmApp() {
           <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
             Danh bạ ({contacts.length})
           </div>
-          {contacts.map((c) => (
+          {loading ? (
+            <div className="text-xs text-stone-500 py-4 text-center">Đang tải danh bạ...</div>
+          ) : (
+            contacts.map((c) => (
             <div
               key={c.id}
               onClick={() => setSelectedContact(c)}
@@ -165,8 +169,9 @@ export function PersonalCrmApp() {
               <div className="text-xs text-stone-400 mt-1 truncate">
                 {c.role} {c.organization ? `• ${c.organization}` : ''}
               </div>
-            </div>
-          ))}
+              </div>
+            ))
+          )}
         </div>
 
         {/* Contact Detail Right */}
@@ -297,7 +302,7 @@ export function PersonalCrmApp() {
                 <label className="text-xs text-stone-400 block mb-1">Nhóm quan hệ</label>
                 <select
                   value={category}
-                  onChange={(e) => setCategory(e.target.value as any)}
+                  onChange={(e) => setCategory(e.target.value as Contact['category'])}
                   className="w-full px-3 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-stone-200 focus:outline-none"
                 >
                   <option value="colleague">Đồng nghiệp (Colleague)</option>

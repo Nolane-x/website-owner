@@ -3,14 +3,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { KanbanTask, TaskStatus, TaskPriority } from '@/lib/types';
 import {
-  CheckSquare,
   Plus,
   Trash2,
-  Calendar,
-  AlertCircle,
   Loader2,
   RefreshCw,
-  Clock,
   ChevronRight,
   ChevronLeft,
 } from 'lucide-react';
@@ -31,7 +27,6 @@ export function TasksApp() {
 
   const fetchTasks = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch('/api/admin/tasks');
       if (res.ok) {
         const data = await res.json();
@@ -45,7 +40,9 @@ export function TasksApp() {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
+    void Promise.resolve().then(() => {
+      fetchTasks();
+    });
   }, [fetchTasks]);
 
   const handleCreate = async (e: React.FormEvent) => {

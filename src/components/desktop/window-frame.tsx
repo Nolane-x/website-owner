@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { WindowState } from '@/lib/types';
 import { useWindowManager } from '@/lib/desktop/window-manager-context';
-import { Minus, Square, X, Maximize2, Move } from 'lucide-react';
+import { Minus, Square, X, Maximize2 } from 'lucide-react';
 
 interface WindowFrameProps {
   window: WindowState;
@@ -103,7 +103,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
   };
 
   // Resize handler
-  const handleResizePointerDown = (dir: string) => (e: React.PointerEvent) => {
+  const handleResizePointerDown = (dir: string, e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     focusWindow(win.id);
@@ -261,35 +261,35 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
 
       {/* Resize handles (8 directions) */}
       <div
-        onPointerDown={handleResizePointerDown('e')}
+        onPointerDown={(e) => handleResizePointerDown('e', e)}
         className="absolute top-0 right-0 w-2 h-full cursor-ew-resize hover:bg-emerald-500/20"
       />
       <div
-        onPointerDown={handleResizePointerDown('w')}
+        onPointerDown={(e) => handleResizePointerDown('w', e)}
         className="absolute top-0 left-0 w-2 h-full cursor-ew-resize hover:bg-emerald-500/20"
       />
       <div
-        onPointerDown={handleResizePointerDown('s')}
+        onPointerDown={(e) => handleResizePointerDown('s', e)}
         className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize hover:bg-emerald-500/20"
       />
       <div
-        onPointerDown={handleResizePointerDown('n')}
+        onPointerDown={(e) => handleResizePointerDown('n', e)}
         className="absolute top-0 left-0 w-full h-2 cursor-ns-resize hover:bg-emerald-500/20"
       />
       <div
-        onPointerDown={handleResizePointerDown('se')}
+        onPointerDown={(e) => handleResizePointerDown('se', e)}
         className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize hover:bg-emerald-500/30"
       />
       <div
-        onPointerDown={handleResizePointerDown('sw')}
+        onPointerDown={(e) => handleResizePointerDown('sw', e)}
         className="absolute bottom-0 left-0 w-3 h-3 cursor-nesw-resize hover:bg-emerald-500/30"
       />
       <div
-        onPointerDown={handleResizePointerDown('ne')}
+        onPointerDown={(e) => handleResizePointerDown('ne', e)}
         className="absolute top-0 right-0 w-3 h-3 cursor-nesw-resize hover:bg-emerald-500/30"
       />
       <div
-        onPointerDown={handleResizePointerDown('nw')}
+        onPointerDown={(e) => handleResizePointerDown('nw', e)}
         className="absolute top-0 left-0 w-3 h-3 cursor-nwse-resize hover:bg-emerald-500/30"
       />
     </div>

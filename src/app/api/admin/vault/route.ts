@@ -6,6 +6,8 @@ import { eq, and, desc } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 
+import { assertValidOrigin } from '@/lib/security/origin-guard';
+
 export async function GET() {
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
@@ -41,6 +43,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -61,9 +65,9 @@ export async function POST(req: NextRequest) {
       isFavorite = false,
     } = body;
 
-    if (!serviceName || !username || !ciphertext || !iv || !salt) {
+    if (!serviceName || !ciphertext || !iv || !salt) {
       return NextResponse.json(
-        { error: 'Dữ liệu mã hóa không đầy đủ (yêu cầu serviceName, username, ciphertext, iv, salt).' },
+        { error: 'Dữ liệu mã hóa không đầy đủ (yêu cầu serviceName, ciphertext, iv, salt).' },
         { status: 400 }
       );
     }
@@ -74,7 +78,7 @@ export async function POST(req: NextRequest) {
       id,
       profileId: auth.profile.id,
       serviceName: sanitizePlain(serviceName),
-      username: sanitizePlain(username),
+      username: username ? sanitizePlain(username) : '',
       ciphertext,
       iv,
       salt,
@@ -94,12 +98,23 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    let id = searchParams.get('id');
+
+    if (!id) {
+      try {
+        const body = await req.json();
+        id = body?.id;
+      } catch {
+        // ignore
+      }
+    }
 
     if (!id) {
       return NextResponse.json({ error: 'Thiếu ID mục cần xóa.' }, { status: 400 });

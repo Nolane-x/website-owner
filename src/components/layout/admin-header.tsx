@@ -76,9 +76,9 @@ export function AdminHeader({
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
+      router.push('/admin/login');
     } catch {
-      router.push('/login');
+      router.push('/admin/login');
     }
   };
 
@@ -86,9 +86,9 @@ export function AdminHeader({
     if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị?')) {
       try {
         await fetch('/api/auth/logout-all', { method: 'POST' });
-        router.push('/login');
+        router.push('/admin/login');
       } catch {
-        router.push('/login');
+        router.push('/admin/login');
       }
     }
   };

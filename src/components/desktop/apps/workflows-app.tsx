@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { GitBranch, Play, Plus, CheckCircle, ShieldAlert, Zap, ArrowRight, RefreshCw, Terminal, Layers } from 'lucide-react';
+import React, { useState } from 'react';
+import { GitBranch, Play, CheckCircle, Zap, ArrowRight, Terminal } from 'lucide-react';
 
 interface WorkflowNode {
   id: string;
@@ -19,48 +19,43 @@ interface Workflow {
   isActive: boolean;
 }
 
+// Mẫu workflow có sẵn theo Section 34.4 (Deadline -> Nhắc việc & AI phân loại)
+const defaultWorkflows: Workflow[] = [
+  {
+    id: 'wf-1',
+    name: 'Thu nhận Thông minh: Inbox → Phân loại AI → Tạo Task',
+    description: 'Tự động kích hoạt khi có item mới vào Universal Inbox, gọi AI trích xuất hạn chót và thêm vào Kanban',
+    triggerType: 'inbox_created',
+    isActive: true,
+    nodes: [
+      { id: 'n1', type: 'trigger', title: 'Khi có Item vào Inbox', description: 'Bắt sự kiện Universal Inbox mới' },
+      { id: 'n2', type: 'ai', title: 'AI Trích xuất & Phân loại', description: 'Phân tích tiêu đề và độ khẩn cấp' },
+      { id: 'n3', type: 'condition', title: 'Kiểm tra Có hạn chót?', description: 'Nếu phát hiện ngày hoặc giờ cụ thể' },
+      { id: 'n4', type: 'action', title: 'Tạo Nhiệm vụ Kanban', description: 'Thêm thẻ việc vào cột Cần làm' },
+      { id: 'n5', type: 'approval', title: 'Cổng Phê duyệt Chủ sở hữu', description: 'Chờ người dùng xác nhận trước khi lưu' },
+    ],
+  },
+  {
+    id: 'wf-2',
+    name: 'Cảnh báo Tiến độ: Quá hạn → Cập nhật Sức khỏe Dự án',
+    description: 'Quét các task quá hạn vào 09:00 hàng ngày và tính toán lại điểm sức khỏe Project Cockpit',
+    triggerType: 'schedule_daily',
+    isActive: true,
+    nodes: [
+      { id: 'n21', type: 'trigger', title: 'Lịch chạy hàng ngày 09:00', description: 'Bộ lập lịch tự động kích hoạt' },
+      { id: 'n22', type: 'action', title: 'Quét Nhiệm vụ quá hạn', description: 'Lọc các task có dueDate < hôm nay' },
+      { id: 'n23', type: 'action', title: 'Cập nhật Điểm Sức khỏe Cockpit', description: 'Áp dụng công thức trừ điểm minh bạch' },
+      { id: 'n24', type: 'action', title: 'Bắn Thông báo OS', description: 'Hiển thị toast cảnh báo lên Desktop Topbar' },
+    ],
+  },
+];
+
 export function WorkflowsApp() {
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const [workflows] = useState<Workflow[]>(defaultWorkflows);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(defaultWorkflows[0]);
   const [isRunning, setIsRunning] = useState(false);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [activeStep, setActiveStep] = useState<number>(-1);
-
-  // Mẫu workflow có sẵn theo Section 34.4 (Deadline -> Nhắc việc & AI phân loại)
-  const defaultWorkflows: Workflow[] = [
-    {
-      id: 'wf-1',
-      name: 'Thu nhận Thông minh: Inbox → Phân loại AI → Tạo Task',
-      description: 'Tự động kích hoạt khi có item mới vào Universal Inbox, gọi AI trích xuất hạn chót và thêm vào Kanban',
-      triggerType: 'inbox_created',
-      isActive: true,
-      nodes: [
-        { id: 'n1', type: 'trigger', title: 'Khi có Item vào Inbox', description: 'Bắt sự kiện Universal Inbox mới' },
-        { id: 'n2', type: 'ai', title: 'AI Trích xuất & Phân loại', description: 'Phân tích tiêu đề và độ khẩn cấp' },
-        { id: 'n3', type: 'condition', title: 'Kiểm tra Có hạn chót?', description: 'Nếu phát hiện ngày hoặc giờ cụ thể' },
-        { id: 'n4', type: 'action', title: 'Tạo Nhiệm vụ Kanban', description: 'Thêm thẻ việc vào cột Cần làm' },
-        { id: 'n5', type: 'approval', title: 'Cổng Phê duyệt Chủ sở hữu', description: 'Chờ người dùng xác nhận trước khi lưu' },
-      ],
-    },
-    {
-      id: 'wf-2',
-      name: 'Cảnh báo Tiến độ: Quá hạn → Cập nhật Sức khỏe Dự án',
-      description: 'Quét các task quá hạn vào 09:00 hàng ngày và tính toán lại điểm sức khỏe Project Cockpit',
-      triggerType: 'schedule_daily',
-      isActive: true,
-      nodes: [
-        { id: 'n21', type: 'trigger', title: 'Lịch chạy hàng ngày 09:00', description: 'Bộ lập lịch tự động kích hoạt' },
-        { id: 'n22', type: 'action', title: 'Quét Nhiệm vụ quá hạn', description: 'Lọc các task có dueDate < hôm nay' },
-        { id: 'n23', type: 'action', title: 'Cập nhật Điểm Sức khỏe Cockpit', description: 'Áp dụng công thức trừ điểm minh bạch' },
-        { id: 'n24', type: 'action', title: 'Bắn Thông báo OS', description: 'Hiển thị toast cảnh báo lên Desktop Topbar' },
-      ],
-    },
-  ];
-
-  useEffect(() => {
-    setWorkflows(defaultWorkflows);
-    setSelectedWorkflow(defaultWorkflows[0]);
-  }, []);
 
   const handleSimulateRun = async () => {
     if (!selectedWorkflow) return;

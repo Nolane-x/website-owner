@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Folder, Database, Download, Upload, ShieldCheck, HardDrive, FileCode, CheckCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Folder, Database, Download, ShieldCheck, HardDrive, FileCode, RefreshCw } from 'lucide-react';
 
 interface TableStat {
   name: string;
@@ -13,7 +13,7 @@ interface TableStat {
 export function FilesApp() {
   const [activeTab, setActiveTab] = useState<'files' | 'database' | 'backup'>('database');
   const [tables, setTables] = useState<TableStat[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [checksum, setChecksum] = useState<string | null>(null);
 
   // Virtual Folders
@@ -25,8 +25,7 @@ export function FilesApp() {
     { name: 'Bản sao lưu Dự phòng', path: '/backups', count: 2, size: '512 KB' },
   ];
 
-  const inspectDatabase = async () => {
-    setLoading(true);
+  const inspectDatabase = useCallback(async () => {
     try {
       // Gọi song song các API để lấy số lượng bản ghi thực tế
       const [inboxRes, tasksRes, snippetsRes, wallpapersRes, researchRes] = await Promise.all([
@@ -54,11 +53,13 @@ export function FilesApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    inspectDatabase();
-  }, []);
+    void Promise.resolve().then(() => {
+      inspectDatabase();
+    });
+  }, [inspectDatabase]);
 
   const handleExportBackup = async () => {
     try {
@@ -66,6 +67,11 @@ export function FilesApp() {
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleRefresh = () => {
+    setLoading(true);
+    inspectDatabase();
   };
 
   return (
@@ -83,7 +89,7 @@ export function FilesApp() {
         </div>
 
         <button
-          onClick={inspectDatabase}
+          onClick={handleRefresh}
           className="p-1.5 rounded-lg bg-stone-800 text-stone-300 hover:bg-stone-700 transition"
           title="Làm mới"
         >
@@ -94,16 +100,16 @@ export function FilesApp() {
       {/* Tabs */}
       <div className="flex items-center px-6 border-b border-stone-800 bg-stone-900/30 text-xs">
         {[
-          { id: 'database', label: 'Thanh tra Bảng Dữ liệu (Inspector)', icon: Database },
-          { id: 'files', label: 'Thư mục Ảo (Virtual Explorer)', icon: Folder },
-          { id: 'backup', label: 'Sao lưu & Toàn vẹn (Backup Center)', icon: ShieldCheck },
+          { id: 'database' as const, label: 'Thanh tra Bảng Dữ liệu (Inspector)', icon: Database },
+          { id: 'files' as const, label: 'Thư mục Ảo (Virtual Explorer)', icon: Folder },
+          { id: 'backup' as const, label: 'Sao lưu & Toàn vẹn (Backup Center)', icon: ShieldCheck },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex items-center space-x-2 py-3 px-4 border-b-2 font-medium transition ${
                 isActive
                   ? 'border-sky-500 text-sky-400 bg-sky-500/5'

@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ResearchSource, Claim, ClaimStatus, ResearchSourceStatus } from '@/lib/types';
+import { ResearchSource, Claim, ClaimStatus } from '@/lib/types';
 import {
-  BookOpen,
   Plus,
   Trash2,
   ExternalLink,
@@ -35,7 +34,6 @@ export function ResearchApp() {
 
   const fetchSources = useCallback(async () => {
     try {
-      setSourceLoading(true);
       const res = await fetch('/api/admin/research');
       if (res.ok) {
         const data = await res.json();
@@ -50,7 +48,6 @@ export function ResearchApp() {
 
   const fetchClaims = useCallback(async () => {
     try {
-      setClaimLoading(true);
       const res = await fetch('/api/admin/research/claims');
       if (res.ok) {
         const data = await res.json();
@@ -64,8 +61,10 @@ export function ResearchApp() {
   }, []);
 
   useEffect(() => {
-    fetchSources();
-    fetchClaims();
+    void Promise.resolve().then(() => {
+      fetchSources();
+      fetchClaims();
+    });
   }, [fetchSources, fetchClaims]);
 
   const handleCreateSource = async (e: React.FormEvent) => {

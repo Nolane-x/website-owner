@@ -20,9 +20,11 @@ export default function AdminLoginPage() {
     async function checkBootstrap() {
       try {
         const res = await fetch('/api/auth/bootstrap');
-        const data = await res.json();
-        if (data && data.needsBootstrap) {
-          router.replace('/admin/bootstrap');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.needsBootstrap === true) {
+            router.replace('/admin/bootstrap');
+          }
         }
       } catch {
         // Tiếp tục chế độ login thông thường

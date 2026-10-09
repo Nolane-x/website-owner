@@ -20,13 +20,12 @@ export function NotesApp() {
 
   const fetchNotes = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await fetch('/api/admin/scratchpads');
       if (res.ok) {
         const data = await res.json();
         setNotes(data.scratchpads || []);
-        if (data.scratchpads?.length > 0 && !activeNote) {
-          setActiveNote(data.scratchpads[0]);
+        if (data.scratchpads?.length > 0) {
+          setActiveNote((prev) => prev ?? data.scratchpads[0]);
         }
       }
     } catch (e) {
@@ -34,10 +33,12 @@ export function NotesApp() {
     } finally {
       setLoading(false);
     }
-  }, [activeNote]);
+  }, []);
 
   useEffect(() => {
-    fetchNotes();
+    void Promise.resolve().then(() => {
+      fetchNotes();
+    });
   }, [fetchNotes]);
 
   const handleCreate = async (color: ScratchpadColor = 'amber') => {

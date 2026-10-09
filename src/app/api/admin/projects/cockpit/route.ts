@@ -23,7 +23,13 @@ export async function GET() {
     ]);
 
     // Tính toán sức khỏe dự án minh bạch (Transparent Health Score)
-    const overdueCount = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length;
+    const now = new Date();
+    const overdueCount = tasks.filter(t => {
+      if (!t.dueDate || t.status === 'done') return false;
+      const due = new Date(t.dueDate);
+      const dueTime = t.dueDate.length === 10 ? new Date(due.getFullYear(), due.getMonth(), due.getDate(), 23, 59, 59, 999) : due;
+      return dueTime < now;
+    }).length;
     const blockedCount = tasks.filter(t => t.priority === 'urgent' && t.status !== 'done').length;
     const completedTasks = tasks.filter(t => t.status === 'done').length;
     const totalTasks = tasks.length || 1;
@@ -54,7 +60,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 

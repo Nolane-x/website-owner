@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, CheckCircle2, Circle, Flame, Plus, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { Calendar as CalendarIcon, CheckCircle2, Circle, Flame, Plus, Zap } from 'lucide-react';
 
 interface Habit {
   id: string;
@@ -12,7 +12,7 @@ interface Habit {
 }
 
 export function CalendarHabitsApp() {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate] = useState(new Date());
   const [habits, setHabits] = useState<Habit[]>([
     { id: 'h1', name: 'Đọc tài liệu kiến trúc & RFC', target: 'Mỗi ngày 30p', streak: 12, completedDays: [0, 1, 2, 3, 4] },
     { id: 'h2', name: 'Tập thể dục & Rèn luyện thể lực', target: '45 phút', streak: 8, completedDays: [1, 2, 4] },

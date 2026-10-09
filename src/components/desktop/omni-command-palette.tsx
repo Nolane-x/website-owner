@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Terminal, Zap, ArrowRight, CornerDownLeft, Sparkles, X } from 'lucide-react';
+import { Search, Terminal, Zap, CornerDownLeft, Sparkles, X } from 'lucide-react';
 import { useWindowManager } from '@/lib/desktop/window-manager-context';
 
 interface CommandItem {
@@ -19,18 +19,19 @@ interface OmniCommandPaletteProps {
 }
 
 export function OmniCommandPalette({ isOpen, onClose }: OmniCommandPaletteProps) {
-  const { openWindow, windows, minimizeWindow, maximizeWindow, setScreensaverOpen } = useWindowManager();
+  const { openWindow, windows, minimizeWindow, setScreensaverOpen } = useWindowManager();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [executionMessage, setExecutionMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setQuery('');
-      setSelectedIndex(0);
-      setExecutionMessage(null);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const timer = setTimeout(() => {
+        setQuery('');
+        setSelectedIndex(0);
+        inputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Target, Play, Pause, RotateCcw, Volume2, Sparkles, Maximize2, Minimize2, CheckCircle2 } from 'lucide-react';
-import { ambientSynth, AmbientSoundType } from '@/lib/audio/ambient-synth';
+import { Target, Play, Pause, RotateCcw, Volume2, Maximize2, Minimize2 } from 'lucide-react';
+import { ambientSynth } from '@/lib/audio/ambient-synth';
 
 export function FocusApp() {
   const [minutes, setMinutes] = useState(25);
@@ -19,7 +19,7 @@ export function FocusApp() {
   const [campfireVol, setCampfireVol] = useState(0);
 
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (isActive) {
       interval = setInterval(() => {
         if (seconds > 0) {
@@ -43,10 +43,12 @@ export function FocusApp() {
           }
         }
       }, 1000);
-    } else {
+    } else if (interval) {
       clearInterval(interval);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isActive, minutes, seconds, mode]);
 
   const toggleTimer = () => {

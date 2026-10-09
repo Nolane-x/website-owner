@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentPipelines } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -29,7 +29,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -44,6 +46,12 @@ export async function POST(req: NextRequest) {
     }
 
     const id = body.id || crypto.randomUUID();
+    const tags = Array.isArray(body.tags)
+      ? body.tags
+      : Array.isArray(body.tagsJson)
+      ? body.tagsJson
+      : [];
+
     const itemData = {
       id,
       profileId: auth.profile.id,
@@ -52,13 +60,16 @@ export async function POST(req: NextRequest) {
       channel: body.channel || 'blog',
       body: body.body || '',
       outline: body.outline ? sanitizePlain(body.outline) : null,
-      tagsJson: Array.isArray(body.tags) ? body.tags : [],
+      tagsJson: tags,
       scheduledAt: body.scheduledAt || null,
       updatedAt: new Date(),
     };
 
     if (body.id) {
-      await db.update(contentPipelines).set(itemData).where(eq(contentPipelines.id, body.id));
+      await db
+        .update(contentPipelines)
+        .set(itemData)
+        .where(and(eq(contentPipelines.id, body.id), eq(contentPipelines.profileId, auth.profile.id)));
     } else {
       await db.insert(contentPipelines).values(itemData);
     }

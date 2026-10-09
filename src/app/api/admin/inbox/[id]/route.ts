@@ -11,7 +11,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -53,9 +54,12 @@ export async function PUT(
     await db
       .update(inboxItems)
       .set(updates)
-      .where(eq(inboxItems.id, id));
+      .where(and(eq(inboxItems.id, id), eq(inboxItems.profileId, auth.profile.id)));
 
-    const [updated] = await db.select().from(inboxItems).where(eq(inboxItems.id, id));
+    const [updated] = await db
+      .select()
+      .from(inboxItems)
+      .where(and(eq(inboxItems.id, id), eq(inboxItems.profileId, auth.profile.id)));
     return NextResponse.json({ item: updated });
   } catch (error) {
     console.error('Lỗi cập nhật mục Inbox:', error);
@@ -67,7 +71,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originErr = await assertValidOrigin(req);
+  if (originErr) return originErr;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -85,7 +90,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Không tìm thấy mục Inbox.' }, { status: 404 });
     }
 
-    await db.delete(inboxItems).where(eq(inboxItems.id, id));
+    await db
+      .delete(inboxItems)
+      .where(and(eq(inboxItems.id, id), eq(inboxItems.profileId, auth.profile.id)));
     return NextResponse.json({ success: true, deletedId: id });
   } catch (error) {
     console.error('Lỗi xóa mục Inbox:', error);

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Shield, Lock, Eye, AlertOctagon, CheckCircle2, Server, Globe, Key, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Shield, Eye, AlertOctagon, CheckCircle2, Server, Globe, Key, RefreshCw } from 'lucide-react';
 
 interface AuditLog {
   id: string;
@@ -13,10 +13,9 @@ interface AuditLog {
 export function PrivacyApp() {
   const [panicLocked, setPanicLocked] = useState(false);
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const loadAuditLogs = async () => {
-    setLoading(true);
+  const loadAuditLogs = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/security-events');
       if (res.ok) {
@@ -28,11 +27,13 @@ export function PrivacyApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadAuditLogs();
-  }, []);
+    void Promise.resolve().then(() => {
+      loadAuditLogs();
+    });
+  }, [loadAuditLogs]);
 
   const triggerPanicLock = () => {
     setPanicLocked(true);

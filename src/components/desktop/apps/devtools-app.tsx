@@ -2,15 +2,11 @@
 
 import React, { useState } from 'react';
 import {
-  Code2,
   FileDiff,
   Key,
   Palette,
   Database,
-  Copy,
-  Check,
   Play,
-  RotateCcw,
 } from 'lucide-react';
 
 export function DevToolsApp() {

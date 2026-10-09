@@ -7,10 +7,8 @@ import {
   Bot,
   User,
   Key,
-  BookOpen,
   Loader2,
   Calendar,
-  CheckCircle,
 } from 'lucide-react';
 
 interface ChatMessage {

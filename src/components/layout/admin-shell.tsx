@@ -32,8 +32,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { desktopMode, openWindow } = useWindowManager();
 
-  const isLoginPage = pathname === '/admin/login';
-  const [loading, setLoading] = useState(!isLoginPage);
+  const isAuthExemptPage = pathname === '/admin/login' || pathname === '/admin/bootstrap';
+  const [loading, setLoading] = useState(!isAuthExemptPage);
   const [profile, setProfile] = useState<AdminHeaderProfile | null>(null);
   const [navItems, setNavItems] = useState<NavItem[]>([]);
 
@@ -50,7 +50,20 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const [screensaverOpen, setScreensaverOpen] = useState(false);
 
   useEffect(() => {
-    if (isLoginPage) {
+    // Default to dark theme for high comfort & zero glare across Web OS
+    const savedTheme = localStorage.getItem('webos_theme');
+    if (savedTheme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+      if (!savedTheme) {
+        localStorage.setItem('webos_theme', 'dark');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthExemptPage) {
       return;
     }
 
@@ -88,7 +101,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [pathname, isLoginPage, router]);
+  }, [pathname, isAuthExemptPage, router]);
 
   // Lắng nghe phím tắt:
   // Panic Lock: Ctrl + Shift + L
@@ -109,7 +122,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  if (isLoginPage) {
+  if (isAuthExemptPage) {
     return <>{children}</>;
   }
 
@@ -123,19 +136,6 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
-  useEffect(() => {
-    // Default to dark theme for high comfort & zero glare across Web OS
-    const savedTheme = localStorage.getItem('webos_theme');
-    if (savedTheme === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else {
-      document.documentElement.classList.add('dark');
-      if (!savedTheme) {
-        localStorage.setItem('webos_theme', 'dark');
-      }
-    }
-  }, []);
 
   return (
     <div className={`h-screen w-screen overflow-hidden ${
