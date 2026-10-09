@@ -3,13 +3,33 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import { playSound } from '@/lib/audio/sound-fx';
+import { CanvasShaders, ShaderMode } from '@/components/wallpaper/canvas-shaders';
+import { generateCssFilterString } from '@/lib/wallpaper/wallpaper-utils';
+import { WallpaperFilters, WallpaperMediaType } from '@/lib/types';
 
 export type WallpaperStyle = 'default' | 'aurora' | 'matrix' | 'starfield' | 'obsidian';
+
+interface ActiveWallpaper5State {
+  type: WallpaperMediaType;
+  url: string;
+  filters: WallpaperFilters;
+  shader: ShaderMode;
+}
 
 export function WallpaperEngine() {
   const [style, setStyle] = useState<WallpaperStyle>(() => {
     if (typeof window === 'undefined') return 'default';
     return (localStorage.getItem('webos_wallpaper_mode') as WallpaperStyle) || 'default';
+  });
+
+  const [activeCustom, setActiveCustom] = useState<ActiveWallpaper5State | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('webos_active_wallpaper_v5');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   useEffect(() => {
@@ -21,10 +41,68 @@ export function WallpaperEngine() {
       }
     };
 
+    const handleCustomChange = (e: Event) => {
+      const customEvent = e as CustomEvent<ActiveWallpaper5State>;
+      if (customEvent.detail) {
+        setActiveCustom(customEvent.detail);
+      }
+    };
+
     window.addEventListener('webos:set-wallpaper', handleStyleChange);
-    return () => window.removeEventListener('webos:set-wallpaper', handleStyleChange);
+    window.addEventListener('webos_wallpaper_change', handleCustomChange);
+    return () => {
+      window.removeEventListener('webos:set-wallpaper', handleStyleChange);
+      window.removeEventListener('webos_wallpaper_change', handleCustomChange);
+    };
   }, []);
 
+  // 1. If 5.0 Custom Wallpaper is configured
+  if (activeCustom && activeCustom.url) {
+    const filterCss = generateCssFilterString(activeCustom.filters || {});
+
+    return (
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        {/* Media Background layer */}
+        <div
+          style={{ filter: filterCss }}
+          className="absolute inset-0 w-full h-full transition-all duration-500 overflow-hidden"
+        >
+          {activeCustom.type === 'video' ? (
+            <video
+              src={activeCustom.url}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={activeCustom.url}
+              alt="Desktop Wallpaper"
+              className="w-full h-full object-cover"
+            />
+          )}
+        </div>
+
+        {/* Dim overlay */}
+        {activeCustom.filters?.dim && activeCustom.filters.dim > 0 && (
+          <div
+            style={{ opacity: activeCustom.filters.dim / 100 }}
+            className="absolute inset-0 bg-black pointer-events-none"
+          />
+        )}
+
+        {/* Active Canvas Shader */}
+        {activeCustom.shader && activeCustom.shader !== 'none' && (
+          <CanvasShaders mode={activeCustom.shader} />
+        )}
+      </div>
+    );
+  }
+
+  // 2. Legacy fallback
   if (style === 'default') return null;
 
   return (

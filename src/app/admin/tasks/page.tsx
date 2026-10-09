@@ -10,6 +10,10 @@ import {
   Edit2,
   Calendar,
   ListTodo,
+  Clock,
+  Play,
+  Pause,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +40,51 @@ export default function KanbanTasksPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+
+  // Stopwatch timer state
+  const [activeTimerTaskId, setActiveTimerTaskId] = useState<string | null>(null);
+  const [taskTimes, setTaskTimes] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!activeTimerTaskId) return;
+    const interval = setInterval(() => {
+      setTaskTimes((prev) => ({
+        ...prev,
+        [activeTimerTaskId]: (prev[activeTimerTaskId] || 0) + 1,
+      }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeTimerTaskId]);
+
+  const toggleStopwatch = (taskId: string) => {
+    playSound('pop');
+    setActiveTimerTaskId((prev) => (prev === taskId ? null : taskId));
+  };
+
+  const formatSeconds = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData('taskId', taskId);
+    playSound('pop');
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetStatus: TaskStatus) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('taskId');
+    if (!taskId) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (task && task.status !== targetStatus) {
+      handleMoveStatus(task, targetStatus);
+    }
+  };
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -330,6 +379,8 @@ export default function KanbanTasksPage() {
             return (
               <div
                 key={col.id}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, col.id)}
                 className="flex flex-col rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] overflow-hidden shadow-sm min-h-[500px]"
               >
                 {/* Column Header */}
@@ -362,36 +413,68 @@ export default function KanbanTasksPage() {
                       const subs = task.subtasksJson || [];
                       const completedSubCount = subs.filter((s: KanbanSubtask) => s.completed).length;
                       const hasSubtasks = subs.length > 0;
+                      const isOverdue = Boolean(task.dueDate && new Date(task.dueDate).getTime() < Date.now() && task.status !== 'done');
                       return (
                         <div
                           key={task.id}
-                          className="group p-3.5 rounded-lg bg-[var(--bg-surface-subtle)] border border-[var(--border-color)] hover:border-[var(--accent)]/50 transition-all hover:shadow-md space-y-2.5"
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, task.id)}
+                          className={`group p-3.5 rounded-lg bg-[var(--bg-surface-subtle)] border transition-all hover:shadow-md space-y-2.5 cursor-grab active:cursor-grabbing ${
+                            isOverdue
+                              ? 'border-rose-500/60 ring-1 ring-rose-500/20'
+                              : 'border-[var(--border-color)] hover:border-[var(--accent)]/50'
+                          }`}
                         >
-                          {/* Card Top: Priority & Actions */}
+                          {/* Card Top: Priority, Stopwatch & Actions */}
                           <div className="flex items-center justify-between gap-2">
-                            <span
-                              className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                PRIORITY_BADGES[task.priority].className
-                              }`}
-                            >
-                              {PRIORITY_BADGES[task.priority].label}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                  PRIORITY_BADGES[task.priority].className
+                                }`}
+                              >
+                                {PRIORITY_BADGES[task.priority].label}
+                              </span>
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {isOverdue && (
+                                <span className="flex items-center gap-0.5 text-[10px] text-rose-400 font-semibold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30">
+                                  <AlertCircle size={10} /> Quá hạn
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {/* Stopwatch button */}
                               <button
-                                onClick={() => handleOpenEdit(task)}
-                                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded"
-                                title="Chỉnh sửa"
+                                type="button"
+                                onClick={() => toggleStopwatch(task.id)}
+                                title={activeTimerTaskId === task.id ? 'Dừng theo dõi thời gian' : 'Bắt đầu bấm giờ'}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                                  activeTimerTaskId === task.id
+                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                                    : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
+                                }`}
                               >
-                                <Edit2 size={13} />
+                                {activeTimerTaskId === task.id ? <Pause size={10} /> : <Play size={10} />}
+                                <span>{formatSeconds(taskTimes[task.id] || 0)}</span>
                               </button>
-                              <button
-                                onClick={() => handleDelete(task.id)}
-                                className="p-1 text-[var(--text-muted)] hover:text-rose-500 rounded"
-                                title="Xóa"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => handleOpenEdit(task)}
+                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded"
+                                  title="Chỉnh sửa"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(task.id)}
+                                  className="p-1 text-[var(--text-muted)] hover:text-rose-500 rounded"
+                                  title="Xóa"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
                             </div>
                           </div>
 

@@ -23,6 +23,7 @@ import {
   BookOpen,
   Code2,
   Globe,
+  Inbox,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -50,6 +51,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   BookOpen,
   Code2,
   Globe,
+  Inbox,
 };
 
 export function AdminSidebar({
@@ -65,7 +67,9 @@ export function AdminSidebar({
 
   const defaultItems: NavItem[] = [
     { id: 'home', label: 'Bảng điều khiển', href: '/admin', icon: 'LayoutDashboard', visible: true },
+    { id: 'inbox', label: 'Hộp thư Toàn năng', href: '/admin/inbox', icon: 'Inbox', visible: true },
     { id: 'tasks', label: 'Công việc Kanban', href: '/admin/tasks', icon: 'CheckSquare', visible: true },
+    { id: 'research', label: 'Kho Nghiên cứu', href: '/admin/research', icon: 'Compass', visible: true },
     { id: 'notes', label: 'Ghi chú & Bài viết', href: '/admin/content', icon: 'FileText', visible: true },
     { id: 'journal', label: 'Nhật ký 365 Ngày', href: '/admin/journal', icon: 'BookOpen', visible: true },
     { id: 'graph', label: 'Đồ thị Tri thức', href: '/admin/graph', icon: 'Share2', visible: true },
