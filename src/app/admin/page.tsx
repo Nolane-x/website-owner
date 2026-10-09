@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VisibilityBadge, StatusBadge } from '@/components/ui/badge';
+import { ScratchpadDesk } from '@/components/ui/scratchpad-desk';
 import { ContentItem, Profile } from '@/lib/types';
 
 export default function AdminDashboardPage() {
@@ -355,6 +356,11 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Quick Scratchpad Sticky Notes Desk */}
+      <div className="pt-4 border-t border-[var(--border-color)]">
+        <ScratchpadDesk />
       </div>
     </div>
   );
