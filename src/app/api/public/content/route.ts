@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { eq, and, desc, isNull, type SQL } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { toPublicContent } from '@/lib/api/public-serializer';
 
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const isFeatured = searchParams.get('isFeatured');
 
     // NGUYÊN TẮC BẢO MẬT: BẮT BUỘC KHÓA Ở CẤP TRUY VẤN DATABASE!
-    const conditions: any[] = [
+    const conditions: SQL[] = [
       eq(contentItems.visibility, 'PUBLIC'),
       eq(contentItems.status, 'PUBLISHED'),
       isNull(contentItems.deletedAt),
@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
       .where(and(...conditions))
       .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt));
 
-    const items = rawItems.map(toPublicContent).filter(Boolean);
+    const items = rawItems
+      .map((it) => toPublicContent(it as unknown as Record<string, unknown>))
+      .filter((it): it is NonNullable<typeof it> => it !== null);
 
     return NextResponse.json({ items });
   } catch (error) {

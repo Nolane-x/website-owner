@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { getDb, initializeDatabase } from '../db';
 import { sessions, profiles } from '../db/schema';
 import { eq, and, ne } from 'drizzle-orm';
-import { COOKIE_SESSION_NAME, COOKIE_MAX_AGE_SECONDS, SESSION_EXPIRY_DAYS } from '../security/constants';
+import { COOKIE_SESSION_NAME, SESSION_EXPIRY_DAYS } from '../security/constants';
 
 export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');

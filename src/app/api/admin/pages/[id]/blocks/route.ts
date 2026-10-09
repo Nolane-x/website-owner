@@ -4,6 +4,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { pages, contentBlocks } from '@/lib/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import crypto from 'crypto';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 export async function GET(
   req: NextRequest,
@@ -45,6 +46,9 @@ export async function POST(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -106,6 +110,9 @@ export async function PUT(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -125,7 +132,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { blocks } = body; // Array of { id, sortOrder, contentJson, settingsJson, blockType }
+    const { blocks } = body;
 
     if (!Array.isArray(blocks)) {
       return NextResponse.json({ error: 'Dữ liệu khối không hợp lệ.' }, { status: 400 });
@@ -135,7 +142,7 @@ export async function PUT(
       const b = blocks[i];
       if (!b.id) continue;
 
-      const updates: any = {
+      const updates: Partial<typeof contentBlocks.$inferInsert> = {
         sortOrder: typeof b.sortOrder === 'number' ? b.sortOrder : i,
         updatedAt: new Date(),
       };
@@ -166,6 +173,9 @@ export async function DELETE(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 

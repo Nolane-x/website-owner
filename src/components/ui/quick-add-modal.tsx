@@ -69,7 +69,7 @@ export function QuickAddModal({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Lỗi khi tạo trang');
       } else {
-        const metadata: Record<string, any> = {};
+        const metadata: Record<string, unknown> = {};
         if (type === 'resource' || type === 'link') {
           metadata.url = url;
           metadata.provider = provider;
@@ -103,8 +103,8 @@ export function QuickAddModal({
       setIsPublishImmediately(false);
       onOpenChange(false);
       onSuccess?.();
-    } catch (err: any) {
-      setError(err.message || 'Không thể lưu nội dung. Vui lòng thử lại.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể lưu nội dung. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -126,7 +126,7 @@ export function QuickAddModal({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setType(tab.id as any)}
+                  onClick={() => setType(tab.id as 'note' | 'project' | 'resource' | 'link' | 'page')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-medium rounded-md transition-all ${
                     isActive
                       ? 'bg-[var(--bg-surface)] text-[var(--accent)] shadow-sm'

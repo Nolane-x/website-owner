@@ -5,7 +5,8 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { profiles, authCredentials, settings, securityEvents } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { createSession, setSessionCookie } from '@/lib/auth/session';
-import { getClientIp } from '@/lib/security/rate-limit';
+import { getClientIp, rateLimiter } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 const BootstrapSchema = z.object({
   username: z.string().min(3, 'Tên đăng nhập phải có ít nhất 3 ký tự').max(32).regex(/^[a-zA-Z0-9_-]+$/, 'Tên đăng nhập chỉ chứa chữ cái, số, dấu gạch dưới hoặc gạch ngang'),
@@ -28,13 +29,28 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // P0.5: CSRF / Origin Guard
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
+  const ip = getClientIp(req.headers);
+
+  // P0.1: Rate limiting cho endpoint bootstrap nhạy cảm (5 lần / 5 phút)
+  const rl = rateLimiter.check(`bootstrap:${ip}`, 5, 300);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Quá nhiều yêu cầu khởi tạo từ địa chỉ này. Vui lòng thử lại sau.' },
+      { status: 429 }
+    );
+  }
+
   try {
     await initializeDatabase();
     const db = getDb();
 
-    // 1. Kiểm tra nghiêm ngặt: Bootstrap chỉ được phép chạy khi CHƯA có chủ sở hữu nào
-    const existing = await db.select().from(profiles).limit(1);
-    if (existing.length > 0) {
+    // 1. Kiểm tra ban đầu: Bootstrap chỉ được phép chạy khi CHƯA có chủ sở hữu nào
+    const preCheck = await db.select().from(profiles).limit(1);
+    if (preCheck.length > 0) {
       return NextResponse.json(
         { error: 'Hệ thống đã được thiết lập. Quy trình khởi tạo (Bootstrap) đã bị vô hiệu hóa vĩnh viễn.' },
         { status: 403 }
@@ -51,32 +67,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { username, password, displayName } = parsed.data;
-    const ip = getClientIp(req.headers);
     const userAgent = req.headers.get('user-agent') || 'Unknown';
 
     const profileId = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
 
-    // 2. Tạo hồ sơ Chủ sở hữu
-    await db.insert(profiles).values({
-      id: profileId,
-      username: username.trim(),
-      displayName: displayName.trim(),
-      bio: 'Không gian số cá nhân — Personal Web OS',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    // 3. Tạo thông tin mật khẩu bảo mật
-    await db.insert(authCredentials).values({
-      id: crypto.randomUUID(),
-      profileId,
-      passwordHash,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    // 4. Khởi tạo cài đặt ban đầu (Dual Themes & Dual Navigation)
+    // Initial settings definition
     const initialSettings = [
       {
         key: 'theme_private',
@@ -144,28 +140,57 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    for (const s of initialSettings) {
-      await db.insert(settings).values({
-        id: crypto.randomUUID(),
-        profileId,
-        key: s.key,
-        valueJson: s.valueJson,
+    // P0.1: Thực hiện toàn bộ khởi tạo trong Database Transaction nguyên tử
+    await db.transaction(async (tx) => {
+      // Khóa và kiểm tra lại bên trong transaction chống tranh chấp đồng thời
+      const existingInTx = await tx.select().from(profiles).limit(1);
+      if (existingInTx.length > 0) {
+        throw new Error('BOOTSTRAP_ALREADY_COMPLETED');
+      }
+
+      // 2. Tạo hồ sơ Chủ sở hữu
+      await tx.insert(profiles).values({
+        id: profileId,
+        username: username.trim(),
+        displayName: displayName.trim(),
+        bio: 'Không gian số cá nhân — Personal Web OS',
+        createdAt: new Date(),
         updatedAt: new Date(),
       });
-    }
 
-    // 5. Ghi log kiểm toán khởi tạo
-    await db.insert(securityEvents).values({
-      id: crypto.randomUUID(),
-      profileId,
-      eventType: 'SYSTEM_BOOTSTRAP_INITIALIZED',
-      detailsJson: { username: username.trim(), ip },
-      ipAddress: ip,
-      userAgent,
-      createdAt: new Date(),
+      // 3. Tạo thông tin mật khẩu bảo mật
+      await tx.insert(authCredentials).values({
+        id: crypto.randomUUID(),
+        profileId,
+        passwordHash,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      // 4. Khởi tạo cài đặt ban đầu (Dual Themes & Dual Navigation)
+      for (const s of initialSettings) {
+        await tx.insert(settings).values({
+          id: crypto.randomUUID(),
+          profileId,
+          key: s.key,
+          valueJson: s.valueJson,
+          updatedAt: new Date(),
+        });
+      }
+
+      // 5. Ghi log kiểm toán khởi tạo
+      await tx.insert(securityEvents).values({
+        id: crypto.randomUUID(),
+        profileId,
+        eventType: 'SYSTEM_BOOTSTRAP_INITIALIZED',
+        detailsJson: { username: username.trim(), ip },
+        ipAddress: ip,
+        userAgent,
+        createdAt: new Date(),
+      });
     });
 
-    // 6. Tạo phiên đăng nhập đầu tiên cho chủ nhân
+    // 6. Tạo phiên đăng nhập đầu tiên cho chủ nhân sau khi transaction cam kết thành công
     const { token, expiresAt } = await createSession(profileId, ip, userAgent, true);
     await setSessionCookie(token, expiresAt);
 
@@ -174,6 +199,12 @@ export async function POST(req: NextRequest) {
       message: 'Khởi tạo không gian số cá nhân thành công!',
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'BOOTSTRAP_ALREADY_COMPLETED') {
+      return NextResponse.json(
+        { error: 'Hệ thống đã được thiết lập bởi một phiên khác. Vui lòng đăng nhập.' },
+        { status: 403 }
+      );
+    }
     console.error('Lỗi thực hiện bootstrap:', error);
     return NextResponse.json(
       { error: 'Không thể hoàn thành khởi tạo hệ thống. Vui lòng thử lại.' },

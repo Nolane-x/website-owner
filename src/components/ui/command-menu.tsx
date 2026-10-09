@@ -10,7 +10,6 @@ import {
   Bookmark,
   Compass,
   Lock,
-  LogOut,
   Plus,
   Home,
   Settings,

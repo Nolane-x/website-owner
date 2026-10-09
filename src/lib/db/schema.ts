@@ -59,7 +59,7 @@ export const contentItems = pgTable('content_items', {
   status: text('status').default('DRAFT').notNull(), // 'DRAFT', 'PUBLISHED', 'ARCHIVED'
   tags: jsonb('tags').$type<string[]>().default([]).notNull(),
   category: text('category'),
-  metadata: jsonb('metadata').$type<Record<string, any>>().default({}),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
   sortOrder: integer('sort_order').default(0).notNull(),
   isFeatured: boolean('is_featured').default(false).notNull(),
   isPinned: boolean('is_pinned').default(false).notNull(),
@@ -95,8 +95,8 @@ export const contentBlocks = pgTable('content_blocks', {
   pageId: text('page_id').notNull().references(() => pages.id, { onDelete: 'cascade' }),
   blockType: text('block_type').notNull(), // 'heading', 'text', 'markdown', 'image', 'gallery', 'video', 'button', 'card', 'project_card', 'resource_card', 'quote', 'code', 'divider', 'spacer', 'grid', 'columns', 'table', 'timeline', 'list', 'embed', 'collection'
   sortOrder: integer('sort_order').default(0).notNull(),
-  contentJson: jsonb('content_json').$type<Record<string, any>>().notNull(),
-  settingsJson: jsonb('settings_json').$type<Record<string, any>>().default({}).notNull(),
+  contentJson: jsonb('content_json').$type<Record<string, unknown>>().notNull(),
+  settingsJson: jsonb('settings_json').$type<Record<string, unknown>>().default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -162,7 +162,7 @@ export const securityEvents = pgTable('security_events', {
   id: text('id').primaryKey(),
   profileId: text('profile_id').notNull(),
   eventType: text('event_type').notNull(),
-  detailsJson: jsonb('details_json').$type<Record<string, any>>(),
+  detailsJson: jsonb('details_json').$type<Record<string, unknown>>(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -188,7 +188,7 @@ export const contentRevisions = pgTable('content_revisions', {
   revisionNumber: integer('revision_number').notNull(),
   titleSnapshot: text('title_snapshot').notNull(),
   bodySnapshot: text('body_snapshot'),
-  metadataSnapshot: jsonb('metadata_snapshot').$type<Record<string, any>>().default({}).notNull(),
+  metadataSnapshot: jsonb('metadata_snapshot').$type<Record<string, unknown>>().default({}).notNull(),
   reason: text('reason'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

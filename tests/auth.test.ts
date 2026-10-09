@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword } from '../src/lib/auth/password';
 import { generateSessionToken, hashToken } from '../src/lib/auth/session';
 import { sanitizeHtml, sanitizePlain } from '../src/lib/security/sanitize';

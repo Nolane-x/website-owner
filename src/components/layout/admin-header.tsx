@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   Search,
   Plus,
@@ -13,7 +14,6 @@ import {
   LogOut,
   Settings,
   Shield,
-  User,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -23,6 +23,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '../ui/dropdown';
+
+export interface AdminHeaderProfile {
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string | null;
+}
 
 export function AdminHeader({
   onOpenQuickAdd,
@@ -37,14 +43,16 @@ export function AdminHeader({
   onTriggerPanicLock: () => void;
   isPrivacyMode: boolean;
   onTogglePrivacyMode: () => void;
-  profile?: any;
+  profile?: AdminHeaderProfile | null;
 }) {
   const router = useRouter();
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    setIsDark(isDarkMode);
+    const handle = requestAnimationFrame(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    return () => cancelAnimationFrame(handle);
   }, []);
 
   const toggleTheme = () => {
@@ -60,99 +68,100 @@ export function AdminHeader({
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/admin/login');
+      router.push('/login');
     } catch {
-      router.push('/admin/login');
+      router.push('/login');
     }
   };
 
   const handleLogoutAll = async () => {
-    if (confirm('Bạn có chắc chắn muốn đăng xuất tất cả các phiên làm việc trên mọi thiết bị?')) {
+    if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị?')) {
       try {
         await fetch('/api/auth/logout-all', { method: 'POST' });
-        router.push('/admin/login');
+        router.push('/login');
       } catch {
-        router.push('/admin/login');
+        router.push('/login');
       }
     }
   };
 
   return (
-    <header className="flex items-center justify-between h-14 px-4 border-b border-[var(--border-color)] bg-[var(--bg-surface)] shrink-0 select-none">
-      {/* Command Palette Trigger */}
-      <div className="flex items-center gap-3">
+    <header className="h-14 border-b border-[var(--border-color)] bg-[var(--bg-surface)] px-4 flex items-center justify-between sticky top-0 z-40 transition-colors">
+      {/* Search / Command Palette Trigger */}
+      <div className="flex items-center gap-3 w-72">
         <button
           onClick={onOpenCommandPalette}
-          className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-[var(--text-muted)] bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)] border border-[var(--border-color)] rounded-[var(--radius-md,0.625rem)] transition-all w-56 md:w-72"
+          className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-[var(--text-muted)] bg-[var(--bg-surface-subtle)] border border-[var(--border-color)] rounded-[var(--radius-md,0.625rem)] hover:border-[var(--text-secondary)] transition-all cursor-pointer group"
         >
-          <Search size={14} className="text-[var(--text-muted)]" />
-          <span className="truncate">Tìm kiếm hoặc lệnh...</span>
-          <kbd className="ml-auto px-1.5 py-0.5 text-[10px] bg-[var(--bg-surface)] border border-[var(--border-color)] rounded text-[var(--text-muted)]">
-            Ctrl K
+          <div className="flex items-center gap-2">
+            <Search size={14} className="group-hover:text-[var(--text-primary)] transition-colors" />
+            <span>Tìm kiếm & Lệnh nhanh...</span>
+          </div>
+          <kbd className="text-[10px] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded border border-[var(--border-color)] font-mono">
+            ⌘K
           </kbd>
         </button>
+      </div>
 
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        {/* Quick Add */}
         <Button
           size="sm"
           onClick={onOpenQuickAdd}
-          className="hidden sm:inline-flex items-center gap-1.5"
+          className="gap-1.5 text-xs font-semibold px-3 py-1.5 shadow-sm"
         >
           <Plus size={15} />
           <span>Thêm nhanh</span>
         </Button>
-      </div>
 
-      {/* Action Controls & Utilities */}
-      <div className="flex items-center gap-2">
         {/* Privacy Screen Toggle */}
         <button
           onClick={onTogglePrivacyMode}
-          className={`p-2 rounded-md border text-xs transition-all ${
+          title={isPrivacyMode ? 'Tắt chế độ làm mờ riêng tư' : 'Bật chế độ làm mờ riêng tư nơi công cộng'}
+          className={`p-2 rounded-[var(--radius-md,0.625rem)] border border-[var(--border-color)] transition-colors ${
             isPrivacyMode
-              ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-              : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]'
+              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+              : 'hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)]'
           }`}
-          title={isPrivacyMode ? 'Tắt chế độ che riêng tư' : 'Bật chế độ che riêng tư (Privacy Screen)'}
         >
           {isPrivacyMode ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
 
-        {/* Panic Lock Button */}
+        {/* Panic Lock Trigger */}
         <button
           onClick={onTriggerPanicLock}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 rounded-[var(--radius-md,0.625rem)] transition-all"
-          title="Khóa ngay không gian làm việc (Ctrl + Shift + L)"
+          title="Khóa khẩn cấp (Panic Lock)"
+          className="p-2 rounded-[var(--radius-md,0.625rem)] border border-[var(--border-color)] hover:bg-red-500/10 text-red-600 dark:text-red-400 hover:border-red-500/30 transition-colors"
         >
-          <Lock size={14} />
-          <span className="hidden md:inline">Khóa ngay</span>
+          <Lock size={16} />
         </button>
 
-        {/* Preview as Guest */}
-        <button
-          onClick={() => window.open('/', '_blank')}
-          className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 rounded-[var(--radius-md,0.625rem)] transition-all"
-          title="Xem website công khai chính xác như một khách thực tế"
-        >
-          <Eye size={14} />
-          <span>Xem như khách</span>
-        </button>
-
-        {/* Theme Switcher */}
+        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] border border-[var(--border-color)] rounded-md transition-all"
-          title="Chuyển chế độ Sáng / Tối"
+          title={isDark ? 'Chuyển sang Giao diện Sáng' : 'Chuyển sang Giao diện Tối'}
+          className="p-2 rounded-[var(--radius-md,0.625rem)] border border-[var(--border-color)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] transition-colors"
         >
           {isDark ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
-        {/* Profile Dropdown */}
+        <div className="h-4 w-px bg-[var(--border-color)] mx-1" />
+
+        {/* User Profile Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 p-1 rounded-full border border-[var(--border-color)] hover:border-[var(--text-secondary)] transition-all focus:outline-none">
-              <div className="w-7 h-7 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold text-xs uppercase overflow-hidden">
+              <div className="w-7 h-7 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold text-xs uppercase overflow-hidden relative">
                 {profile?.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  <Image
+                    src={profile.avatarUrl}
+                    alt="Avatar"
+                    width={28}
+                    height={28}
+                    unoptimized
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   profile?.displayName?.[0] || 'O'
                 )}

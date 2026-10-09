@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
-import { contentItems, pages, contentBlocks, collections, collectionItems, settings } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { contentItems, pages, contentBlocks, collections, collectionItems, settings, folders } from '@/lib/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 
@@ -16,13 +16,23 @@ export async function GET() {
 
     const items = await db.select().from(contentItems).where(eq(contentItems.profileId, auth.profile.id));
     const allPages = await db.select().from(pages).where(eq(pages.profileId, auth.profile.id));
-    const allBlocks = await db.select().from(contentBlocks);
+    const allFolders = await db.select().from(folders).where(eq(folders.profileId, auth.profile.id));
     const allCollections = await db.select().from(collections).where(eq(collections.profileId, auth.profile.id));
-    const allColItems = await db.select().from(collectionItems);
+
+    const pageIds = allPages.map((p) => p.id);
+    const allBlocks = pageIds.length > 0
+      ? await db.select().from(contentBlocks).where(inArray(contentBlocks.pageId, pageIds))
+      : [];
+
+    const colIds = allCollections.map((c) => c.id);
+    const allColItems = colIds.length > 0
+      ? await db.select().from(collectionItems).where(inArray(collectionItems.collectionId, colIds))
+      : [];
+
     const allSettings = await db.select().from(settings).where(eq(settings.profileId, auth.profile.id));
 
     const exportPayload = {
-      version: '1.0',
+      version: '1.1',
       exportedAt: new Date().toISOString(),
       owner: {
         username: auth.profile.username,
@@ -32,18 +42,24 @@ export async function GET() {
         contentItems: items,
         pages: allPages,
         contentBlocks: allBlocks,
+        folders: allFolders,
         collections: allCollections,
         collectionItems: allColItems,
-        settings: allSettings.map((s: any) => ({
-          key: s.key,
-          valueJson: s.key === 'public_access' ? { ...(s.valueJson as any), passwordHash: undefined } : s.valueJson,
-        })),
+        settings: allSettings.map((s) => {
+          const val = (typeof s.valueJson === 'object' && s.valueJson !== null ? s.valueJson : {}) as Record<string, unknown>;
+          return {
+            key: s.key,
+            valueJson: s.key === 'public_access' ? { ...val, passwordHash: undefined } : val,
+          };
+        }),
       },
     };
 
     await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.EXPORT_DOWNLOADED, {
       itemsCount: items.length,
       pagesCount: allPages.length,
+      blocksCount: allBlocks.length,
+      collectionsCount: allCollections.length,
     });
 
     return new NextResponse(JSON.stringify(exportPayload, null, 2), {

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Lock, ShieldAlert, KeyRound } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lock, KeyRound } from 'lucide-react';
 import { Button } from './button';
 import { Input } from './input';
 
@@ -17,13 +17,13 @@ export function PanicLockOverlay({
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [prevLocked, setPrevLocked] = useState(isLocked);
 
-  useEffect(() => {
-    if (isLocked) {
-      setPassword('');
-      setError('');
-    }
-  }, [isLocked]);
+  if (isLocked !== prevLocked) {
+    setPrevLocked(isLocked);
+    setPassword('');
+    setError('');
+  }
 
   if (!isLocked) return null;
 
@@ -44,7 +44,7 @@ export function PanicLockOverlay({
         onLogout();
         return;
       }
-      const data = await res.json();
+      const data = (await res.json()) as { profile?: { username?: string } };
       const username = data.profile?.username;
 
       const loginRes = await fetch('/api/auth/login', {

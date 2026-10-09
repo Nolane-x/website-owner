@@ -6,9 +6,14 @@ import * as schema from './schema';
 import path from 'path';
 import fs from 'fs';
 
-let dbInstance: any = null;
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { PgliteDatabase } from 'drizzle-orm/pglite';
+
+export type AppDatabase = PostgresJsDatabase<typeof schema> | PgliteDatabase<typeof schema>;
+
+let dbInstance: AppDatabase | null = null;
 let pgliteClient: PGlite | null = null;
-let postgresClient: any = null;
+let postgresClient: ReturnType<typeof postgres> | null = null;
 
 // Khởi tạo Database Client linh hoạt: Postgres hoặc PGLite Embedded
 export function getDb() {

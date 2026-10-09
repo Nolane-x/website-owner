@@ -6,21 +6,16 @@ import {
   FileText,
   FolderGit2,
   Bookmark,
-  Compass,
-  Layers,
-  Plus,
   ArrowUpRight,
   ShieldCheck,
-  Clock,
   Sparkles,
   ExternalLink,
-  Lock,
   Eye,
   CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VisibilityBadge, StatusBadge } from '@/components/ui/badge';
-import { ContentItem } from '@/lib/types';
+import { ContentItem, Profile } from '@/lib/types';
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -35,7 +30,7 @@ export default function AdminDashboardPage() {
   const [recentItems, setRecentItems] = useState<ContentItem[]>([]);
   const [pinnedProjects, setPinnedProjects] = useState<ContentItem[]>([]);
   const [recentResources, setRecentResources] = useState<ContentItem[]>([]);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const fetchDashboardData = async () => {
     try {
@@ -81,11 +76,58 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    let ignore = false;
+    async function loadInitialData() {
+      try {
+        const [itemsRes, meRes, pagesRes] = await Promise.all([
+          fetch('/api/admin/content'),
+          fetch('/api/auth/me'),
+          fetch('/api/admin/pages'),
+        ]);
 
-    const handleRefresh = () => fetchDashboardData();
+        if (itemsRes.ok && meRes.ok && !ignore) {
+          const itemsData = await itemsRes.json();
+          const meData = await meRes.json();
+          const pagesData = pagesRes.ok ? await pagesRes.json() : { pages: [] };
+
+          const all: ContentItem[] = itemsData.items || [];
+          setProfile(meData.profile);
+
+          const publishedCount = all.filter((i) => i.status === 'PUBLISHED').length;
+          const draftCount = all.filter((i) => i.status === 'DRAFT').length;
+          const projCount = all.filter((i) => i.type === 'project').length;
+          const resCount = all.filter((i) => i.type === 'resource' || i.type === 'link').length;
+          const pCount = pagesData.pages?.length || 0;
+
+          setStats({
+            total: all.length,
+            published: publishedCount,
+            drafts: draftCount,
+            projects: projCount,
+            resources: resCount,
+            pages: pCount,
+          });
+
+          setRecentItems(all.slice(0, 5));
+          setPinnedProjects(all.filter((i) => i.type === 'project' && (i.isPinned || i.isFeatured)).slice(0, 4));
+          setRecentResources(all.filter((i) => i.type === 'resource' || i.type === 'link').slice(0, 4));
+        }
+      } catch (err) {
+        console.error('Lỗi tải dữ liệu bảng điều khiển:', err);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    loadInitialData();
+
+    const handleRefresh = () => {
+      fetchDashboardData();
+    };
     window.addEventListener('webos:refresh-content', handleRefresh);
-    return () => window.removeEventListener('webos:refresh-content', handleRefresh);
+    return () => {
+      ignore = true;
+      window.removeEventListener('webos:refresh-content', handleRefresh);
+    };
   }, []);
 
   return (
@@ -253,27 +295,30 @@ export default function AdminDashboardPage() {
             </p>
 
             <div className="space-y-2">
-              {recentResources.map((r) => (
-                <div key={r.id} className="p-3 bg-[var(--bg-surface-subtle)] border border-[var(--border-color)] rounded-xl flex items-center justify-between gap-3">
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{r.title}</p>
-                    <span className="text-[10px] text-[var(--accent)] font-medium">
-                      {(r.metadata as any)?.provider || 'Liên kết ngoài'}
-                    </span>
+              {recentResources.map((r) => {
+                const meta = (r.metadata || {}) as Record<string, unknown>;
+                return (
+                  <div key={r.id} className="p-3 bg-[var(--bg-surface-subtle)] border border-[var(--border-color)] rounded-xl flex items-center justify-between gap-3">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{r.title}</p>
+                      <span className="text-[10px] text-[var(--accent)] font-medium">
+                        {(meta.provider as string) || 'Liên kết ngoài'}
+                      </span>
+                    </div>
+                    {typeof meta.url === 'string' && (
+                      <a
+                        href={meta.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-md border border-[var(--border-color)] bg-[var(--bg-surface)]"
+                        title="Mở liên kết"
+                      >
+                        <ExternalLink size={13} />
+                      </a>
+                    )}
                   </div>
-                  {(r.metadata as any)?.url && (
-                    <a
-                      href={(r.metadata as any).url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-md border border-[var(--border-color)] bg-[var(--bg-surface)]"
-                      title="Mở liên kết"
-                    >
-                      <ExternalLink size={13} />
-                    </a>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

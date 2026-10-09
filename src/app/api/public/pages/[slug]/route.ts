@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { pages, contentBlocks } from '@/lib/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { toPublicPage, toPublicBlock } from '@/lib/api/public-serializer';
 
 export async function GET(
   req: NextRequest,
@@ -18,22 +19,16 @@ export async function GET(
     await initializeDatabase();
     const db = getDb();
 
-    // CHỈ QUERY TRANG CÔNG KHAI VÀ ĐÃ XUẤT BẢN
+    // CHỈ QUERY TRANG CÔNG KHAI, ĐÃ XUẤT BẢN VÀ CHƯA BỊ XÓA (SOFT DELETE)
     const pageResult = await db
-      .select({
-        id: pages.id,
-        title: pages.title,
-        slug: pages.slug,
-        description: pages.description,
-        coverImage: pages.coverImage,
-        publishedAt: pages.publishedAt,
-      })
+      .select()
       .from(pages)
       .where(
         and(
           eq(pages.slug, slug),
           eq(pages.visibility, 'PUBLIC'),
-          eq(pages.status, 'PUBLISHED')
+          eq(pages.status, 'PUBLISHED'),
+          isNull(pages.deletedAt)
         )
       )
       .limit(1);
@@ -42,23 +37,20 @@ export async function GET(
       return NextResponse.json({ error: 'Trang không tồn tại hoặc chưa được xuất bản.' }, { status: 404 });
     }
 
-    const page = pageResult[0];
+    const pageRaw = pageResult[0];
 
-    const blocks = await db
-      .select({
-        id: contentBlocks.id,
-        blockType: contentBlocks.blockType,
-        sortOrder: contentBlocks.sortOrder,
-        content: contentBlocks.contentJson,
-        settings: contentBlocks.settingsJson,
-      })
+    const rawBlocks = await db
+      .select()
       .from(contentBlocks)
-      .where(eq(contentBlocks.pageId, page.id))
+      .where(eq(contentBlocks.pageId, pageRaw.id))
       .orderBy(asc(contentBlocks.sortOrder));
 
+    const publicBlocks = rawBlocks.map((b) => toPublicBlock(b as unknown as Record<string, unknown>)).filter(Boolean);
+    const publicPage = toPublicPage(pageRaw as unknown as Record<string, unknown>, rawBlocks as unknown as Array<Record<string, unknown>>);
+
     return NextResponse.json({
-      page,
-      blocks,
+      page: publicPage,
+      blocks: publicBlocks,
     });
   } catch (error) {
     console.error('Lỗi API public page:', error);

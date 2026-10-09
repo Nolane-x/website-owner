@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { getDb, initializeDatabase } from '../src/lib/db';
-import { contentItems, pages, profiles } from '../src/lib/db/schema';
+import { contentItems, profiles } from '../src/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -83,7 +83,7 @@ describe('Public vs Private Data Isolation & Anti-Leakage Tests', () => {
         )
       );
 
-    const publicTitles = publicApiResults.map((i: any) => i.title);
+    const publicTitles = publicApiResults.map((i) => i.title);
 
     // Bắt buộc: Item Public phải tồn tại
     expect(publicTitles).toContain(publicItemTitle);
@@ -124,7 +124,7 @@ describe('Public vs Private Data Isolation & Anti-Leakage Tests', () => {
       .select()
       .from(contentItems)
       .where(and(eq(contentItems.visibility, 'PUBLIC'), eq(contentItems.status, 'PUBLISHED')));
-    expect(publicItems.map((i: any) => i.id)).not.toContain(itemId);
+    expect(publicItems.map((i) => i.id)).not.toContain(itemId);
 
     // OWNER BẤM XUẤT BẢN: visibility = PUBLIC, status = PUBLISHED
     await db
@@ -137,7 +137,7 @@ describe('Public vs Private Data Isolation & Anti-Leakage Tests', () => {
       .select()
       .from(contentItems)
       .where(and(eq(contentItems.visibility, 'PUBLIC'), eq(contentItems.status, 'PUBLISHED')));
-    expect(publicItems.map((i: any) => i.id)).toContain(itemId);
+    expect(publicItems.map((i) => i.id)).toContain(itemId);
 
     // OWNER BẤM HỦY XUẤT BẢN: status = DRAFT
     await db
@@ -150,6 +150,6 @@ describe('Public vs Private Data Isolation & Anti-Leakage Tests', () => {
       .select()
       .from(contentItems)
       .where(and(eq(contentItems.visibility, 'PUBLIC'), eq(contentItems.status, 'PUBLISHED')));
-    expect(publicItems.map((i: any) => i.id)).not.toContain(itemId);
+    expect(publicItems.map((i) => i.id)).not.toContain(itemId);
   });
 });

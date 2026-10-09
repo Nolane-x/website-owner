@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield, KeyRound, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { DecorativeMesh } from '@/components/ui/decorative-mesh';
 import { BrandLogo } from '@/components/ui/brand-logo';
 
@@ -94,7 +94,7 @@ export default function AdminLoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <Input
             label="Tên đăng nhập"
-            placeholder="admin"
+            placeholder="Tên tài khoản chủ sở hữu"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoFocus

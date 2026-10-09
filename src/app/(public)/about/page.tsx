@@ -2,21 +2,25 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { User, Sparkles, Shield, Code, Cpu, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Sparkles, Shield, Code, Cpu, ExternalLink, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+interface PublicProfile {
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+}
+
 export default function PublicAboutPage() {
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
 
   useEffect(() => {
     fetch('/api/public/site')
       .then((res) => res.json())
       .then((data) => {
-        setProfile(data.profile);
+        if (data?.profile) setProfile(data.profile);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch(console.error);
   }, []);
 
   return (

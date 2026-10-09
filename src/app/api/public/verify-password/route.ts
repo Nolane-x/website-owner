@@ -37,7 +37,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'Website không yêu cầu mật khẩu.' });
     }
 
-    const config = publicSettings[0].valueJson as any;
+    interface PublicAccessConfig {
+      requirePassword?: boolean;
+      passwordHash?: string;
+    }
+    const config = (publicSettings[0].valueJson || {}) as PublicAccessConfig;
     if (!config.requirePassword || !config.passwordHash) {
       return NextResponse.json({ success: true, message: 'Website không yêu cầu mật khẩu.' });
     }

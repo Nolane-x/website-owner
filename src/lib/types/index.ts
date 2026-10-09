@@ -53,7 +53,7 @@ export interface ContentItem {
   status: ContentStatus;
   tags: string[];
   category?: string | null;
-  metadata?: Record<string, any> | null;
+  metadata?: Record<string, unknown> | null;
   sortOrder: number;
   isFeatured: boolean;
   isPinned: boolean;
@@ -67,8 +67,8 @@ export interface ContentBlock {
   pageId: string;
   blockType: BlockType;
   sortOrder: number;
-  content: Record<string, any>;
-  settings: Record<string, any>;
+  content: Record<string, unknown>;
+  settings: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -150,7 +150,7 @@ export interface SecurityEvent {
   id: string;
   profileId: string;
   eventType: string;
-  details?: Record<string, any> | null;
+  details?: Record<string, unknown> | null;
   ipAddress?: string | null;
   userAgent?: string | null;
   createdAt: string;

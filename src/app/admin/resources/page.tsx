@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Bookmark, Plus, ExternalLink, Trash2, Edit, Tag, Globe, Search, Filter } from 'lucide-react';
+import { Bookmark, Plus, ExternalLink, Trash2, Edit, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { VisibilityBadge, StatusBadge } from '@/components/ui/badge';
+import { VisibilityBadge } from '@/components/ui/badge';
 import { ContentItem, Visibility } from '@/lib/types';
 
 export default function AdminResourcesPage() {
@@ -49,7 +49,20 @@ export default function AdminResourcesPage() {
   };
 
   useEffect(() => {
-    fetchResources();
+    async function loadResources() {
+      try {
+        const res = await fetch('/api/admin/content?type=resource');
+        if (res.ok) {
+          const data = await res.json();
+          setResources(data.items || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải danh sách tài nguyên:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadResources();
   }, []);
 
   const openCreateModal = () => {
@@ -70,14 +83,14 @@ export default function AdminResourcesPage() {
   const openEditModal = (item: ContentItem) => {
     setEditingItem(item);
     setTitle(item.title);
-    setUrl((item.metadata as any)?.url || '');
-    setProvider((item.metadata as any)?.provider || 'Google Drive');
+    setUrl(typeof item.metadata?.url === 'string' ? item.metadata.url : '');
+    setProvider(typeof item.metadata?.provider === 'string' ? item.metadata.provider : 'Google Drive');
     setCategory(item.category || 'Tài liệu');
     setDescription(item.description || '');
     setTags((item.tags || []).join(', '));
     setVisibility(item.visibility);
-    setDownloadAllowed((item.metadata as any)?.downloadAllowed !== false);
-    setOpenInNewTab((item.metadata as any)?.openInNewTab !== false);
+    setDownloadAllowed(item.metadata?.downloadAllowed !== false);
+    setOpenInNewTab(item.metadata?.openInNewTab !== false);
     setError('');
     setModalOpen(true);
   };
@@ -132,8 +145,8 @@ export default function AdminResourcesPage() {
 
       setModalOpen(false);
       fetchResources();
-    } catch (err: any) {
-      setError(err.message || 'Không thể lưu tài nguyên.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể lưu tài nguyên.');
     } finally {
       setSubmitting(false);
     }
@@ -222,7 +235,9 @@ export default function AdminResourcesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((item) => {
-            const meta = (item.metadata as any) || {};
+            const meta = (item.metadata || {}) as Record<string, unknown>;
+            const metaProvider = typeof meta.provider === 'string' ? meta.provider : 'Link';
+            const metaUrl = typeof meta.url === 'string' ? meta.url : '';
             return (
               <div
                 key={item.id}
@@ -231,7 +246,7 @@ export default function AdminResourcesPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1 min-w-0">
                     <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--accent)] bg-[var(--accent-light)] px-2 py-0.5 rounded-full inline-block">
-                      {meta.provider || 'Link'}
+                      {metaProvider}
                     </span>
                     <h3 className="font-bold text-sm text-[var(--text-primary)] truncate">
                       {item.title}
@@ -258,9 +273,9 @@ export default function AdminResourcesPage() {
                 )}
 
                 <div className="pt-2 border-t border-[var(--border-color)] flex items-center justify-between text-xs mt-auto">
-                  {meta.url ? (
+                  {metaUrl ? (
                     <a
-                      href={meta.url}
+                      href={metaUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs font-medium text-[var(--accent)] hover:underline flex items-center gap-1"

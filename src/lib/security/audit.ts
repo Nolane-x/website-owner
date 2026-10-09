@@ -5,7 +5,7 @@ import { securityEvents } from '../db/schema';
 export async function logSecurityEvent(
   profileId: string,
   eventType: string,
-  details?: Record<string, any> | null,
+  details?: Record<string, unknown> | null,
   ipAddress?: string | null,
   userAgent?: string | null
 ) {
@@ -14,7 +14,7 @@ export async function logSecurityEvent(
     const db = getDb();
 
     // Loại bỏ hoàn toàn bất kỳ trường nhạy cảm nào nếu có trong details
-    const sanitizedDetails = details ? { ...details } : {};
+    const sanitizedDetails: Record<string, unknown> = details ? { ...details } : {};
     delete sanitizedDetails.password;
     delete sanitizedDetails.newPassword;
     delete sanitizedDetails.token;

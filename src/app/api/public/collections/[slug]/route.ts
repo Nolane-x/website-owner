@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { collections, collectionItems, contentItems } from '@/lib/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { toPublicCollection, toPublicContent } from '@/lib/api/public-serializer';
 
 export async function GET(
   req: NextRequest,
@@ -19,21 +20,14 @@ export async function GET(
     const db = getDb();
 
     const colResult = await db
-      .select({
-        id: collections.id,
-        name: collections.name,
-        slug: collections.slug,
-        description: collections.description,
-        coverImage: collections.coverImage,
-        icon: collections.icon,
-        isFeatured: collections.isFeatured,
-      })
+      .select()
       .from(collections)
       .where(
         and(
           eq(collections.slug, slug),
           eq(collections.visibility, 'PUBLIC'),
-          eq(collections.status, 'PUBLISHED')
+          eq(collections.status, 'PUBLISHED'),
+          isNull(collections.deletedAt)
         )
       )
       .limit(1);
@@ -42,23 +36,26 @@ export async function GET(
       return NextResponse.json({ error: 'Bộ sưu tập không tồn tại hoặc chưa xuất bản.' }, { status: 404 });
     }
 
-    const col = colResult[0];
+    const colRaw = colResult[0];
 
-    // CHỈ QUERY PHẦN TỬ CÔNG KHAI VÀ ĐÃ XUẤT BẢN TRONG BỘ SƯU TẬP
-    const items = await db
+    // CHỈ QUERY PHẦN TỬ CÔNG KHAI, ĐÃ XUẤT BẢN VÀ CHƯA BỊ XÓA
+    const rawItems = await db
       .select({
         id: contentItems.id,
         title: contentItems.title,
         slug: contentItems.slug,
         type: contentItems.type,
         description: contentItems.description,
+        content: contentItems.content,
         coverImage: contentItems.coverImage,
         icon: contentItems.icon,
         tags: contentItems.tags,
         category: contentItems.category,
         metadata: contentItems.metadata,
+        sortOrder: contentItems.sortOrder,
         isFeatured: contentItems.isFeatured,
         publishedAt: contentItems.publishedAt,
+        createdAt: contentItems.createdAt,
       })
       .from(collectionItems)
       .innerJoin(
@@ -66,15 +63,25 @@ export async function GET(
         and(
           eq(collectionItems.contentItemId, contentItems.id),
           eq(contentItems.visibility, 'PUBLIC'),
-          eq(contentItems.status, 'PUBLISHED')
+          eq(contentItems.status, 'PUBLISHED'),
+          isNull(contentItems.deletedAt)
         )
       )
-      .where(eq(collectionItems.collectionId, col.id))
+      .where(eq(collectionItems.collectionId, colRaw.id))
       .orderBy(asc(collectionItems.sortOrder));
 
+    const publicItems = rawItems
+      .map((it) => toPublicContent(it as unknown as Record<string, unknown>))
+      .filter((it): it is NonNullable<typeof it> => it !== null);
+
+    const publicCol = toPublicCollection(
+      colRaw as unknown as Record<string, unknown>,
+      rawItems as unknown as Array<Record<string, unknown>>
+    );
+
     return NextResponse.json({
-      collection: col,
-      items,
+      collection: publicCol,
+      items: publicItems,
     });
   } catch (error) {
     console.error('Lỗi API public collection slug:', error);

@@ -8,7 +8,6 @@ import {
   Eye,
   Save,
   Globe,
-  Plus,
   Trash2,
   Copy,
   ChevronUp,
@@ -34,18 +33,43 @@ import { VisibilityBadge, StatusBadge } from '@/components/ui/badge';
 import { BlockType, ContentStatus } from '@/lib/types';
 import { sanitizeHtml } from '@/lib/security/sanitize';
 
+interface BuilderBlockContent {
+  text?: string;
+  level?: number;
+  url?: string;
+  caption?: string;
+  author?: string;
+  code?: string;
+  language?: string;
+  title?: string;
+  description?: string;
+  linkUrl?: string;
+  linkText?: string;
+  style?: string;
+  [key: string]: unknown;
+}
+
 interface BuilderBlock {
   id: string;
   blockType: BlockType;
   sortOrder: number;
-  contentJson: Record<string, any>;
-  settingsJson: Record<string, any>;
+  contentJson: BuilderBlockContent;
+  settingsJson: Record<string, unknown>;
+}
+
+interface BuilderPage {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  visibility: string;
+  status: ContentStatus;
 }
 
 export function BuilderCanvasClient({ pageId }: { pageId: string }) {
   const router = useRouter();
 
-  const [page, setPage] = useState<any>(null);
+  const [page, setPage] = useState<BuilderPage | null>(null);
   const [blocks, setBlocks] = useState<BuilderBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,12 +101,32 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
   };
 
   useEffect(() => {
-    fetchPageAndBlocks();
-  }, [pageId]);
+    let ignore = false;
+    async function loadData() {
+      try {
+        const res = await fetch(`/api/admin/pages/${pageId}`);
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          setPage(data.page);
+          setBlocks(data.blocks || []);
+        } else if (!ignore) {
+          router.push('/admin/pages');
+        }
+      } catch {
+        if (!ignore) router.push('/admin/pages');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    loadData();
+    return () => {
+      ignore = true;
+    };
+  }, [pageId, router]);
 
   // Add block
   const handleAddBlock = async (type: BlockType) => {
-    const defaultContents: Record<string, any> = {
+    const defaultContents: Record<string, Record<string, unknown>> = {
       heading: { text: 'Tiêu đề khối mới', level: 2 },
       text: { text: 'Nhập nội dung đoạn văn ở đây...' },
       markdown: { text: '### Tiêu đề Markdown\n\nNội dung Markdown với **in đậm** và danh sách:\n- Ý 1\n- Ý 2' },
@@ -95,7 +139,7 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
     };
 
     const newBlock: BuilderBlock = {
-      id: 'temp-' + Date.now(),
+      id: 'temp-' + crypto.randomUUID(),
       blockType: type,
       sortOrder: blocks.length,
       contentJson: defaultContents[type] || {},
@@ -125,7 +169,7 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
   const duplicateBlock = (index: number) => {
     const source = blocks[index];
     const duplicate: BuilderBlock = {
-      id: 'temp-' + Date.now(),
+      id: 'temp-' + crypto.randomUUID(),
       blockType: source.blockType,
       sortOrder: index + 1,
       contentJson: JSON.parse(JSON.stringify(source.contentJson)),
@@ -146,7 +190,7 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
   };
 
   // Update block content
-  const updateBlockContent = (id: string, newContent: Record<string, any>) => {
+  const updateBlockContent = (id: string, newContent: Partial<BuilderBlockContent>) => {
     setBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, contentJson: { ...b.contentJson, ...newContent } } : b))
     );
@@ -154,6 +198,7 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
 
   // Save changes
   const handleSaveAll = async (targetStatus?: ContentStatus) => {
+    if (!page) return;
     setSaving(true);
     setSaveSuccess(false);
 
@@ -491,26 +536,27 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
                           <div className="space-y-2">
                             <Input
                               label="Đường dẫn ảnh (URL)"
-                              value={block.contentJson.url || ''}
+                              value={String(block.contentJson.url || '')}
                               onChange={(e) => updateBlockContent(block.id, { url: e.target.value })}
                             />
                             <Input
                               label="Chú thích ảnh"
-                              value={block.contentJson.caption || ''}
+                              value={String(block.contentJson.caption || '')}
                               onChange={(e) => updateBlockContent(block.id, { caption: e.target.value })}
                             />
                           </div>
                         ) : null}
-                        {block.contentJson.url && (
+                        {block.contentJson.url ? (
                           <div className="rounded-xl overflow-hidden border border-[var(--border-color)]">
-                            <img src={block.contentJson.url} alt="Block image" className="w-full object-cover max-h-96" />
-                            {block.contentJson.caption && (
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={String(block.contentJson.url)} alt="Block image" className="w-full object-cover max-h-96" />
+                            {block.contentJson.caption ? (
                               <p className="p-2 text-center text-xs italic text-[var(--text-muted)] bg-[var(--bg-surface-subtle)]">
-                                {block.contentJson.caption}
+                                {String(block.contentJson.caption)}
                               </p>
-                            )}
+                            ) : null}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     )}
 
@@ -521,24 +567,24 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
                           <div className="space-y-2">
                             <Textarea
                               label="Câu trích dẫn"
-                              value={block.contentJson.text || ''}
+                              value={String(block.contentJson.text || '')}
                               onChange={(e) => updateBlockContent(block.id, { text: e.target.value })}
                               rows={2}
                             />
                             <Input
                               label="Tác giả"
-                              value={block.contentJson.author || ''}
+                              value={String(block.contentJson.author || '')}
                               onChange={(e) => updateBlockContent(block.id, { author: e.target.value })}
                             />
                           </div>
                         ) : (
                           <blockquote className="border-l-4 border-[var(--accent)] pl-4 py-1 italic text-[var(--text-primary)]">
-                            "{block.contentJson.text}"
-                            {block.contentJson.author && (
+                            &ldquo;{String(block.contentJson.text || '')}&rdquo;
+                            {block.contentJson.author ? (
                               <cite className="block text-xs not-italic text-[var(--text-muted)] mt-1 font-semibold">
-                                — {block.contentJson.author}
+                                — {String(block.contentJson.author)}
                               </cite>
-                            )}
+                            ) : null}
                           </blockquote>
                         )}
                       </div>

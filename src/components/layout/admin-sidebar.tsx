@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BrandLogo } from '@/components/ui/brand-logo';
@@ -19,7 +19,16 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
-const iconMap: Record<string, any> = {
+export interface NavItem {
+  id: string;
+  label: string;
+  href: string;
+  icon?: string;
+  visible?: boolean;
+  pinned?: boolean;
+}
+
+const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   LayoutDashboard,
   FileText,
   FolderGit2,
@@ -38,11 +47,11 @@ export function AdminSidebar({
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  navItems?: Array<{ id: string; label: string; href: string; icon: string; visible: boolean }>;
+  navItems?: NavItem[];
 }) {
   const pathname = usePathname();
 
-  const defaultItems = [
+  const defaultItems: NavItem[] = [
     { id: 'home', label: 'Bảng điều khiển', href: '/admin', icon: 'LayoutDashboard', visible: true },
     { id: 'notes', label: 'Ghi chú & Bài viết', href: '/admin/content', icon: 'FileText', visible: true },
     { id: 'projects', label: 'Dự án', href: '/admin/projects', icon: 'FolderGit2', visible: true },
@@ -60,64 +69,91 @@ export function AdminSidebar({
 
   return (
     <aside
-      className={`relative flex flex-col border-r border-[var(--border-color)] bg-[var(--bg-surface)] transition-all duration-200 shrink-0 select-none ${
+      className={`h-screen border-r border-[var(--border-color)] bg-[var(--bg-surface)] flex flex-col justify-between transition-all duration-200 z-30 shrink-0 ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
-      {/* Brand & Workspace Identity */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-[var(--border-color)]">
-        {!collapsed ? (
-          <BrandLogo size={28} subtitle="Private Workspace" />
-        ) : (
-          <div className="mx-auto">
-            <BrandLogo size={28} withText={false} />
-          </div>
-        )}
+      {/* Top Branding */}
+      <div>
+        <div className="h-14 border-b border-[var(--border-color)] px-4 flex items-center justify-between">
+          {!collapsed && (
+            <Link href="/admin" className="flex items-center gap-2.5 group">
+              <BrandLogo size={22} className="text-[var(--accent)] transition-transform group-hover:scale-105" />
+              <div className="flex flex-col">
+                <span className="font-bold text-xs tracking-tight text-[var(--text-primary)]">
+                  Personal Web OS
+                </span>
+                <span className="text-[9px] font-mono text-[var(--accent)] uppercase font-semibold">
+                  Owner Workspace
+                </span>
+              </div>
+            </Link>
+          )}
 
-        <button
-          onClick={onToggleCollapse}
-          className="hidden md:flex p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
-          title={collapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
+          {collapsed && (
+            <div className="mx-auto">
+              <BrandLogo size={22} className="text-[var(--accent)]" />
+            </div>
+          )}
+
+          <button
+            onClick={onToggleCollapse}
+            className={`p-1.5 rounded-[var(--radius-sm,0.375rem)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] transition-colors ${
+              collapsed ? 'hidden' : ''
+            }`}
+            title="Thu gọn thanh điều hướng"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        </div>
+
+        {/* Navigation Items */}
+        <nav className="p-2 space-y-1">
+          {items.map((item) => {
+            const Icon = item.icon && iconMap[item.icon] ? iconMap[item.icon] : LayoutDashboard;
+            const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
+
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md,0.625rem)] text-xs font-medium transition-all group ${
+                  isActive
+                    ? 'bg-[var(--accent)] text-white shadow-xs'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)]'
+                }`}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon size={16} className={`shrink-0 ${isActive ? 'text-white' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'}`} />
+                {!collapsed && <span className="truncate">{item.label}</span>}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-1">
-        {items.map((item) => {
-          const Icon = iconMap[item.icon] || FileText;
-          const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
-
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 text-xs font-medium rounded-[var(--radius-md,0.625rem)] transition-all duration-150 ${
-                isActive
-                  ? 'bg-[var(--accent-light)] text-[var(--accent)] font-semibold shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]'
-              }`}
-              title={collapsed ? item.label : undefined}
-            >
-              <Icon size={17} className={isActive ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Public Site Quick View */}
-      <div className="p-2 border-t border-[var(--border-color)]">
+      {/* Bottom Section */}
+      <div className="p-2 border-t border-[var(--border-color)] space-y-1">
+        {/* Xem trang công khai */}
         <Link
           href="/"
           target="_blank"
-          className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] rounded-[var(--radius-md,0.625rem)] transition-all"
-          title={collapsed ? 'Mở Website công khai' : undefined}
+          className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md,0.625rem)] text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)] transition-all group"
+          title={collapsed ? 'Mở trang công khai' : undefined}
         >
-          <ExternalLink size={16} className="text-emerald-600" />
-          {!collapsed && <span>Xem Website ngoài</span>}
+          <ExternalLink size={16} className="shrink-0 text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
+          {!collapsed && <span>Xem trang Public</span>}
         </Link>
+
+        {collapsed && (
+          <button
+            onClick={onToggleCollapse}
+            className="w-full flex items-center justify-center p-2 rounded-[var(--radius-md,0.625rem)] text-[var(--text-muted)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)] transition-colors"
+            title="Mở rộng menu"
+          >
+            <ChevronRight size={16} />
+          </button>
+        )}
       </div>
     </aside>
   );

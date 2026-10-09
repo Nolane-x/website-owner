@@ -5,6 +5,7 @@ import { collections, collectionItems, contentItems } from '@/lib/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 export async function GET(
   req: NextRequest,
@@ -41,7 +42,7 @@ export async function GET(
 
     return NextResponse.json({
       collection: colResult[0],
-      items: items.map((i: any) => ({ ...i.item, collectionOrder: i.collectionItem.sortOrder })),
+      items: items.map((i) => ({ ...i.item, collectionOrder: i.collectionItem.sortOrder })),
     });
   } catch (error) {
     console.error('Lỗi lấy chi tiết bộ sưu tập:', error);
@@ -53,6 +54,9 @@ export async function PUT(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -126,6 +130,9 @@ export async function DELETE(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 

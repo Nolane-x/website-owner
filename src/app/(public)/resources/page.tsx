@@ -3,15 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  Bookmark, 
   ExternalLink, 
   Search, 
   ArrowLeft, 
   HardDrive, 
   Globe, 
-  FileCode, 
   FolderDown,
-  Layers
 } from 'lucide-react';
 import { GithubIcon as Github } from '@/components/ui/github-icon';
 import { Badge } from '@/components/ui/badge';
@@ -25,13 +22,12 @@ interface Resource {
   description: string;
   category?: string;
   tags?: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   publishedAt: string;
 }
 
 export default function PublicResourcesPage() {
   const [resources, setResources] = useState<Resource[]>([]);
-  const [filtered, setFiltered] = useState<Resource[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -44,7 +40,6 @@ export default function PublicResourcesPage() {
         const data = await res.json();
         if (res.ok) {
           setResources(data.resources || []);
-          setFiltered(data.resources || []);
         }
       } catch (e) {
         console.error(e);
@@ -55,7 +50,7 @@ export default function PublicResourcesPage() {
     loadResources();
   }, []);
 
-  useEffect(() => {
+  const filtered = React.useMemo(() => {
     let list = [...resources];
     if (selectedCat !== 'all') {
       list = list.filter((r) => r.category?.toLowerCase() === selectedCat.toLowerCase());
@@ -70,7 +65,7 @@ export default function PublicResourcesPage() {
           r.tags?.some((t) => t.toLowerCase().includes(q))
       );
     }
-    setFiltered(list);
+    return list;
   }, [selectedCat, search, resources]);
 
   const categories = ['all', ...Array.from(new Set(resources.map((r) => r.category).filter(Boolean)))];
@@ -149,8 +144,8 @@ export default function PublicResourcesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((item) => {
-            const url = item.metadata?.url || '#';
-            const provider = item.metadata?.provider || 'Web';
+            const url = typeof item.metadata?.url === 'string' ? item.metadata.url : '#';
+            const provider = typeof item.metadata?.provider === 'string' ? item.metadata.provider : 'Web';
 
             return (
               <a

@@ -16,9 +16,30 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
+interface PublicCollectionData {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  coverImage?: string;
+  icon?: string;
+  updatedAt?: string;
+}
+
+interface PublicCollectionItemData {
+  id: string;
+  title: string;
+  slug: string;
+  type: string;
+  description?: string;
+  category?: string;
+  metadata?: Record<string, unknown>;
+  publishedAt?: string;
+}
+
 export function CollectionDetailClient({ slug }: { slug: string }) {
-  const [collection, setCollection] = useState<any>(null);
-  const [items, setItems] = useState<any[]>([]);
+  const [collection, setCollection] = useState<PublicCollectionData | null>(null);
+  const [items, setItems] = useState<PublicCollectionItemData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -78,9 +99,11 @@ export function CollectionDetailClient({ slug }: { slug: string }) {
     );
   }
 
-  const getItemLink = (item: any) => {
+  const getItemLink = (item: PublicCollectionItemData) => {
     if (item.type === 'project') return `/projects/${item.slug}`;
-    if (item.type === 'resource' || item.type === 'link') return item.metadata?.url || `/resources`;
+    if (item.type === 'resource' || item.type === 'link') {
+      return typeof item.metadata?.url === 'string' ? item.metadata.url : '/resources';
+    }
     return `/articles/${item.slug}`;
   };
 

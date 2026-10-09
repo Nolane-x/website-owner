@@ -5,6 +5,7 @@ import { PublicHeader } from '@/components/layout/public-header';
 import { PublicFooter } from '@/components/layout/public-footer';
 import { PublicSearchModal } from '@/components/ui/public-search-modal';
 import { GuestPasswordModal } from '@/components/ui/guest-password-modal';
+import { DecorativeMesh } from '@/components/ui/decorative-mesh';
 
 interface SiteData {
   profile: {
@@ -22,8 +23,6 @@ interface SiteData {
   };
 }
 
-import { DecorativeMesh } from '@/components/ui/decorative-mesh';
-
 export function PublicShell({
   children,
 }: {
@@ -33,22 +32,21 @@ export function PublicShell({
   const [searchOpen, setSearchOpen] = useState(false);
   const [guestLocked, setGuestLocked] = useState(false);
 
-  const fetchSiteData = async () => {
-    try {
-      const res = await fetch('/api/public/site');
-      const data = await res.json();
-      if (res.ok) {
+  const fetchSiteData = React.useCallback(() => {
+    fetch('/api/public/site')
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Fetch failed'))))
+      .then((data: SiteData) => {
         setSiteData(data);
         if (data.accessProtection?.requirePassword && !data.accessProtection?.isUnlocked) {
           setGuestLocked(true);
         } else {
           setGuestLocked(false);
         }
-      }
-    } catch (e) {
-      console.error('Lỗi tải thông tin site công khai:', e);
-    }
-  };
+      })
+      .catch((e) => {
+        console.error('Lỗi tải thông tin site công khai:', e);
+      });
+  }, []);
 
   useEffect(() => {
     fetchSiteData();
@@ -62,8 +60,10 @@ export function PublicShell({
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [fetchSiteData]);
 
   return (
     <div className="relative min-h-screen flex flex-col bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors selection:bg-[var(--accent)] selection:text-white overflow-x-hidden">
@@ -85,13 +85,19 @@ export function PublicShell({
               Khu vực yêu cầu mật mã khách
             </h2>
             <p className="text-xs text-[var(--text-secondary)]">
-              Vui lòng nhập mật mã khách được cấp để mở khóa nội dung của website.
+              Chủ sở hữu đã thiết lập mã bảo vệ cho trang web công khai này. Vui lòng mở khóa để tiếp tục khám phá.
             </p>
+            <GuestPasswordModal
+              open={guestLocked}
+              passwordHint={siteData?.accessProtection?.passwordHint}
+              onSuccess={() => {
+                setGuestLocked(false);
+                fetchSiteData();
+              }}
+            />
           </div>
         ) : (
-          <Suspense fallback={<div className="py-12 text-center text-xs font-mono text-[var(--text-muted)]">Đang tải nội dung...</div>}>
-            {children}
-          </Suspense>
+          children
         )}
       </main>
 
@@ -101,20 +107,10 @@ export function PublicShell({
         author={siteData?.profile?.displayName || 'Chủ Sở Hữu'}
       />
 
-      {/* Public Search Dialog */}
+      {/* Public Search Modal */}
       <PublicSearchModal
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
-      />
-
-      {/* Guest Password Gate Modal */}
-      <GuestPasswordModal
-        open={guestLocked}
-        passwordHint={siteData?.accessProtection?.passwordHint}
-        onSuccess={() => {
-          setGuestLocked(false);
-          fetchSiteData();
-        }}
       />
     </div>
   );

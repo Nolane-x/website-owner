@@ -3,9 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Search, Sun, Moon, Lock, Menu, X, ArrowUpRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-
+import { Search, Sun, Moon, Lock, Menu, X } from 'lucide-react';
 import { BrandLogo } from '@/components/ui/brand-logo';
 
 interface NavItem {
@@ -34,12 +32,12 @@ export function PublicHeader({
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    // Check initial dark mode
-    if (typeof window !== 'undefined') {
+    const handle = requestAnimationFrame(() => {
       const isDarkMode = document.documentElement.classList.contains('dark') ||
         window.matchMedia('(prefers-color-scheme: dark)').matches;
       setIsDark(isDarkMode);
-    }
+    });
+    return () => cancelAnimationFrame(handle);
   }, []);
 
   const toggleDarkMode = () => {
@@ -53,8 +51,8 @@ export function PublicHeader({
     <header className="sticky top-0 z-40 w-full border-b border-[var(--border-color)] bg-[var(--bg-surface)]/90 backdrop-blur-md transition-colors">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         {/* Brand / Logo */}
-        <Link href="/" className="group">
-          <BrandLogo size={36} subtitle="Bản phát hành công khai" />
+        <Link href="/" className="group flex items-center gap-2">
+          <BrandLogo size={36} subtitle={siteTitle} />
         </Link>
 
         {/* Desktop Navigation */}

@@ -8,6 +8,9 @@ on:
       - '.github/workflows/cloudflare-worker.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   deploy-edge:
     name: Deploy to Cloudflare Workers
@@ -23,4 +26,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "3.114.0"
           workingDirectory: 'worker'
+          command: deploy

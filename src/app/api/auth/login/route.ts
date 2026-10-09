@@ -8,10 +8,18 @@ import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { rateLimiter, getClientIp } from '@/lib/security/rate-limit';
 import { ensureSeedData } from '@/lib/db/seed';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 export async function POST(req: NextRequest) {
+  // P0.5: CSRF / Origin Guard
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   try {
-    await ensureSeedData();
+    await initializeDatabase();
+    if (process.env.NODE_ENV !== 'production') {
+      await ensureSeedData();
+    }
     const db = getDb();
     const ip = getClientIp(req.headers);
     const userAgent = req.headers.get('user-agent') || 'Unknown';
@@ -90,7 +98,7 @@ export async function POST(req: NextRequest) {
         bio: profile.bio,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Lỗi API đăng nhập:', error);
     return NextResponse.json(
       { error: 'Đã xảy ra lỗi trong quá trình xử lý đăng nhập. Vui lòng thử lại.' },

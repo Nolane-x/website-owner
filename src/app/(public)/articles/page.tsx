@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { FileText, Search, ArrowRight, ArrowLeft, Calendar, Tag } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Search, ArrowRight, ArrowLeft, Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 interface Article {
@@ -19,7 +18,6 @@ interface Article {
 
 export default function PublicArticlesPage() {
   const [articles, setArticles] = useState<Article[]>([]);
-  const [filtered, setFiltered] = useState<Article[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -27,16 +25,14 @@ export default function PublicArticlesPage() {
   useEffect(() => {
     async function loadArticles() {
       try {
-        setLoading(true);
         const res = await fetch('/api/public/content');
         const data = await res.json();
         if (res.ok) {
           // Chỉ lấy các nội dung dạng note hoặc article
           const list = (data.items || []).filter(
-            (i: any) => i.type !== 'project' && i.type !== 'resource' && i.type !== 'link'
+            (i: Article) => i.type !== 'project' && i.type !== 'resource' && i.type !== 'link'
           );
           setArticles(list);
-          setFiltered(list);
         }
       } catch (e) {
         console.error(e);
@@ -47,7 +43,7 @@ export default function PublicArticlesPage() {
     loadArticles();
   }, []);
 
-  useEffect(() => {
+  const filtered = useMemo(() => {
     let list = [...articles];
     if (selectedCategory !== 'all') {
       list = list.filter((a) => a.category?.toLowerCase() === selectedCategory.toLowerCase());
@@ -61,7 +57,7 @@ export default function PublicArticlesPage() {
           a.tags?.some((t) => t.toLowerCase().includes(q))
       );
     }
-    setFiltered(list);
+    return list;
   }, [selectedCategory, search, articles]);
 
   const categories = ['all', ...Array.from(new Set(articles.map((a) => a.category).filter(Boolean)))];

@@ -16,8 +16,19 @@ import { Badge } from '@/components/ui/badge';
 import { marked } from 'marked';
 import { sanitizeHtml } from '@/lib/security/sanitize';
 
+interface ArticleData {
+  id: string;
+  title: string;
+  slug: string;
+  description?: string;
+  content?: string;
+  category?: string;
+  tags?: string[];
+  publishedAt?: string;
+}
+
 export function ArticleDetailClient({ slug }: { slug: string }) {
-  const [article, setArticle] = useState<any>(null);
+  const [article, setArticle] = useState<ArticleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);

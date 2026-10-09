@@ -46,7 +46,12 @@ export async function checkPublicAccessProtection(): Promise<{
     return { requirePassword: false, hasValidGuestSession: true };
   }
 
-  const config = publicSettings[0].valueJson as any;
+  interface PublicAccessConfig {
+    requirePassword?: boolean;
+    passwordHash?: string;
+    passwordHint?: string;
+  }
+  const config = (publicSettings[0].valueJson || {}) as PublicAccessConfig;
   if (!config.requirePassword || !config.passwordHash) {
     return { requirePassword: false, hasValidGuestSession: true };
   }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
-import { collections, collectionItems, contentItems } from '@/lib/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { collections, collectionItems } from '@/lib/db/schema';
+import { eq, desc } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 

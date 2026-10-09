@@ -177,7 +177,7 @@ export async function PATCH(
     }
 
     return NextResponse.json({ error: 'Hành động PATCH không hợp lệ.' }, { status: 400 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Không thể xử lý yêu cầu.' }, { status: 500 });
   }
 }

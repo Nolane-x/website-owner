@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Compass, Plus, Edit3, Trash2, ExternalLink, Globe, LayoutTemplate, Eye } from 'lucide-react';
+import { Compass, Plus, Trash2, ExternalLink, LayoutTemplate } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -37,7 +37,20 @@ export default function AdminPagesListPage() {
   };
 
   useEffect(() => {
-    fetchPages();
+    async function loadPages() {
+      try {
+        const res = await fetch('/api/admin/pages');
+        if (res.ok) {
+          const data = await res.json();
+          setPages(data.pages || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải danh sách trang:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadPages();
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -69,8 +82,8 @@ export default function AdminPagesListPage() {
       setTitle('');
       setDescription('');
       fetchPages();
-    } catch (err: any) {
-      setError(err.message || 'Không thể tạo trang.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể tạo trang.');
     } finally {
       setSubmitting(false);
     }

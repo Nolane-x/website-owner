@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, desc, asc, and, like, or, isNull, isNotNull } from 'drizzle-orm';
+import { eq, desc, and, like, or, isNull, isNotNull, type SQL } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizeHtml, sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 function generateSlug(text: string): string {
   return text
@@ -31,10 +32,10 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get('type');
     const status = searchParams.get('status');
     const visibility = searchParams.get('visibility');
-    const query = searchParams.get('q');
+    const query = searchParams.get('query') || searchParams.get('q');
     const isPinned = searchParams.get('isPinned');
 
-    const conditions: any[] = [eq(contentItems.profileId, auth.profile.id)];
+    const conditions: SQL[] = [eq(contentItems.profileId, auth.profile.id)];
 
     const trash = searchParams.get('trash');
     if (trash === 'true') {
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
         or(
           like(contentItems.title, q),
           like(contentItems.description, q)
-        )
+        )!
       );
     }
 
@@ -71,6 +72,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -123,7 +127,7 @@ export async function POST(req: NextRequest) {
       status,
       tags: Array.isArray(tags) ? tags : [],
       category: category ? sanitizePlain(category) : null,
-      metadata: typeof metadata === 'object' ? metadata : {},
+      metadata: typeof metadata === 'object' && metadata !== null ? metadata : {},
       sortOrder: 0,
       isFeatured: Boolean(isFeatured),
       isPinned: Boolean(isPinned),

@@ -8,8 +8,19 @@ import { Badge } from '@/components/ui/badge';
 import { marked } from 'marked';
 import { sanitizeHtml } from '@/lib/security/sanitize';
 
+interface UnlistedItem {
+  id: string;
+  title: string;
+  slug?: string;
+  description?: string | null;
+  content?: string | null;
+  category?: string | null;
+  tags?: string[];
+  createdAt?: string;
+}
+
 export function UnlistedShareClient({ token }: { token: string }) {
-  const [item, setItem] = useState<any>(null);
+  const [item, setItem] = useState<UnlistedItem | null>(null);
   const [itemType, setItemType] = useState<string>('content');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -7,11 +7,7 @@ import {
   Smartphone, 
   Laptop, 
   LogOut, 
-  AlertTriangle, 
   CheckCircle2, 
-  History, 
-  Clock, 
-  Lock,
   RefreshCw,
   Eye,
   EyeOff,
@@ -91,8 +87,36 @@ export default function SecurityPage() {
   };
 
   useEffect(() => {
-    fetchSessions();
-    fetchEvents();
+    let ignore = false;
+    async function loadInitialData() {
+      try {
+        const [sessRes, evRes] = await Promise.all([
+          fetch('/api/auth/sessions'),
+          fetch('/api/admin/security-events?limit=50'),
+        ]);
+        if (!ignore) {
+          if (sessRes.ok) {
+            const sessData = await sessRes.json();
+            setSessions(sessData.sessions || []);
+          }
+          if (evRes.ok) {
+            const evData = await evRes.json();
+            setEvents(evData.events || []);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!ignore) {
+          setLoadingSessions(false);
+          setLoadingEvents(false);
+        }
+      }
+    }
+    loadInitialData();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleRevokeSession = async (sessionId: string) => {

@@ -26,26 +26,33 @@ export function PublicSearchModal({
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    } else {
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) {
       setQuery('');
       setResults([]);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
     }
   }, [open]);
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
+    const trimmed = query.trim();
+    if (!trimmed) {
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/public/search?q=${encodeURIComponent(query.trim())}`);
-        const data = await res.json();
+        const res = await fetch(`/api/public/search?q=${encodeURIComponent(trimmed)}`);
+        const data = (await res.json()) as { results?: SearchResult[] };
         if (res.ok) {
           setResults(data.results || []);
         }
@@ -58,6 +65,8 @@ export function PublicSearchModal({
 
     return () => clearTimeout(timer);
   }, [query]);
+
+  const displayedResults = query.trim() ? results : [];
 
   if (!open) return null;
 
@@ -112,12 +121,12 @@ export function PublicSearchModal({
             <div className="py-8 text-center text-xs text-[var(--text-muted)]">
               Đang tìm kiếm...
             </div>
-          ) : results.length === 0 ? (
+          ) : displayedResults.length === 0 ? (
             <div className="py-8 text-center text-xs text-[var(--text-muted)]">
               Không tìm thấy kết quả nào phù hợp với &ldquo;{query}&rdquo;.
             </div>
           ) : (
-            results.map((item) => (
+            displayedResults.map((item) => (
               <Link
                 key={item.id}
                 href={getItemLink(item)}

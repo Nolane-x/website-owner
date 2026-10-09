@@ -1,0 +1,7 @@
+name = "webos-security-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-10-08"
+
+[vars]
+ORIGIN_URL = "https://your-domain.com"
+ENABLE_RATE_LIMIT = "true"

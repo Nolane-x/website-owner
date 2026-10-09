@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { profiles, settings } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
 import { ensureSeedData } from '@/lib/db/seed';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { toPublicSiteSettings } from '@/lib/api/public-serializer';
 
 export async function GET() {
   try {
-    await ensureSeedData();
+    await initializeDatabase();
+    if (process.env.NODE_ENV !== 'production') {
+      await ensureSeedData();
+    }
     const db = getDb();
 
     // 1. Lấy thông tin hiển thị của Owner
@@ -26,7 +28,7 @@ export async function GET() {
 
     // 2. Lấy cài đặt giao diện công khai và cấu hình bảo vệ mật mã khách
     const settingList = await db.select().from(settings);
-    const settingsMap: Record<string, any> = {};
+    const settingsMap: Record<string, unknown> = {};
     for (const s of settingList) {
       settingsMap[s.key] = s.valueJson;
     }

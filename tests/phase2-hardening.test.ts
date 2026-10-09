@@ -10,7 +10,7 @@ import { toPublicContent, toPublicResource } from '../src/lib/api/public-seriali
 
 describe('Phase 2 Hardening & Production Security Test Suite', () => {
   const testOwnerId = 'phase2-owner-' + Date.now();
-  let testDb: any;
+  let testDb: ReturnType<typeof getDb>;
 
   beforeAll(async () => {
     await initializeDatabase();
@@ -32,7 +32,7 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
       const originalSeedFlag = process.env.ENABLE_DEV_SEED;
 
       try {
-        (process.env as any).NODE_ENV = 'production';
+        (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
         process.env.ENABLE_DEV_SEED = 'false';
 
         // Gọi ensureSeedData trong môi trường production
@@ -47,7 +47,7 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
         // Trong production, ensureSeedData không được phép sinh profile 'admin'
         expect(adminAccounts.length).toBe(0);
       } finally {
-        (process.env as any).NODE_ENV = originalEnv;
+        (process.env as Record<string, string | undefined>).NODE_ENV = originalEnv;
         process.env.ENABLE_DEV_SEED = originalSeedFlag;
       }
     });
@@ -61,6 +61,7 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
       const { token, expiresAt } = await createGuestSession(ip, userAgent);
       expect(token).toBeDefined();
       expect(token.length).toBe(64); // 32 bytes hex = 64 chars
+      expect(expiresAt).toBeDefined();
 
       // Kiểm tra DB: Chỉ lưu băm SHA-256, không lưu raw token hoặc bcrypt hash
       const tokenHash = hashToken(token);
@@ -104,7 +105,7 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
           )
         );
 
-      const activeIds = activeSessions.map((s: any) => s.id);
+      const activeIds = activeSessions.map((s) => s.id);
       expect(activeIds).toContain(s3.sessionId);
       expect(activeIds).not.toContain(s1.sessionId);
       expect(activeIds).not.toContain(s2.sessionId);
@@ -138,10 +139,11 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
 
       expect(publicResult.id).toBe('test-id-123');
       expect(publicResult.title).toBe('Bí mật chiến lược');
-      expect((publicResult as any).internalNotes).toBeUndefined();
-      expect((publicResult as any).adminOnlyData).toBeUndefined();
-      expect((publicResult as any).visibility).toBeUndefined();
-      expect((publicResult as any).status).toBeUndefined();
+      const untypedResult = publicResult as unknown as Record<string, unknown>;
+      expect(untypedResult.internalNotes).toBeUndefined();
+      expect(untypedResult.adminOnlyData).toBeUndefined();
+      expect(untypedResult.visibility).toBeUndefined();
+      expect(untypedResult.status).toBeUndefined();
     });
 
     it('toPublicResource loại bỏ ghi chú quản trị nội bộ', () => {
@@ -159,7 +161,8 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
       if (!publicRes) return;
 
       expect(publicRes.title).toBe('Tài liệu API');
-      expect((publicRes as any).internalNotes).toBeUndefined();
+      const untypedRes = publicRes as unknown as Record<string, unknown>;
+      expect(untypedRes.internalNotes).toBeUndefined();
     });
   });
 
@@ -194,7 +197,7 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
         .from(contentItems)
         .where(isNull(contentItems.deletedAt));
 
-      const activeIds = activeItems.map((i: any) => i.id);
+      const activeIds = activeItems.map((i) => i.id);
       expect(activeIds).not.toContain(itemId);
 
       // 4. Restore: xóa deletedAt (set null)
@@ -208,7 +211,7 @@ describe('Phase 2 Hardening & Production Security Test Suite', () => {
         .from(contentItems)
         .where(isNull(contentItems.deletedAt));
 
-      const restoredIds = restoredItems.map((i: any) => i.id);
+      const restoredIds = restoredItems.map((i) => i.id);
       expect(restoredIds).toContain(itemId);
     });
 

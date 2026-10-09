@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { AdminSidebar } from '@/components/layout/admin-sidebar';
-import { AdminHeader } from '@/components/layout/admin-header';
+import { AdminSidebar, type NavItem } from '@/components/layout/admin-sidebar';
+import { AdminHeader, type AdminHeaderProfile } from '@/components/layout/admin-header';
 import { CommandMenu } from '@/components/ui/command-menu';
 import { QuickAddModal } from '@/components/ui/quick-add-modal';
 import { PanicLockOverlay } from '@/components/ui/panic-lock-modal';
@@ -12,9 +12,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
-  const [navItems, setNavItems] = useState<any[]>([]);
+  const isLoginPage = pathname === '/admin/login';
+  const [loading, setLoading] = useState(!isLoginPage);
+  const [profile, setProfile] = useState<AdminHeaderProfile | null>(null);
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -22,15 +23,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [isPanicLocked, setIsPanicLocked] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
 
-  // Không áp dụng shell cho trang login
-  const isLoginPage = pathname === '/admin/login';
-
   useEffect(() => {
     if (isLoginPage) {
-      setLoading(false);
       return;
     }
 
+    let isMounted = true;
     const checkAuth = async () => {
       try {
         const res = await fetch('/api/auth/me');
@@ -38,13 +36,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           router.push('/admin/login');
           return;
         }
-        const data = await res.json();
-        setProfile(data.profile);
+        const data = (await res.json()) as { profile?: AdminHeaderProfile };
+        if (isMounted) {
+          setProfile(data.profile || null);
+        }
 
         // Tải cấu hình navigation
         const setRes = await fetch('/api/admin/settings');
-        if (setRes.ok) {
-          const setData = await setRes.json();
+        if (setRes.ok && isMounted) {
+          const setData = (await setRes.json()) as { settings?: { nav_config?: { items?: NavItem[] } } };
           if (setData.settings?.nav_config?.items) {
             setNavItems(setData.settings.nav_config.items);
           }
@@ -52,11 +52,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       } catch {
         router.push('/admin/login');
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     checkAuth();
+    return () => {
+      isMounted = false;
+    };
   }, [pathname, isLoginPage, router]);
 
   // Lắng nghe phím tắt Panic Lock: Ctrl + Shift + L

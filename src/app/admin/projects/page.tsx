@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FolderGit2, Plus, Edit, Trash2, Globe, ExternalLink, Eye } from 'lucide-react';
-import { GithubIcon as Github } from '@/components/ui/github-icon';
+import { FolderGit2, Plus, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -46,7 +45,20 @@ export default function AdminProjectsPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
+    async function loadProjects() {
+      try {
+        const res = await fetch('/api/admin/content?type=project');
+        if (res.ok) {
+          const data = await res.json();
+          setProjects(data.items || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải danh sách dự án:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProjects();
   }, []);
 
   const openCreateModal = () => {
@@ -71,8 +83,8 @@ export default function AdminProjectsPage() {
     setDescription(item.description || '');
     setContent(item.content || '');
     setCoverImage(item.coverImage || '');
-    setDemoUrl((item.metadata as any)?.demoUrl || '');
-    setGithubUrl((item.metadata as any)?.githubUrl || '');
+    setDemoUrl(typeof item.metadata?.demoUrl === 'string' ? item.metadata.demoUrl : '');
+    setGithubUrl(typeof item.metadata?.githubUrl === 'string' ? item.metadata.githubUrl : '');
     setTags((item.tags || []).join(', '));
     setVisibility(item.visibility);
     setStatus(item.status);
@@ -128,8 +140,8 @@ export default function AdminProjectsPage() {
 
       setModalOpen(false);
       fetchProjects();
-    } catch (err: any) {
-      setError(err.message || 'Không thể lưu dự án.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể lưu dự án.');
     } finally {
       setSubmitting(false);
     }
@@ -185,6 +197,7 @@ export default function AdminProjectsPage() {
             >
               {proj.coverImage && (
                 <div className="h-36 w-full overflow-hidden bg-[var(--bg-surface-subtle)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={proj.coverImage}
                     alt={proj.title}

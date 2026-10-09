@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Layers, ArrowRight, ArrowLeft, Sparkles, Folder } from 'lucide-react';
+import { Layers, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface Collection {

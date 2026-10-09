@@ -17,8 +17,10 @@ import { Badge } from '@/components/ui/badge';
 import { marked } from 'marked';
 import { sanitizeHtml } from '@/lib/security/sanitize';
 
+import type { ContentItem } from '@/lib/types';
+
 export function ProjectDetailClient({ slug }: { slug: string }) {
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<ContentItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -126,7 +128,7 @@ export function ProjectDetailClient({ slug }: { slug: string }) {
 
         {/* Action Links */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
-          {project.metadata?.demoUrl && (
+          {typeof project.metadata?.demoUrl === 'string' && (
             <a
               href={project.metadata.demoUrl}
               target="_blank"
@@ -137,7 +139,7 @@ export function ProjectDetailClient({ slug }: { slug: string }) {
               </Button>
             </a>
           )}
-          {project.metadata?.repoUrl && (
+          {typeof project.metadata?.repoUrl === 'string' && (
             <a
               href={project.metadata.repoUrl}
               target="_blank"

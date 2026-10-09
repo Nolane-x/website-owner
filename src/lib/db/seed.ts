@@ -3,7 +3,6 @@ import { getDb, initializeDatabase } from './index';
 import { profiles, authCredentials, settings, contentItems, pages, contentBlocks, collections, collectionItems } from './schema';
 import { hashPassword } from '../auth/password';
 import { eq } from 'drizzle-orm';
-import { DEFAULT_THEME_TOKENS } from '../security/constants';
 
 export async function ensureSeedData() {
   await initializeDatabase();
@@ -15,11 +14,14 @@ export async function ensureSeedData() {
     return existingProfiles[0];
   }
 
-  // RULE III: Production KHÔNG tự động bootstrap tài khoản với credential mặc định
-  const isProduction = process.env.NODE_ENV === 'production';
-  const allowDevSeed = process.env.ENABLE_DEV_SEED === 'true' || process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+  // RULE P0.1: Production TUYỆT ĐỐI KHÔNG tự động tạo owner/password mẫu dưới mọi tình huống kể cả khi ENABLE_DEV_SEED=true
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
 
-  if (isProduction && !allowDevSeed) {
+  // Trong môi trường development hoặc test: chỉ seed khi explicit flag ENABLE_DEV_SEED === 'true' hoặc NODE_ENV === 'test'
+  const allowDevSeed = process.env.ENABLE_DEV_SEED === 'true' || process.env.NODE_ENV === 'test';
+  if (!allowDevSeed) {
     return null;
   }
 

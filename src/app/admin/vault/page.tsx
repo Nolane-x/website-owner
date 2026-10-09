@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ShieldCheck,
   KeyRound,
@@ -17,16 +17,28 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { encryptVaultSecret, decryptVaultSecret } from '@/lib/security/vault-crypto';
+
+interface VaultItem {
+  id: string;
+  serviceName: string;
+  username: string | null;
+  url: string | null;
+  category: string | null;
+  ciphertext: string;
+  iv: string;
+  salt: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export default function AdminVaultPage() {
   const [masterPassword, setMasterPassword] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [unlockError, setUnlockError] = useState('');
 
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<VaultItem[]>([]);
   const [decryptedPasswords, setDecryptedPasswords] = useState<Record<string, string>>({});
   const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -65,7 +77,7 @@ export default function AdminVaultPage() {
   };
 
   // Giải mã mật khẩu của một mục cụ thể
-  const handleRevealPassword = async (item: any) => {
+  const handleRevealPassword = async (item: VaultItem) => {
     if (revealedIds[item.id]) {
       setRevealedIds((prev) => ({ ...prev, [item.id]: false }));
       return;
@@ -94,7 +106,7 @@ export default function AdminVaultPage() {
   };
 
   // Sao chép mật khẩu vào clipboard
-  const handleCopyPassword = async (item: any) => {
+  const handleCopyPassword = async (item: VaultItem) => {
     let pass = decryptedPasswords[item.id];
     if (!pass) {
       try {
@@ -157,8 +169,8 @@ export default function AdminVaultPage() {
       setSecretPassword('');
       setUrl('');
       fetchVaultItems();
-    } catch (err: any) {
-      setCreateError(err.message || 'Không thể lưu vào két mật mã.');
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : 'Không thể lưu vào két mật mã.');
     } finally {
       setSubmitting(false);
     }

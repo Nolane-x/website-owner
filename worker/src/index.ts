@@ -42,8 +42,8 @@ const BLOCKED_PATTERNS = [
   /\/api\/actuator/i,
 ];
 
-export default {
-  async fetch(request: Request, env: Env, ctx?: any): Promise<Response> {
+const worker = {
+  async fetch(request: Request, env: Env, _ctx?: unknown): Promise<Response> {
     const url = new URL(request.url);
     const clientIp = request.headers.get('cf-connecting-ip') || '127.0.0.1';
 
@@ -103,7 +103,7 @@ export default {
     let originResponse: Response;
     try {
       originResponse = await fetch(originRequest);
-    } catch (err) {
+    } catch {
       return new Response('Lỗi kết nối tới máy chủ nguồn (Upstream Error)', {
         status: 502,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -137,3 +137,5 @@ export default {
     });
   },
 };
+
+export default worker;

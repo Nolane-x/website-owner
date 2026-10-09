@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowUp, ShieldCheck, Heart } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 
 export function PublicFooter({
   siteTitle = 'Personal Web OS',
@@ -17,11 +17,7 @@ export function PublicFooter({
     }
   };
 
-  const [currentYear, setCurrentYear] = React.useState<number>(2026);
-
-  React.useEffect(() => {
-    setCurrentYear(new Date().getFullYear());
-  }, []);
+  const currentYear = new Date().getFullYear();
 
   return (
     <footer className="w-full border-t border-[var(--border-color)] bg-[var(--bg-surface)] py-12 mt-auto transition-colors">
@@ -60,22 +56,15 @@ export function PublicFooter({
               title="Cuộn lên đầu trang"
             >
               <ArrowUp size={14} />
-              <span>Lên đầu</span>
             </button>
           </div>
         </div>
 
-        <div className="pt-6 border-t border-[var(--border-color)] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--text-muted)]">
-          <div className="flex items-center gap-1">
-            <span>© {currentYear} {author}. Bản quyền được bảo lưu.</span>
-          </div>
-
+        <div className="pt-6 border-t border-[var(--border-color)] flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-[var(--text-muted)]">
+          <p>© {currentYear} {author}. Giữ toàn quyền tác giả và nội dung.</p>
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-              <ShieldCheck size={14} /> Hệ thống bảo vệ riêng tư
-            </span>
-            <Link href="/admin/login" className="hover:text-[var(--text-primary)] text-[11px]">
-              Khu vực chủ nhân
+            <Link href="/admin/login" className="hover:text-[var(--accent)] transition-colors">
+              Chủ sở hữu đăng nhập
             </Link>
           </div>
         </div>

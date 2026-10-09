@@ -2,19 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  FileText,
   Plus,
   Search,
-  Filter,
   Trash2,
   Edit,
-  ExternalLink,
-  Eye,
-  Globe,
-  Lock,
   Tag,
-  Check,
-  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,7 +54,20 @@ export default function AdminContentPage() {
   };
 
   useEffect(() => {
-    fetchItems();
+    async function loadItems() {
+      try {
+        const res = await fetch('/api/admin/content');
+        if (res.ok) {
+          const data = await res.json();
+          setItems(data.items || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải nội dung:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadItems();
   }, []);
 
   const openCreateModal = () => {
@@ -136,8 +141,8 @@ export default function AdminContentPage() {
 
       setModalOpen(false);
       fetchItems();
-    } catch (err: any) {
-      setFormError(err.message || 'Không thể lưu nội dung.');
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Không thể lưu nội dung.');
     } finally {
       setSubmitting(false);
     }
@@ -151,7 +156,7 @@ export default function AdminContentPage() {
       if (res.ok) {
         fetchItems();
       }
-    } catch (err) {
+    } catch {
       alert('Không thể xóa mục này.');
     }
   };

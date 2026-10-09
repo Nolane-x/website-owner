@@ -15,16 +15,42 @@ import { Button } from '@/components/ui/button';
 import { marked } from 'marked';
 import { sanitizeHtml } from '@/lib/security/sanitize';
 
+interface BlockContent {
+  text?: string;
+  level?: number;
+  markdown?: string;
+  author?: string;
+  url?: string;
+  caption?: string;
+  language?: string;
+  code?: string;
+  openInNewTab?: boolean;
+  label?: string;
+  title?: string;
+  description?: string;
+  link?: string;
+  height?: number;
+  [key: string]: unknown;
+}
+
 interface Block {
   id: string;
   blockType: string;
   sortOrder: number;
-  content: any;
-  settings?: any;
+  content: BlockContent;
+  settings?: Record<string, unknown>;
+}
+
+interface PublicPageDetail {
+  id: string;
+  title: string;
+  slug: string;
+  description?: string;
+  publishedAt?: string;
 }
 
 export function CanvasPageClient({ slug }: { slug: string }) {
-  const [page, setPage] = useState<any>(null);
+  const [page, setPage] = useState<PublicPageDetail | null>(null);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -175,6 +201,7 @@ export function CanvasPageClient({ slug }: { slug: string }) {
       case 'image': {
         return (
           <figure className="my-6 space-y-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={c.url}
               alt={c.caption || 'Hình ảnh tài liệu'}

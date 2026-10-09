@@ -12,14 +12,11 @@ import {
   Save, 
   CheckCircle2, 
   AlertCircle,
-  Sparkles,
   RefreshCw,
-  FileJson
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'theme' | 'public' | 'dashboard' | 'backup'>('profile');
@@ -71,11 +68,12 @@ export default function SettingsPage() {
         }
 
         const s = data.settings || {};
-        if (s.theme) {
-          setThemeMode(s.theme.mode || 'dark');
-          setAccentColor(s.theme.accent || '#E66828');
-          setFontFamily(s.theme.fontFamily || 'serif');
-          setBorderRadius(s.theme.borderRadius || '0.625rem');
+        const themeConfig = s.theme_private || s.theme || {};
+        if (themeConfig) {
+          setThemeMode(themeConfig.mode || 'dark');
+          setAccentColor(themeConfig.accent || themeConfig.accentColor || '#E66828');
+          setFontFamily(themeConfig.fontFamily || themeConfig.fontSans || 'serif');
+          setBorderRadius(themeConfig.borderRadius || themeConfig.radius || '0.625rem');
         }
 
         if (s.public_access) {
@@ -105,7 +103,58 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    fetchSettings();
+    let ignore = false;
+    async function loadInitialSettings() {
+      try {
+        const res = await fetch('/api/admin/settings');
+        const data = await res.json();
+        if (res.ok && !ignore) {
+          if (data.profile) {
+            setDisplayName(data.profile.displayName || '');
+            setBio(data.profile.bio || '');
+            setAvatarUrl(data.profile.avatarUrl || '');
+          }
+
+          const s = data.settings || {};
+          const themeConfig = s.theme_private || s.theme || {};
+          if (themeConfig) {
+            setThemeMode(themeConfig.mode || 'dark');
+            setAccentColor(themeConfig.accent || themeConfig.accentColor || '#E66828');
+            setFontFamily(themeConfig.fontFamily || themeConfig.fontSans || 'serif');
+            setBorderRadius(themeConfig.borderRadius || themeConfig.radius || '0.625rem');
+          }
+
+          if (s.public_access) {
+            setRequireGuestPassword(Boolean(s.public_access.requirePassword));
+            setHasPasswordSet(Boolean(s.public_access.hasPasswordSet));
+            setGuestPasswordHint(s.public_access.passwordHint || '');
+            setAllowPublicCopy(s.public_access.allowCopy ?? true);
+            setShowPublicSearch(s.public_access.showSearch ?? true);
+            setSiteTitle(s.public_access.customHeaderTitle || 'Personal Web OS');
+          }
+
+          if (s.dashboard_layout) {
+            const w = s.dashboard_layout.widgets || {};
+            setWidgetStats(w.stats ?? true);
+            setWidgetRecentNotes(w.recentNotes ?? true);
+            setWidgetPinnedProjects(w.pinnedProjects ?? true);
+            setWidgetLinks(w.links ?? true);
+            setWidgetSecurityStatus(w.securityStatus ?? true);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        if (!ignore) {
+          setNotification({ type: 'error', text: 'Không thể tải thông tin cài đặt.' });
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    loadInitialSettings();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -136,19 +185,35 @@ export default function SettingsPage() {
     e.preventDefault();
     try {
       setSaving(true);
+      const themePayload = {
+        mode: themeMode,
+        accent: accentColor,
+        accentColor,
+        fontFamily,
+        fontSans: fontFamily,
+        borderRadius,
+        radius: borderRadius,
+      };
+
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          key: 'theme',
-          value: {
-            mode: themeMode,
-            accent: accentColor,
-            fontFamily,
-            borderRadius,
-          }
+          key: 'theme_private',
+          value: themePayload,
         }),
       });
+
+      // Also persist theme key for backwards compatibility
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: 'theme',
+          value: themePayload,
+        }),
+      });
+
       const data = await res.json();
       if (res.ok) {
         setNotification({ type: 'success', text: 'Đã cập nhật hệ thống Theme thành công!' });
@@ -255,8 +320,8 @@ export default function SettingsPage() {
       } else {
         setNotification({ type: 'error', text: data.error || 'Lỗi xử lý file sao lưu.' });
       }
-    } catch (e: any) {
-      setNotification({ type: 'error', text: 'Dữ liệu JSON không hợp lệ: ' + e.message });
+    } catch (e: unknown) {
+      setNotification({ type: 'error', text: 'Dữ liệu JSON không hợp lệ: ' + (e instanceof Error ? e.message : 'Lỗi không xác định') });
     } finally {
       setImporting(false);
     }
@@ -420,13 +485,13 @@ export default function SettingsPage() {
             <label className="block text-xs font-medium text-foreground mb-2">Chế độ hiển thị</label>
             <div className="grid grid-cols-3 gap-3">
               {[
-                { id: 'dark', label: 'Tối (Bàn Giấy Đêm)', desc: 'Nền mực đen ấm áp, dịu mắt' },
-                { id: 'light', label: 'Sáng (Giấy Cũ Mộc)', desc: 'Nền giấy thủ công ấm áp, thanh tao' },
-                { id: 'system', label: 'Theo hệ thống', desc: 'Tự động theo thiết bị' },
+                { id: 'dark' as const, label: 'Tối (Bàn Giấy Đêm)', desc: 'Nền mực đen ấm áp, dịu mắt' },
+                { id: 'light' as const, label: 'Sáng (Giấy Cũ Mộc)', desc: 'Nền giấy thủ công ấm áp, thanh tao' },
+                { id: 'system' as const, label: 'Theo hệ thống', desc: 'Tự động theo thiết bị' },
               ].map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => setThemeMode(item.id as any)}
+                  onClick={() => setThemeMode(item.id)}
                   className={`p-4 rounded-xl border cursor-pointer transition-all ${
                     themeMode === item.id 
                       ? 'border-accent bg-accent/5 ring-1 ring-accent' 

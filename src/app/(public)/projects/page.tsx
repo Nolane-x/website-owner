@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderGit2, Search, Globe, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Search, Globe, ArrowRight, ArrowLeft } from 'lucide-react';
 import { GithubIcon as Github } from '@/components/ui/github-icon';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -14,14 +14,13 @@ interface Project {
   description: string;
   tags?: string[];
   category?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   isFeatured?: boolean;
   publishedAt: string;
 }
 
 export default function PublicProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -34,7 +33,6 @@ export default function PublicProjectsPage() {
         const data = await res.json();
         if (res.ok) {
           setProjects(data.projects || []);
-          setFilteredProjects(data.projects || []);
         }
       } catch (e) {
         console.error(e);
@@ -45,7 +43,7 @@ export default function PublicProjectsPage() {
     loadProjects();
   }, []);
 
-  useEffect(() => {
+  const filteredProjects = React.useMemo(() => {
     let result = [...projects];
 
     if (selectedCategory !== 'all') {
@@ -62,8 +60,8 @@ export default function PublicProjectsPage() {
       );
     }
 
-    setFilteredProjects(result);
-  }, [selectedCategory, searchQuery, projects]);
+    return result;
+  }, [projects, selectedCategory, searchQuery]);
 
   const categories = ['all', ...Array.from(new Set(projects.map((p) => p.category).filter(Boolean)))];
 
@@ -143,7 +141,7 @@ export default function PublicProjectsPage() {
                     {proj.category || 'Engineering'}
                   </Badge>
                   <div className="flex items-center gap-2">
-                    {proj.metadata?.repoUrl && (
+                    {typeof proj.metadata?.repoUrl === 'string' && (
                       <a
                         href={proj.metadata.repoUrl}
                         target="_blank"
@@ -154,7 +152,7 @@ export default function PublicProjectsPage() {
                         <Github size={15} />
                       </a>
                     )}
-                    {proj.metadata?.demoUrl && (
+                    {typeof proj.metadata?.demoUrl === 'string' && (
                       <a
                         href={proj.metadata.demoUrl}
                         target="_blank"

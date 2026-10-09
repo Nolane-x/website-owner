@@ -74,8 +74,8 @@ export async function GET(req: NextRequest) {
       .limit(10);
 
     const results = [
-      ...matchingItems.map((i: any) => ({ ...i, resultType: 'content' })),
-      ...matchingPages.map((p: any) => ({ ...p, type: 'page', resultType: 'page' })),
+      ...matchingItems.map((i) => ({ ...i, resultType: 'content' as const })),
+      ...matchingPages.map((p) => ({ ...p, type: 'page', resultType: 'page' as const })),
     ];
 
     return NextResponse.json({ results });

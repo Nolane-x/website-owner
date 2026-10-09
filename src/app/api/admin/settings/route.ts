@@ -8,6 +8,8 @@ import { hashPassword } from '@/lib/auth/password';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
+import { revokeAllGuestSessions } from '@/lib/auth/guest-session';
 
 export async function GET() {
   const auth = await requireOwner();
@@ -22,16 +24,17 @@ export async function GET() {
       .from(settings)
       .where(eq(settings.profileId, auth.profile.id));
 
-    const settingsMap: Record<string, any> = {};
+    const settingsMap: Record<string, unknown> = {};
     for (const s of allSettings) {
       settingsMap[s.key] = s.valueJson;
     }
 
     // Không bao giờ gửi password hash của public access ra client!
     if (settingsMap['public_access']) {
+      const pubAccess = (settingsMap['public_access'] || {}) as Record<string, unknown>;
       settingsMap['public_access'] = {
-        ...settingsMap['public_access'],
-        hasPasswordSet: Boolean(settingsMap['public_access'].passwordHash),
+        ...pubAccess,
+        hasPasswordSet: Boolean(pubAccess.passwordHash),
         passwordHash: undefined,
       };
     }
@@ -47,6 +50,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // P0.5: CSRF / Origin Guard
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -88,14 +95,25 @@ export async function POST(req: NextRequest) {
           .where(and(eq(settings.profileId, auth.profile.id), eq(settings.key, 'public_access')))
           .limit(1);
 
-        const currentVal = existingSetting.length > 0 ? (existingSetting[0].valueJson as any) : {};
+        const currentVal = (existingSetting.length > 0
+          ? existingSetting[0].valueJson
+          : {}) as Record<string, unknown>;
 
         let newPasswordHash = currentVal.passwordHash;
-        if (value.newPublicPassword && value.newPublicPassword.trim() !== '') {
+        let passwordRotated = false;
+
+        if (value.newPublicPassword && typeof value.newPublicPassword === 'string' && value.newPublicPassword.trim() !== '') {
           newPasswordHash = await hashPassword(value.newPublicPassword.trim());
+          passwordRotated = true;
           await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.PUBLIC_PASSWORD_CHANGED, null, ip, userAgent);
         } else if (value.removePassword) {
           newPasswordHash = null;
+          passwordRotated = true;
+        }
+
+        // P1.3: Thu hồi toàn bộ guest sessions nếu đổi mật mã, gỡ mật mã, hoặc tắt requirePassword
+        if (passwordRotated || value.requirePassword === false) {
+          await revokeAllGuestSessions();
         }
 
         finalValue = {

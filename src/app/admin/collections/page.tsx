@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Layers, Plus, Trash2, Edit, ExternalLink, Eye } from 'lucide-react';
+import { Layers, Plus, Trash2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,7 +38,20 @@ export default function AdminCollectionsPage() {
   };
 
   useEffect(() => {
-    fetchCollections();
+    async function loadCollections() {
+      try {
+        const res = await fetch('/api/admin/collections');
+        if (res.ok) {
+          const data = await res.json();
+          setCollections(data.collections || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải bộ sưu tập:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCollections();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,8 +86,8 @@ export default function AdminCollectionsPage() {
       setName('');
       setDescription('');
       fetchCollections();
-    } catch (err: any) {
-      setError(err.message || 'Không thể tạo bộ sưu tập.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể tạo bộ sưu tập.');
     } finally {
       setSubmitting(false);
     }

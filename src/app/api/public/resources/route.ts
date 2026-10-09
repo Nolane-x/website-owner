@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, and, desc, or, isNull } from 'drizzle-orm';
+import { eq, and, desc, or, isNull, type SQL } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { toPublicResource } from '@/lib/api/public-serializer';
 
@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get('category');
 
-    const conditions: any[] = [
-      or(eq(contentItems.type, 'resource'), eq(contentItems.type, 'link')),
+    const conditions: SQL[] = [
+      or(eq(contentItems.type, 'resource'), eq(contentItems.type, 'link'))!,
       eq(contentItems.visibility, 'PUBLIC'),
       eq(contentItems.status, 'PUBLISHED'),
       isNull(contentItems.deletedAt),
@@ -34,7 +34,9 @@ export async function GET(req: NextRequest) {
       .where(and(...conditions))
       .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt));
 
-    const resources = rawResources.map(toPublicResource).filter(Boolean);
+    const resources = rawResources
+      .map((r) => toPublicResource(r as unknown as Record<string, unknown>))
+      .filter((r): r is NonNullable<typeof r> => r !== null);
 
     return NextResponse.json({ resources });
   } catch (error) {

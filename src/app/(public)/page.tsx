@@ -8,10 +8,6 @@ import {
   FolderGit2, 
   Bookmark, 
   FileText, 
-  Sparkles, 
-  Layers, 
-  Compass, 
-  Terminal, 
   HardDrive,
   Globe,
   Copy,
@@ -33,7 +29,7 @@ interface ProjectItem {
   coverImage?: string;
   tags?: string[];
   category?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   isFeatured?: boolean;
 }
 
@@ -44,7 +40,7 @@ interface ResourceItem {
   type: string;
   description: string;
   category?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   publishedAt: string;
 }
 
@@ -60,8 +56,14 @@ interface ContentItem {
   createdAt: string;
 }
 
+interface PublicProfile {
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+}
+
 export default function PublicHomePage() {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [articles, setArticles] = useState<ContentItem[]>([]);
@@ -93,7 +95,7 @@ export default function PublicHomePage() {
         }
         if (contRes.ok) {
           const contData = await contRes.json();
-          const arts = (contData.items || []).filter((i: any) => i.type !== 'project' && i.type !== 'resource');
+          const arts = (contData.items || []).filter((i: ContentItem) => i.type !== 'project' && i.type !== 'resource');
           setArticles(arts.slice(0, 5));
         }
       } catch (e) {
@@ -118,13 +120,29 @@ export default function PublicHomePage() {
   return (
     <div className="space-y-20 md:space-y-28">
       {/* 1. HERO SECTION WITH HIGH-CRAFT NUI ATMOSPHERE */}
-      <section className="relative pt-6 md:pt-14 pb-10 border-b border-[var(--border-color)] space-y-8">
+      <section className="relative pt-6 md:pt-14 pb-12 border-b border-[var(--border-color)] space-y-8 overflow-hidden rounded-3xl p-6 md:p-10 bg-gradient-to-b from-[var(--bg-surface)] to-[var(--bg-page)] shadow-sm">
+        {/* Subtle Ambient Background Artwork */}
+        <div className="absolute right-0 top-0 w-full md:w-2/3 h-full pointer-events-none opacity-25 dark:opacity-40 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/hero-canvas.jpg"
+            alt="Atmospheric Background"
+            className="w-full h-full object-cover object-right"
+            style={{
+              maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 85%)',
+              WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 85%)',
+            }}
+          />
+        </div>
+
         {/* Floating System Status Pill */}
-        <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/80 backdrop-blur-md text-xs text-[var(--text-secondary)] shadow-sm">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
+        <div className="relative z-10 inline-flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/90 backdrop-blur-md text-xs text-[var(--text-secondary)] shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.jpg"
+            alt="Emblem"
+            className="w-4 h-4 rounded-full object-cover ring-1 ring-amber-500/40"
+          />
           <span className="font-mono text-[11px] uppercase tracking-wider text-[var(--accent)] font-semibold">
             Hệ Điều Hành Web Cá Nhân
           </span>
@@ -133,7 +151,7 @@ export default function PublicHomePage() {
         </div>
 
         {/* Hero Typography */}
-        <div className="space-y-5 max-w-4xl">
+        <div className="relative z-10 space-y-5 max-w-4xl">
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-serif font-bold text-[var(--text-primary)] tracking-tight leading-[1.1]">
             {profile?.displayName ? profile.displayName : 'Không Gian Số Cá Nhân'}
           </h1>
@@ -225,7 +243,7 @@ export default function PublicHomePage() {
                       </Badge>
                     </div>
 
-                    {proj.metadata?.repoUrl && (
+                    {typeof proj.metadata?.repoUrl === 'string' && (
                       <a 
                         href={proj.metadata.repoUrl} 
                         target="_blank" 
@@ -299,8 +317,8 @@ export default function PublicHomePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {resources.map((res) => {
-              const url = res.metadata?.url || '#';
-              const provider = res.metadata?.provider || 'Web';
+              const url = typeof res.metadata?.url === 'string' ? res.metadata.url : '#';
+              const provider = typeof res.metadata?.provider === 'string' ? res.metadata.provider : 'Web';
               const isCopied = copiedId === res.id;
 
               return (
