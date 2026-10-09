@@ -15,18 +15,31 @@ import {
   Settings,
   Shield,
   Eye,
+  CheckSquare,
+  CreditCard,
+  Share2,
+  BookOpen,
+  Code2,
+  Globe,
+  Wrench,
+  Timer,
 } from 'lucide-react';
+import { playSound } from '@/lib/audio/sound-fx';
 
 export function CommandMenu({
   open,
   onOpenChange,
   onTriggerQuickAdd,
   onTriggerPanicLock,
+  onTriggerDevTools,
+  onTriggerFocusStudio,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTriggerQuickAdd?: () => void;
   onTriggerPanicLock?: () => void;
+  onTriggerDevTools?: () => void;
+  onTriggerFocusStudio?: () => void;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -35,6 +48,7 @@ export function CommandMenu({
     const down = (e: KeyboardEvent) => {
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        playSound('pop');
         onOpenChange(!open);
       }
     };
@@ -45,6 +59,7 @@ export function CommandMenu({
   if (!open) return null;
 
   const runCommand = (cmd: () => void) => {
+    playSound('snap');
     onOpenChange(false);
     cmd();
   };
@@ -63,7 +78,7 @@ export function CommandMenu({
           <div className="flex items-center px-4 py-3 border-b border-[var(--border-color)]">
             <Search className="mr-3 h-4 w-4 text-[var(--text-muted)] shrink-0" />
             <Command.Input
-              placeholder="Nhập lệnh hoặc tìm kiếm nội dung... (ESC để đóng)"
+              placeholder="Nhập lệnh hoặc tìm kiếm công cụ... (ESC để đóng)"
               className="w-full bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
               autoFocus
             />
@@ -71,7 +86,7 @@ export function CommandMenu({
 
           <Command.List className="max-h-80 overflow-y-auto p-2 space-y-1">
             <Command.Empty className="py-6 text-center text-xs text-[var(--text-muted)]">
-              Không tìm thấy lệnh hoặc nội dung phù hợp.
+              Không tìm thấy lệnh hoặc công cụ phù hợp.
             </Command.Empty>
 
             <Command.Group heading="Thao tác nhanh" className="text-[11px] font-semibold text-[var(--text-muted)] px-2 py-1">
@@ -81,6 +96,20 @@ export function CommandMenu({
               >
                 <Plus size={15} className="text-[var(--accent)]" />
                 <span>Thêm nhanh nội dung (+ Note, Project, Resource)</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runCommand(() => onTriggerFocusStudio?.())}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-amber-500 rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <Timer size={15} />
+                <span>Mở Focus Studio & Pomodoro Ambient Sound</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runCommand(() => onTriggerDevTools?.())}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-indigo-400 rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <Wrench size={15} />
+                <span>Mở Tiện ích Lập trình viên (JSON, UUID, Regex, Crypto)</span>
               </Command.Item>
               <Command.Item
                 onSelect={() => runCommand(() => onTriggerPanicLock?.())}
@@ -95,6 +124,51 @@ export function CommandMenu({
               >
                 <Eye size={15} className="text-emerald-600" />
                 <span>Mở xem Website công khai (Guest Mode)</span>
+              </Command.Item>
+            </Command.Group>
+
+            <Command.Group heading="Tính năng Nâng cao (Executive Suite)" className="text-[11px] font-semibold text-[var(--text-muted)] px-2 py-1 mt-2">
+              <Command.Item
+                onSelect={() => runCommand(() => router.push('/admin/tasks'))}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-primary)] rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <CheckSquare size={15} className="text-blue-500" />
+                <span>Bảng điều hành Công việc (Kanban Board)</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runCommand(() => router.push('/admin/subscriptions'))}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-primary)] rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <CreditCard size={15} className="text-emerald-500" />
+                <span>Quản trị Chi phí & Đăng ký Dịch vụ</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runCommand(() => router.push('/admin/graph'))}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-primary)] rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <Share2 size={15} className="text-violet-500" />
+                <span>Đồ thị Tri thức Cá nhân (Knowledge Graph)</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runCommand(() => router.push('/admin/journal'))}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-primary)] rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <BookOpen size={15} className="text-rose-500" />
+                <span>Nhật ký Điều hành & Heatmap 365 Ngày</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runCommand(() => router.push('/admin/snippets'))}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-primary)] rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <Code2 size={15} className="text-cyan-500" />
+                <span>Kho Đoạn mã Lập trình (Snippets Vault)</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runCommand(() => router.push('/admin/api-tester'))}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-primary)] rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <Globe size={15} className="text-amber-500" />
+                <span>Trình Thử nghiệm Yêu cầu API (HTTP Tester)</span>
               </Command.Item>
             </Command.Group>
 

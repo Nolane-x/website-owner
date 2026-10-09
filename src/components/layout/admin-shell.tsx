@@ -7,6 +7,11 @@ import { AdminHeader, type AdminHeaderProfile } from '@/components/layout/admin-
 import { CommandMenu } from '@/components/ui/command-menu';
 import { QuickAddModal } from '@/components/ui/quick-add-modal';
 import { PanicLockOverlay } from '@/components/ui/panic-lock-modal';
+import { DevToolsModal } from '@/components/ui/dev-tools-modal';
+import { FocusStudioModal } from '@/components/ui/focus-studio-modal';
+import { WallpaperEngine, WallpaperSelectorModal } from '@/components/ui/wallpaper-engine';
+import { FloatingDock } from '@/components/ui/floating-dock';
+import { playSound } from '@/lib/audio/sound-fx';
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -22,6 +27,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [isPanicLocked, setIsPanicLocked] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
+
+  // Power Suite Modals
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
+  const [focusStudioOpen, setFocusStudioOpen] = useState(false);
+  const [wallpaperSelectorOpen, setWallpaperSelectorOpen] = useState(false);
 
   useEffect(() => {
     if (isLoginPage) {
@@ -64,12 +74,19 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, isLoginPage, router]);
 
-  // Lắng nghe phím tắt Panic Lock: Ctrl + Shift + L
+  // Lắng nghe phím tắt:
+  // Panic Lock: Ctrl + Shift + L
+  // DevTools: Ctrl + Shift + D
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'l' || e.key === 'L')) {
         e.preventDefault();
         setIsPanicLocked(true);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        playSound('pop');
+        setDevToolsOpen((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -92,14 +109,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className={`flex h-screen overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] ${isPrivacyMode ? 'privacy-screen-active' : ''}`}>
+    <div className={`flex h-screen overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] relative ${isPrivacyMode ? 'privacy-screen-active' : ''}`}>
+      {/* Background Wallpaper Engine */}
+      <WallpaperEngine />
+
       <AdminSidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         navItems={navItems}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative z-10">
         <AdminHeader
           onOpenQuickAdd={() => setQuickAddOpen(true)}
           onOpenCommandPalette={() => setCommandPaletteOpen(true)}
@@ -109,24 +129,33 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           profile={profile}
         />
 
-        <main className={`flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 ${isPrivacyMode ? 'privacy-blur' : ''}`}>
+        <main className={`flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-20 ${isPrivacyMode ? 'privacy-blur' : ''}`}>
           <div className="max-w-7xl mx-auto">{children}</div>
         </main>
       </div>
 
-      {/* Global Modals */}
+      {/* macOS-style Floating Dock */}
+      <FloatingDock
+        onOpenFocusStudio={() => setFocusStudioOpen(true)}
+        onOpenDevTools={() => setDevToolsOpen(true)}
+        onOpenWallpaper={() => setWallpaperSelectorOpen(true)}
+        onTriggerPanicLock={() => setIsPanicLocked(true)}
+      />
+
+      {/* Global Modals & Power Tools */}
       <CommandMenu
         open={commandPaletteOpen}
         onOpenChange={setCommandPaletteOpen}
         onTriggerQuickAdd={() => setQuickAddOpen(true)}
         onTriggerPanicLock={() => setIsPanicLocked(true)}
+        onTriggerDevTools={() => setDevToolsOpen(true)}
+        onTriggerFocusStudio={() => setFocusStudioOpen(true)}
       />
 
       <QuickAddModal
         open={quickAddOpen}
         onOpenChange={setQuickAddOpen}
         onSuccess={() => {
-          // Trigger refresh event
           window.dispatchEvent(new Event('webos:refresh-content'));
         }}
       />
@@ -139,6 +168,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             router.push('/admin/login');
           });
         }}
+      />
+
+      <DevToolsModal
+        isOpen={devToolsOpen}
+        onClose={() => setDevToolsOpen(false)}
+      />
+
+      <FocusStudioModal
+        isOpen={focusStudioOpen}
+        onClose={() => setFocusStudioOpen(false)}
+      />
+
+      <WallpaperSelectorModal
+        isOpen={wallpaperSelectorOpen}
+        onClose={() => setWallpaperSelectorOpen(false)}
       />
     </div>
   );

@@ -17,6 +17,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  CheckSquare,
+  CreditCard,
+  Share2,
+  BookOpen,
+  Code2,
+  Globe,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -38,6 +44,12 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   ShieldCheck,
   Lock,
   Settings,
+  CheckSquare,
+  CreditCard,
+  Share2,
+  BookOpen,
+  Code2,
+  Globe,
 };
 
 export function AdminSidebar({
@@ -53,9 +65,15 @@ export function AdminSidebar({
 
   const defaultItems: NavItem[] = [
     { id: 'home', label: 'Bảng điều khiển', href: '/admin', icon: 'LayoutDashboard', visible: true },
+    { id: 'tasks', label: 'Công việc Kanban', href: '/admin/tasks', icon: 'CheckSquare', visible: true },
     { id: 'notes', label: 'Ghi chú & Bài viết', href: '/admin/content', icon: 'FileText', visible: true },
+    { id: 'journal', label: 'Nhật ký 365 Ngày', href: '/admin/journal', icon: 'BookOpen', visible: true },
+    { id: 'graph', label: 'Đồ thị Tri thức', href: '/admin/graph', icon: 'Share2', visible: true },
     { id: 'projects', label: 'Dự án', href: '/admin/projects', icon: 'FolderGit2', visible: true },
     { id: 'resources', label: 'Tài nguyên Link', href: '/admin/resources', icon: 'Bookmark', visible: true },
+    { id: 'snippets', label: 'Kho Đoạn mã', href: '/admin/snippets', icon: 'Code2', visible: true },
+    { id: 'api-tester', label: 'Thử nghiệm API', href: '/admin/api-tester', icon: 'Globe', visible: true },
+    { id: 'subscriptions', label: 'Chi phí & Dịch vụ', href: '/admin/subscriptions', icon: 'CreditCard', visible: true },
     { id: 'pages', label: 'Trình dựng Trang', href: '/admin/pages', icon: 'Compass', visible: true },
     { id: 'collections', label: 'Bộ sưu tập', href: '/admin/collections', icon: 'Layers', visible: true },
     { id: 'vault', label: 'Két bảo mật', href: '/admin/vault', icon: 'ShieldCheck', visible: true },
