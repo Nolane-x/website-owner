@@ -36,18 +36,47 @@ export function minifyJson(input: string): JsonProcessResult {
   }
 }
 
+function getRandomBytes(count: number): Uint8Array {
+  const bytes = new Uint8Array(count);
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < count; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return bytes;
+}
+
+export function generateUuidV4(): string {
+  if (typeof globalThis !== 'undefined' && typeof globalThis.crypto?.randomUUID === 'function') {
+    try {
+      return globalThis.crypto.randomUUID();
+    } catch {
+      // Fallback bên dưới
+    }
+  }
+
+  const bytes = getRandomBytes(16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 export function generateUuidV7(): string {
   const now = Date.now();
   const timeHex = now.toString(16).padStart(12, '0');
-  const randBytes = crypto.randomBytes(10);
+  const randBytes = getRandomBytes(10);
 
   const part1 = timeHex.slice(0, 8);
   const part2 = timeHex.slice(8, 12);
-  const part3 = '7' + randBytes.subarray(0, 2).toString('hex').slice(1, 4);
+  const randHex = Array.from(randBytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  const part3 = '7' + randHex.slice(0, 3);
 
   const varByte = (randBytes[2] & 0x3f) | 0x80;
-  const part4 = varByte.toString(16).padStart(2, '0') + randBytes.subarray(3, 4).toString('hex');
-  const part5 = randBytes.subarray(4, 10).toString('hex');
+  const part4 = varByte.toString(16).padStart(2, '0') + randBytes[3].toString(16).padStart(2, '0');
+  const part5 = Array.from(randBytes.subarray(4, 10), (b) => b.toString(16).padStart(2, '0')).join('');
 
   return `${part1}-${part2}-${part3}-${part4}-${part5}`;
 }
@@ -59,7 +88,7 @@ export function generateUuid(version: 'v4' | 'v7' = 'v4', count = 1): string[] {
     if (version === 'v7') {
       result.push(generateUuidV7());
     } else {
-      result.push(crypto.randomUUID());
+      result.push(generateUuidV4());
     }
   }
   return result;

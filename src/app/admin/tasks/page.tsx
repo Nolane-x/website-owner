@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { playSound } from '@/lib/audio/sound-fx';
+import { generateUuidV4 } from '@/lib/dev-tools/converters';
 import { KanbanTask, TaskStatus, TaskPriority, KanbanSubtask } from '@/lib/types';
 
 const STATUS_COLUMNS: { id: TaskStatus; label: string; bgBadge: string; textBadge: string }[] = [
@@ -236,7 +237,7 @@ export default function KanbanTasksPage() {
   const handleAddSubtaskInModal = () => {
     if (!newSubtaskTitle.trim()) return;
     const newSt: KanbanSubtask = {
-      id: crypto.randomUUID(),
+      id: generateUuidV4(),
       title: newSubtaskTitle.trim(),
       completed: false,
     };

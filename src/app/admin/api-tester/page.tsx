@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { playSound } from '@/lib/audio/sound-fx';
+import { generateUuidV4 } from '@/lib/dev-tools/converters';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -49,7 +50,7 @@ export default function ApiTesterPage() {
 
   const handleAddHeader = () => {
     playSound('pop');
-    setHeaders((prev) => [...prev, { id: crypto.randomUUID(), key: '', value: '' }]);
+    setHeaders((prev) => [...prev, { id: generateUuidV4(), key: '', value: '' }]);
   };
 
   const handleRemoveHeader = (id: string) => {

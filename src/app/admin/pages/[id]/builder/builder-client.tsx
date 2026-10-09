@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { VisibilityBadge, StatusBadge } from '@/components/ui/badge';
 import { BlockType, ContentStatus } from '@/lib/types';
 import { sanitizeHtml } from '@/lib/security/sanitize';
+import { generateUuidV4 } from '@/lib/dev-tools/converters';
 
 interface BuilderBlockContent {
   text?: string;
@@ -139,7 +140,7 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
     };
 
     const newBlock: BuilderBlock = {
-      id: 'temp-' + crypto.randomUUID(),
+      id: 'temp-' + generateUuidV4(),
       blockType: type,
       sortOrder: blocks.length,
       contentJson: defaultContents[type] || {},
@@ -169,7 +170,7 @@ export function BuilderCanvasClient({ pageId }: { pageId: string }) {
   const duplicateBlock = (index: number) => {
     const source = blocks[index];
     const duplicate: BuilderBlock = {
-      id: 'temp-' + crypto.randomUUID(),
+      id: 'temp-' + generateUuidV4(),
       blockType: source.blockType,
       sortOrder: index + 1,
       contentJson: JSON.parse(JSON.stringify(source.contentJson)),
