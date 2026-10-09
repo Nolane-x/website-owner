@@ -24,7 +24,9 @@ import {
   Code2,
   Globe,
   Inbox,
+  Monitor,
 } from 'lucide-react';
+import { useWindowManager } from '@/lib/desktop/window-manager-context';
 
 export interface NavItem {
   id: string;
@@ -64,6 +66,7 @@ export function AdminSidebar({
   navItems?: NavItem[];
 }) {
   const pathname = usePathname();
+  const { setDesktopMode } = useWindowManager();
 
   const defaultItems: NavItem[] = [
     { id: 'home', label: 'Bảng điều khiển', href: '/admin', icon: 'LayoutDashboard', visible: true },
@@ -126,6 +129,20 @@ export function AdminSidebar({
             title="Thu gọn thanh điều hướng"
           >
             <ChevronLeft size={16} />
+          </button>
+        </div>
+ 
+        {/* Switch to Web OS Virtual Desktop Mode */}
+        <div className="p-2 pb-1">
+          <button
+            onClick={() => setDesktopMode('desktop')}
+            className={`w-full flex items-center gap-2.5 py-2 rounded-[var(--radius-md,0.625rem)] text-xs font-bold transition-all bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-950/20 border border-emerald-400/40 group hover:scale-[1.02] active:scale-[0.98] ${
+              collapsed ? 'justify-center px-0' : 'px-3'
+            }`}
+            title="Quay lại Màn hình Bàn làm việc Web OS 5.0 (Virtual Desktop)"
+          >
+            <Monitor size={16} className="text-emerald-200 animate-pulse shrink-0" />
+            {!collapsed && <span className="truncate">Bàn làm việc Web OS</span>}
           </button>
         </div>
 

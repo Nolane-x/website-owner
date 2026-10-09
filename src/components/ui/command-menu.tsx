@@ -23,8 +23,10 @@ import {
   Globe,
   Wrench,
   Timer,
+  Monitor,
 } from 'lucide-react';
 import { playSound } from '@/lib/audio/sound-fx';
+import { useWindowManager } from '@/lib/desktop/window-manager-context';
 
 export function CommandMenu({
   open,
@@ -42,6 +44,7 @@ export function CommandMenu({
   onTriggerFocusStudio?: () => void;
 }) {
   const router = useRouter();
+  const { setDesktopMode } = useWindowManager();
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -90,6 +93,13 @@ export function CommandMenu({
             </Command.Empty>
 
             <Command.Group heading="Thao tác nhanh" className="text-[11px] font-semibold text-[var(--text-muted)] px-2 py-1">
+              <Command.Item
+                onSelect={() => runCommand(() => setDesktopMode('desktop'))}
+                className="flex items-center gap-2.5 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 font-semibold rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-emerald-500/10"
+              >
+                <Monitor size={15} className="text-emerald-500 animate-pulse" />
+                <span>Chuyển sang Bàn làm việc Web OS 5.0 (Virtual Desktop)</span>
+              </Command.Item>
               <Command.Item
                 onSelect={() => runCommand(() => onTriggerQuickAdd?.())}
                 className="flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-primary)] rounded-[var(--radius-md,0.625rem)] cursor-pointer hover:bg-[var(--bg-surface-subtle)]"

@@ -18,8 +18,10 @@ import {
   Lock,
   ChevronDown,
   ChevronUp,
+  Monitor,
 } from 'lucide-react';
 import { playSound } from '@/lib/audio/sound-fx';
+import { useWindowManager } from '@/lib/desktop/window-manager-context';
 
 export function FloatingDock({
   onOpenFocusStudio,
@@ -33,6 +35,7 @@ export function FloatingDock({
   onTriggerPanicLock: () => void;
 }) {
   const pathname = usePathname();
+  const { setDesktopMode } = useWindowManager();
   const [collapsed, setCollapsed] = useState(false);
 
   const DOCK_ITEMS: {
@@ -43,6 +46,13 @@ export function FloatingDock({
     onClick?: () => void;
     color: string;
   }[] = [
+    {
+      id: 'desktop',
+      label: 'Bàn làm việc Web OS 5.0 (Màn hình Ảo)',
+      icon: Monitor,
+      onClick: () => setDesktopMode('desktop'),
+      color: 'text-emerald-400',
+    },
     { id: 'dash', label: 'Bảng điều khiển', icon: LayoutDashboard, href: '/admin', color: 'text-zinc-300' },
     { id: 'tasks', label: 'Kanban Tasks', icon: CheckSquare, href: '/admin/tasks', color: 'text-blue-400' },
     { id: 'notes', label: 'Ghi chú & Bài viết', icon: FileText, href: '/admin/content', color: 'text-amber-400' },

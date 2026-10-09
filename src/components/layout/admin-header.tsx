@@ -14,7 +14,9 @@ import {
   LogOut,
   Settings,
   Shield,
+  Monitor,
 } from 'lucide-react';
+import { useWindowManager } from '@/lib/desktop/window-manager-context';
 import { Button } from '../ui/button';
 import {
   DropdownMenu,
@@ -46,6 +48,7 @@ export function AdminHeader({
   profile?: AdminHeaderProfile | null;
 }) {
   const router = useRouter();
+  const { setDesktopMode } = useWindowManager();
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -105,6 +108,16 @@ export function AdminHeader({
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        {/* Switch to Web OS Virtual Desktop Mode */}
+        <button
+          onClick={() => setDesktopMode('desktop')}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-[var(--radius-md,0.625rem)] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-600/25 transition-all border border-emerald-400/50 hover:scale-105 active:scale-95"
+          title="Quay lại Màn hình Bàn làm việc Hệ điều hành Web OS 5.0 (Virtual Desktop)"
+        >
+          <Monitor size={15} className="animate-pulse text-emerald-200" />
+          <span>Màn hình Web OS</span>
+        </button>
+
         {/* Quick Add */}
         <Button
           size="sm"
