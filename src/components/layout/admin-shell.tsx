@@ -124,8 +124,25 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     );
   }
 
+  useEffect(() => {
+    // Default to dark theme for high comfort & zero glare across Web OS
+    const savedTheme = localStorage.getItem('webos_theme');
+    if (savedTheme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+      if (!savedTheme) {
+        localStorage.setItem('webos_theme', 'dark');
+      }
+    }
+  }, []);
+
   return (
-    <div className={`h-screen w-screen overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] relative ${isPrivacyMode ? 'privacy-screen-active' : ''}`}>
+    <div className={`h-screen w-screen overflow-hidden ${
+      desktopMode === 'desktop'
+        ? 'bg-[#080b11] text-stone-100 dark'
+        : 'bg-[var(--bg-page)] text-[var(--text-primary)]'
+    } relative ${isPrivacyMode ? 'privacy-screen-active' : ''}`}>
       {/* Background Wallpaper Engine */}
       <WallpaperEngine />
 

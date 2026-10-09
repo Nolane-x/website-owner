@@ -61,7 +61,7 @@ export function WallpaperEngine() {
     const filterCss = generateCssFilterString(activeCustom.filters || {});
 
     return (
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#080b11]">
         {/* Media Background layer */}
         <div
           style={{ filter: filterCss }}
@@ -102,48 +102,83 @@ export function WallpaperEngine() {
     );
   }
 
-  // 2. Legacy fallback
-  if (style === 'default') return null;
-
+  // 2. Built-in Preset Wallpapers with deep, eye-comfort dark background
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden transition-opacity duration-1000">
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#080b11] transition-opacity duration-700">
+      {/* 2.1 Default Flagship Web OS 5.0 Wallpaper: Deep Cyber Space Nebula */}
+      {style === 'default' && (
+        <div className="absolute inset-0">
+          {/* Subtle Ambient Nebula Glow Orbs */}
+          <div className="absolute -top-[20%] left-[8%] w-[60vw] h-[60vw] rounded-full bg-gradient-to-br from-emerald-900/30 via-teal-950/20 to-transparent blur-[140px] pointer-events-none animate-pulse duration-1000" />
+          <div className="absolute top-[35%] -right-[15%] w-[55vw] h-[55vw] rounded-full bg-gradient-to-tl from-indigo-950/35 via-blue-950/20 to-transparent blur-[150px] pointer-events-none" />
+          <div className="absolute -bottom-[20%] left-[25%] w-[50vw] h-[50vw] rounded-full bg-gradient-to-tr from-cyan-950/25 via-emerald-950/20 to-transparent blur-[130px] pointer-events-none" />
+
+          {/* Minimalist Micro-grid texture for high-tech OS depth */}
+          <div
+            className="absolute inset-0 opacity-[0.04] pointer-events-none"
+            style={{
+              backgroundImage:
+                'linear-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.4) 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+            }}
+          />
+
+          {/* Vignette border shading to eliminate any edge glare */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(0,0,0,0.6)_100%)] pointer-events-none" />
+        </div>
+      )}
+
+      {/* 2.2 Aurora Borealis */}
       {style === 'aurora' && (
-        <div className="absolute inset-0 opacity-40">
-          <div className="absolute -top-[30%] -left-[10%] w-[60vw] h-[60vw] rounded-full bg-gradient-to-br from-indigo-600/30 via-purple-600/20 to-transparent blur-[120px] animate-pulse duration-1000" />
-          <div className="absolute -bottom-[20%] -right-[10%] w-[50vw] h-[50vw] rounded-full bg-gradient-to-tl from-teal-500/20 via-emerald-600/20 to-transparent blur-[100px] animate-pulse duration-700" />
+        <div className="absolute inset-0 bg-[#070a14]">
+          <div className="absolute inset-0 opacity-60">
+            <div className="absolute -top-[30%] -left-[10%] w-[65vw] h-[65vw] rounded-full bg-gradient-to-br from-indigo-600/35 via-purple-600/25 to-transparent blur-[140px] animate-pulse duration-1000" />
+            <div className="absolute -bottom-[20%] -right-[10%] w-[55vw] h-[55vw] rounded-full bg-gradient-to-tl from-teal-500/25 via-emerald-600/25 to-transparent blur-[120px] animate-pulse duration-700" />
+          </div>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_20%,rgba(0,0,0,0.65)_100%)] pointer-events-none" />
         </div>
       )}
 
+      {/* 2.3 Cyber Grid Matrix */}
       {style === 'matrix' && (
-        <div className="absolute inset-0 opacity-20">
-          <div
-            className="w-full h-full"
-            style={{
-              backgroundImage:
-                'linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px)',
-              backgroundSize: '36px 36px',
-            }}
-          />
+        <div className="absolute inset-0 bg-[#050807]">
+          <div className="absolute inset-0 opacity-30">
+            <div
+              className="w-full h-full"
+              style={{
+                backgroundImage:
+                  'linear-gradient(rgba(16, 185, 129, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 185, 129, 0.15) 1px, transparent 1px)',
+                backgroundSize: '36px 36px',
+              }}
+            />
+          </div>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_20%,rgba(0,0,0,0.7)_100%)] pointer-events-none" />
         </div>
       )}
 
+      {/* 2.4 Deep Starfield */}
       {style === 'starfield' && (
-        <div className="absolute inset-0 opacity-30">
-          <div
-            className="w-full h-full"
-            style={{
-              backgroundImage:
-                'radial-gradient(rgba(255, 255, 255, 0.25) 1px, transparent 1px), radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px)',
-              backgroundSize: '48px 48px, 96px 96px',
-              backgroundPosition: '0 0, 24px 24px',
-            }}
-          />
+        <div className="absolute inset-0 bg-[#04060a]">
+          <div className="absolute inset-0 opacity-40">
+            <div
+              className="w-full h-full"
+              style={{
+                backgroundImage:
+                  'radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px), radial-gradient(rgba(255, 255, 255, 0.25) 1px, transparent 1px)',
+                backgroundSize: '48px 48px, 96px 96px',
+                backgroundPosition: '0 0, 24px 24px',
+              }}
+            />
+          </div>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_20%,rgba(0,0,0,0.7)_100%)] pointer-events-none" />
         </div>
       )}
 
+      {/* 2.5 Pure OLED Obsidian */}
       {style === 'obsidian' && (
-        <div className="absolute inset-0 bg-[#07080b]/90">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(120,119,198,0.12),transparent_70%)]" />
+        <div className="absolute inset-0 bg-[#050608]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(120,119,198,0.18),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(0,0,0,0.8)_100%)] pointer-events-none" />
         </div>
       )}
     </div>
@@ -172,7 +207,7 @@ export function WallpaperSelectorModal({
   if (!isOpen) return null;
 
   const WALLPAPERS: { id: WallpaperStyle; label: string; desc: string }[] = [
-    { id: 'default', label: 'Mặc định (Minimal)', desc: 'Giao diện trung tính gốc của Web OS' },
+    { id: 'default', label: 'Vũ trụ Không gian (Cyber Nebula)', desc: 'Nền không gian hắc thạch dịu mắt, chống chói lóa và bảo vệ thị giác' },
     { id: 'aurora', label: 'Cực quang huyền ảo (Digital Aurora)', desc: 'Dải cực quang tím và lục mờ ảo nhẹ nhàng' },
     { id: 'matrix', label: 'Mạng lưới Cybernetic (Cyber Grid)', desc: 'Lưới tọa độ xanh lục công nghệ hiện đại' },
     { id: 'starfield', label: 'Vũ trụ sao đêm (Starfield)', desc: 'Không gian tĩnh lặng với bụi sao lấp lánh' },

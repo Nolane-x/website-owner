@@ -117,14 +117,16 @@ export function DesktopWidgets() {
               key={icon.appId}
               onDoubleClick={() => openWindow(icon.appId, icon.title)}
               onClick={() => {
-                // Also single click on mobile or quick launch
+                if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                  openWindow(icon.appId, icon.title);
+                }
               }}
-              className="group flex flex-col items-center justify-center w-24 p-2 rounded-xl hover:bg-white/10 active:bg-white/20 backdrop-blur-xs border border-transparent hover:border-white/20 transition-all text-center focus:outline-hidden focus:ring-1 focus:ring-emerald-400"
+              className="group flex flex-col items-center justify-center w-24 p-2 rounded-2xl hover:bg-white/10 active:bg-white/20 backdrop-blur-xs border border-transparent hover:border-white/20 transition-all text-center focus:outline-hidden focus:ring-2 focus:ring-emerald-400 cursor-pointer"
             >
-              <div className="p-2.5 rounded-2xl bg-stone-900/60 border border-stone-700/50 shadow-lg group-hover:shadow-emerald-950/50 transition">
+              <div className="p-3 rounded-2xl bg-stone-900/85 border border-stone-700/70 shadow-xl group-hover:scale-105 group-hover:border-emerald-500/60 group-hover:shadow-emerald-900/40 group-hover:bg-stone-850 transition-all duration-200">
                 {icon.icon}
               </div>
-              <span className="mt-1.5 text-xs text-stone-200 font-medium tracking-wide drop-shadow-md truncate max-w-[88px]">
+              <span className="mt-2 px-2 py-0.5 rounded-md bg-stone-950/90 border border-stone-800/80 backdrop-blur-md text-[11px] font-semibold text-stone-100 tracking-wide shadow-md truncate max-w-[92px] group-hover:border-emerald-500/60 group-hover:text-emerald-300 transition-colors">
                 {icon.title}
               </span>
             </button>

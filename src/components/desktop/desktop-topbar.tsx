@@ -9,6 +9,8 @@ import {
   Sparkles,
   Maximize,
   Moon,
+  Sun,
+  Tv,
   Clock,
   Radio,
   Image as ImageIcon,
@@ -31,6 +33,29 @@ export function DesktopTopbar({
   const [timeStr, setTimeStr] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>('');
   const [ping, setPing] = useState<number>(24);
+  const [isDark, setIsDark] = useState<boolean>(true);
+
+  useEffect(() => {
+    const syncTheme = () => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+    syncTheme();
+    window.addEventListener('webos:theme-change', syncTheme);
+    return () => window.removeEventListener('webos:theme-change', syncTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('webos_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('webos_theme', 'light');
+    }
+    window.dispatchEvent(new CustomEvent('webos:theme-change', { detail: nextDark ? 'dark' : 'light' }));
+  };
 
   // Update clock every second
   useEffect(() => {
@@ -204,9 +229,26 @@ export function DesktopTopbar({
             title="Bật chế độ Màn hình chờ (Screensaver)"
             className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-stone-200 transition"
           >
-            <Moon className="w-3.5 h-3.5 text-indigo-400" />
+            <Tv className="w-3.5 h-3.5 text-indigo-400" />
           </button>
         )}
+
+        {/* Chế độ Tối / Bảo vệ mắt (Theme & Eye Care) */}
+        <button
+          onClick={toggleTheme}
+          title={
+            isDark
+              ? 'Đang bật Chế độ Tối (Bảo vệ mắt). Bấm để chuyển sang Sáng'
+              : 'Chuyển sang Chế độ Tối (Bảo vệ mắt)'
+          }
+          className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-stone-200 transition"
+        >
+          {isDark ? (
+            <Sun className="w-3.5 h-3.5 text-amber-400" />
+          ) : (
+            <Moon className="w-3.5 h-3.5 text-sky-400" />
+          )}
+        </button>
 
         {/* Fullscreen */}
         <button

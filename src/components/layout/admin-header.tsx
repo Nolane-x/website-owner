@@ -49,13 +49,15 @@ export function AdminHeader({
 }) {
   const router = useRouter();
   const { setDesktopMode } = useWindowManager();
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
-    const handle = requestAnimationFrame(() => {
+    const sync = () => {
       setIsDark(document.documentElement.classList.contains('dark'));
-    });
-    return () => cancelAnimationFrame(handle);
+    };
+    sync();
+    window.addEventListener('webos:theme-change', sync);
+    return () => window.removeEventListener('webos:theme-change', sync);
   }, []);
 
   const toggleTheme = () => {
@@ -63,9 +65,12 @@ export function AdminHeader({
     setIsDark(nextDark);
     if (nextDark) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('webos_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('webos_theme', 'light');
     }
+    window.dispatchEvent(new CustomEvent('webos:theme-change', { detail: nextDark ? 'dark' : 'light' }));
   };
 
   const handleLogout = async () => {

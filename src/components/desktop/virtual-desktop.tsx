@@ -63,7 +63,7 @@ export function VirtualDesktop({
   return (
     <div
       onContextMenu={handleContextMenu}
-      className="fixed inset-0 z-30 overflow-hidden select-none"
+      className="fixed inset-0 z-10 overflow-hidden select-none bg-transparent text-stone-100 dark"
     >
       {/* Dynamic Wallpaper background slot */}
       {wallpaperBackground}
