@@ -8,6 +8,7 @@ import { sanitizeHtml, sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { syncContentLinks } from '@/lib/knowledge/wiki-links';
 
 export async function GET(
   req: NextRequest,
@@ -132,6 +133,10 @@ export async function PUT(
       .update(contentItems)
       .set(updates)
       .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)));
+
+    if (updates.content !== undefined) {
+      await syncContentLinks(auth.profile.id, id, updates.content || '');
+    }
 
     const ip = getClientIp(req.headers);
     const userAgent = req.headers.get('user-agent') || 'Unknown';

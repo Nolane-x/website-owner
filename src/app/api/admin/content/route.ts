@@ -9,6 +9,7 @@ import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
+import { syncContentLinks } from '@/lib/knowledge/wiki-links';
 
 function generateSlug(text: string): string {
   return text
@@ -148,6 +149,10 @@ export async function POST(req: NextRequest) {
     );
 
     const created = await db.select().from(contentItems).where(eq(contentItems.id, id)).limit(1);
+
+    if (sanitizedContent) {
+      await syncContentLinks(auth.profile.id, id, sanitizedContent);
+    }
 
     return NextResponse.json({ success: true, item: created[0] }, { status: 201 });
   } catch (error) {

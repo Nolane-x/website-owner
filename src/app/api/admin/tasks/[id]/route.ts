@@ -5,7 +5,7 @@ import { kanbanTasks } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
-import { TaskStatus, TaskPriority, KanbanSubtask } from '@/lib/types';
+import { TaskStatus, TaskPriority } from '@/lib/types';
 import crypto from 'crypto';
 
 export async function PUT(

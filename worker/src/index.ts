@@ -43,7 +43,7 @@ const BLOCKED_PATTERNS = [
 ];
 
 const worker = {
-  async fetch(request: Request, env: Env, _ctx?: unknown): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const clientIp = request.headers.get('cf-connecting-ip') || '127.0.0.1';
 
