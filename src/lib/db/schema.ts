@@ -193,6 +193,76 @@ export const contentRevisions = pgTable('content_revisions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 15. Quản lý công việc Kanban (Personal Task Board)
+export const kanbanTasks = pgTable('kanban_tasks', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  status: text('status').notNull().default('todo'), // 'backlog' | 'todo' | 'in_progress' | 'review' | 'done'
+  priority: text('priority').notNull().default('medium'), // 'urgent' | 'high' | 'medium' | 'low'
+  dueDate: text('due_date'),
+  tags: jsonb('tags').$type<string[]>().default([]).notNull(),
+  subtasksJson: jsonb('subtasks_json').$type<Array<{ id: string; title: string; completed: boolean }>>().default([]).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  relatedItemId: text('related_item_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 16. Quản lý chi phí & dịch vụ định kỳ (Subscriptions & Tech Stack)
+export const subscriptions = pgTable('subscriptions', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  category: text('category').notNull().default('infrastructure'), // 'infrastructure' | 'ai' | 'developer' | 'lifestyle'
+  cost: integer('cost').notNull().default(0),
+  currency: text('currency').notNull().default('VND'), // 'VND' | 'USD'
+  billingCycle: text('billing_cycle').notNull().default('monthly'), // 'monthly' | 'yearly'
+  nextBillingDate: text('next_billing_date').notNull(),
+  status: text('status').notNull().default('active'), // 'active' | 'paused' | 'canceled'
+  url: text('url'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 17. Kho lưu trữ đoạn mã lập trình viên (Code Snippets Vault)
+export const codeSnippets = pgTable('code_snippets', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  language: text('language').notNull().default('typescript'),
+  code: text('code').notNull(),
+  tags: jsonb('tags').$type<string[]>().default([]).notNull(),
+  isFavorite: boolean('is_favorite').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 18. Ghi chú nháp tức thì (Quick Scratchpad / Sticky Notes)
+export const scratchpads = pgTable('scratchpads', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title'),
+  content: text('content').notNull(),
+  color: text('color').notNull().default('amber'), // 'amber' | 'emerald' | 'sky' | 'rose' | 'violet' | 'stone'
+  isPinned: boolean('is_pinned').default(false).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 19. Đồ thị liên kết hai chiều (Bi-directional Wiki-links)
+export const contentLinks = pgTable('content_links', {
+  id: text('id').primaryKey(),
+  sourceId: text('source_id').notNull().references(() => contentItems.id, { onDelete: 'cascade' }),
+  targetId: text('target_id').notNull().references(() => contentItems.id, { onDelete: 'cascade' }),
+  linkText: text('link_text').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Relations
 export const pagesRelations = relations(pages, ({ many }) => ({
   blocks: many(contentBlocks),

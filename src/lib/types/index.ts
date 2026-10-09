@@ -12,7 +12,8 @@ export type ContentType =
   | 'video'
   | 'code'
   | 'bookmark'
-  | 'timeline';
+  | 'timeline'
+  | 'journal';
 
 export type BlockType =
   | 'heading'
@@ -182,4 +183,99 @@ export interface PublicAccessConfig {
   allowCopy: boolean;
   showSearch: boolean;
   customHeaderTitle?: string;
+}
+
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done';
+export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low';
+
+export interface KanbanSubtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+export interface KanbanTask {
+  id: string;
+  profileId: string;
+  title: string;
+  description?: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate?: string | null;
+  tags: string[];
+  subtasksJson: KanbanSubtask[];
+  sortOrder: number;
+  relatedItemId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SubscriptionCategory = 'infrastructure' | 'ai' | 'developer' | 'lifestyle';
+export type BillingCycle = 'monthly' | 'yearly';
+export type SubscriptionStatus = 'active' | 'paused' | 'canceled';
+
+export interface Subscription {
+  id: string;
+  profileId: string;
+  name: string;
+  category: SubscriptionCategory;
+  cost: number;
+  currency: 'VND' | 'USD';
+  billingCycle: BillingCycle;
+  nextBillingDate: string;
+  status: SubscriptionStatus;
+  url?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CodeSnippet {
+  id: string;
+  profileId: string;
+  title: string;
+  description?: string | null;
+  language: string;
+  code: string;
+  tags: string[];
+  isFavorite: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ScratchpadColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'violet' | 'stone';
+
+export interface Scratchpad {
+  id: string;
+  profileId: string;
+  title?: string | null;
+  content: string;
+  color: ScratchpadColor;
+  isPinned: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentLink {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  linkText: string;
+  createdAt: string;
+}
+
+export interface GraphNode {
+  id: string;
+  title: string;
+  type: string;
+  slug: string;
+  description?: string | null;
+  connectionsCount?: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  label?: string;
 }
