@@ -336,6 +336,79 @@ export const decisionRecords = pgTable('decision_records', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 25. Mục tiêu Dự án & Chỉ số Tiến độ (Project Goals & Milestones)
+export const projectGoals = pgTable('project_goals', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  category: text('category').notNull().default('delivery'), // 'delivery' | 'growth' | 'learning' | 'system'
+  targetDate: text('target_date').notNull(),
+  status: text('status').notNull().default('active'), // 'active' | 'completed' | 'paused'
+  progress: integer('progress').notNull().default(0), // 0 - 100
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 26. Quy trình Tự động hóa & Node Canvas (Automation Workflows)
+export const automationWorkflows = pgTable('automation_workflows', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  triggerType: text('trigger_type').notNull().default('manual'), // 'manual' | 'schedule' | 'inbox' | 'task_deadline'
+  nodesJson: jsonb('nodes_json').$type<any[]>().default([]).notNull(),
+  edgesJson: jsonb('edges_json').$type<any[]>().default([]).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 27. Chuỗi Sản xuất Nội dung (Creator Content Pipeline)
+export const contentPipelines = pgTable('content_pipelines', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  stage: text('stage').notNull().default('idea'), // 'idea' | 'brief' | 'research' | 'draft' | 'review' | 'approved' | 'published'
+  channel: text('channel').notNull().default('blog'), // 'blog' | 'video' | 'social' | 'newsletter'
+  body: text('body').notNull().default(''),
+  outline: text('outline'),
+  tagsJson: jsonb('tags_json').$type<string[]>().default([]).notNull(),
+  scheduledAt: text('scheduled_at'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 28. Thẻ Ôn tập Lặp lại Ngắt quãng (Spaced Repetition Learning Cards)
+export const learningCards = pgTable('learning_cards', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  deckName: text('deck_name').notNull().default('default'),
+  front: text('front').notNull(),
+  back: text('back').notNull(),
+  difficulty: integer('difficulty').notNull().default(1),
+  intervalDays: integer('interval_days').notNull().default(1),
+  repetitions: integer('repetitions').notNull().default(0),
+  easeFactor: integer('ease_factor').notNull().default(250), // 2.5 * 100
+  nextReviewDate: text('next_review_date').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 29. Danh bạ Cá nhân & Quan hệ (Personal CRM Contacts)
+export const crmContacts = pgTable('crm_contacts', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  role: text('role').notNull().default(''),
+  organization: text('organization'),
+  category: text('category').notNull().default('colleague'), // 'colleague' | 'mentor' | 'client' | 'partner' | 'other'
+  email: text('email'),
+  phone: text('phone'),
+  lastInteractionAt: text('last_interaction_at'),
+  followUpDays: integer('follow_up_days').notNull().default(14),
+  notes: text('notes'),
+  neverCloudAi: boolean('never_cloud_ai').notNull().default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Relations
 export const pagesRelations = relations(pages, ({ many }) => ({
   blocks: many(contentBlocks),

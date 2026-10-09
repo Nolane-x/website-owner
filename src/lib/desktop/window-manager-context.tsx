@@ -15,6 +15,10 @@ interface WindowManagerContextType {
   windows: WindowState[];
   activeWindowId: string | null;
   desktopMode: DesktopMode;
+  isScreensaverOpen: boolean;
+  setScreensaverOpen: (open: boolean) => void;
+  isOmniOpen: boolean;
+  setOmniOpen: (open: boolean) => void;
   openWindow: (
     appId: string,
     title?: string,
@@ -48,6 +52,15 @@ const STORAGE_KEY_MODE = 'webos_desktop_mode_v5';
 const DEFAULT_APPS: Record<string, { title: string; icon?: string; defaultSize?: { width: number; height: number } }> = {
   tasks: { title: 'Quản lý công việc Kanban', defaultSize: { width: 1040, height: 680 } },
   inbox: { title: 'Universal Capture Inbox', defaultSize: { width: 860, height: 600 } },
+  projects: { title: 'Trung tâm Dự án (Project Cockpit)', defaultSize: { width: 1020, height: 680 } },
+  workflows: { title: 'Quy trình Tự động hóa (Workflow Canvas)', defaultSize: { width: 980, height: 660 } },
+  creator: { title: 'Xưởng Sáng tạo Nội dung (Creator Studio)', defaultSize: { width: 1040, height: 680 } },
+  learning: { title: 'Phòng Học tập & Spaced Repetition', defaultSize: { width: 840, height: 600 } },
+  crm: { title: 'Danh bạ Quan hệ Cá nhân (Personal CRM)', defaultSize: { width: 960, height: 620 } },
+  focus: { title: 'Phòng Tập trung Sâu & Pomodoro 2.0', defaultSize: { width: 800, height: 580 } },
+  files: { title: 'Trình Quản lý Tệp Ảo & Data Studio', defaultSize: { width: 980, height: 640 } },
+  privacy: { title: 'Trung tâm Riêng tư & Giám sát Luồng Dữ liệu', defaultSize: { width: 900, height: 600 } },
+  calendar: { title: 'Lịch Cá nhân & Bảng Thói quen', defaultSize: { width: 960, height: 620 } },
   vault: { title: 'Két mật mã Zero-Knowledge', defaultSize: { width: 880, height: 560 } },
   devtools: { title: 'Developer Power Lab', defaultSize: { width: 1000, height: 680 } },
   notes: { title: 'Ghi chú nháp Scratchpad', defaultSize: { width: 720, height: 520 } },
@@ -63,6 +76,8 @@ export function WindowManagerProvider({ children }: { children: React.ReactNode 
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeWindowId, setActiveWindowId] = useState<string | null>(null);
   const [desktopMode, setDesktopModeState] = useState<DesktopMode>('desktop');
+  const [isScreensaverOpen, setScreensaverOpen] = useState(false);
+  const [isOmniOpen, setOmniOpen] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Rehydrate safely after mount
@@ -326,11 +341,17 @@ export function WindowManagerProvider({ children }: { children: React.ReactNode 
       toggleDesktopMode,
       setDesktopMode,
       minimizeAll,
+      isScreensaverOpen,
+      setScreensaverOpen,
+      isOmniOpen,
+      setOmniOpen,
     }),
     [
       windows,
       activeWindowId,
       desktopMode,
+      isScreensaverOpen,
+      isOmniOpen,
       openWindow,
       closeWindow,
       minimizeWindow,

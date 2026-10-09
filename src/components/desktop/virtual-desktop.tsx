@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useWindowManager } from '@/lib/desktop/window-manager-context';
 import { WindowFrame } from './window-frame';
 import { DesktopTopbar } from './desktop-topbar';
@@ -8,6 +8,7 @@ import { DesktopDock } from './desktop-dock';
 import { DesktopWidgets } from './desktop-widgets';
 import { DesktopContextMenu } from './desktop-context-menu';
 import { renderAppContent } from './window-app-registry';
+import { OmniCommandPalette } from './omni-command-palette';
 
 interface VirtualDesktopProps {
   onOpenWallpaperStudio?: () => void;
@@ -24,8 +25,20 @@ export function VirtualDesktop({
   onOpenCommandPalette,
   wallpaperBackground,
 }: VirtualDesktopProps) {
-  const { windows, desktopMode } = useWindowManager();
+  const { windows, desktopMode, isOmniOpen, setOmniOpen } = useWindowManager();
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Global Ctrl+K / Cmd+K listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setOmniOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setOmniOpen]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     // Only open context menu when clicking on desktop canvas itself
@@ -70,11 +83,17 @@ export function VirtualDesktop({
         onOpenWallpaperStudio={onOpenWallpaperStudio}
         onOpenScreensaver={onOpenScreensaver}
         onToggleRadio={onToggleRadio}
-        onOpenCommandPalette={onOpenCommandPalette}
+        onOpenCommandPalette={() => setOmniOpen(true)}
       />
 
       {/* Bottom application launcher dock */}
       <DesktopDock />
+
+      {/* Omni Spotlight Command Palette (Ctrl+K) */}
+      <OmniCommandPalette
+        isOpen={isOmniOpen}
+        onClose={() => setOmniOpen(false)}
+      />
 
       {/* Right-click desktop context menu */}
       {contextMenuPos && (

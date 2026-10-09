@@ -15,6 +15,15 @@ import {
   Sparkles,
   Sliders,
   Layers,
+  Target,
+  GitBranch,
+  PenTool,
+  GraduationCap,
+  Users,
+  HardDrive,
+  Calendar,
+  Shield,
+  Hourglass,
 } from 'lucide-react';
 
 interface DockApp {
@@ -38,10 +47,64 @@ const DOCK_APPS: DockApp[] = [
     color: 'hover:bg-emerald-500/20',
   },
   {
+    appId: 'projects',
+    title: 'Project Cockpit',
+    icon: <Target className="w-5 h-5 text-teal-400" />,
+    color: 'hover:bg-teal-500/20',
+  },
+  {
+    appId: 'focus',
+    title: 'Focus Studio & Pomodoro',
+    icon: <Hourglass className="w-5 h-5 text-emerald-400" />,
+    color: 'hover:bg-emerald-500/20',
+  },
+  {
+    appId: 'workflows',
+    title: 'Workflow Automation Canvas',
+    icon: <GitBranch className="w-5 h-5 text-indigo-400" />,
+    color: 'hover:bg-indigo-500/20',
+  },
+  {
+    appId: 'creator',
+    title: 'Creator Studio & Pipeline',
+    icon: <PenTool className="w-5 h-5 text-amber-400" />,
+    color: 'hover:bg-amber-500/20',
+  },
+  {
+    appId: 'learning',
+    title: 'Learning Lab & Anki',
+    icon: <GraduationCap className="w-5 h-5 text-cyan-400" />,
+    color: 'hover:bg-cyan-500/20',
+  },
+  {
+    appId: 'crm',
+    title: 'Personal CRM & Memory',
+    icon: <Users className="w-5 h-5 text-rose-400" />,
+    color: 'hover:bg-rose-500/20',
+  },
+  {
+    appId: 'files',
+    title: 'Virtual Files & Data Studio',
+    icon: <HardDrive className="w-5 h-5 text-sky-400" />,
+    color: 'hover:bg-sky-500/20',
+  },
+  {
+    appId: 'calendar',
+    title: 'Lịch & Thói quen',
+    icon: <Calendar className="w-5 h-5 text-emerald-400" />,
+    color: 'hover:bg-emerald-500/20',
+  },
+  {
     appId: 'vault',
     title: 'Két mật mã Zero-Knowledge',
     icon: <Lock className="w-5 h-5 text-amber-400" />,
     color: 'hover:bg-amber-500/20',
+  },
+  {
+    appId: 'privacy',
+    title: 'Trung tâm Riêng tư',
+    icon: <Shield className="w-5 h-5 text-emerald-400" />,
+    color: 'hover:bg-emerald-500/20',
   },
   {
     appId: 'devtools',
@@ -94,11 +157,21 @@ const DOCK_APPS: DockApp[] = [
 ];
 
 export function DesktopDock() {
-  const { windows, activeWindowId, openWindow, minimizeAll } = useWindowManager();
+  const { windows, activeWindowId, openWindow, minimizeAll, setOmniOpen } = useWindowManager();
 
   return (
     <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 select-none">
       <div className="backdrop-blur-2xl bg-stone-900/85 border border-stone-700/60 shadow-2xl shadow-black/80 rounded-2xl px-3 py-2 flex items-center gap-1.5 transition-all">
+        {/* Spotlight Omni Search */}
+        <button
+          onClick={() => setOmniOpen(true)}
+          title="Lệnh nhanh Omni Spotlight (Ctrl+K)"
+          className="p-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:scale-110 active:scale-95 transition-all border border-amber-500/20"
+        >
+          <Sparkles className="w-5 h-5" />
+        </button>
+
+        <div className="w-[1px] h-7 bg-stone-700/60 mx-1" />
         {DOCK_APPS.map((app) => {
           const openWin = windows.find((w) => w.appId === app.appId);
           const isOpen = Boolean(openWin);

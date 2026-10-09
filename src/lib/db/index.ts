@@ -364,6 +364,74 @@ export async function initializeDatabase() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS project_goals (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      category TEXT NOT NULL DEFAULT 'delivery',
+      target_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      progress INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS automation_workflows (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      trigger_type TEXT NOT NULL DEFAULT 'manual',
+      nodes_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      edges_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS content_pipelines (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      stage TEXT NOT NULL DEFAULT 'idea',
+      channel TEXT NOT NULL DEFAULT 'blog',
+      body TEXT NOT NULL DEFAULT '',
+      outline TEXT,
+      tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      scheduled_at TEXT,
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS learning_cards (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      deck_name TEXT NOT NULL DEFAULT 'default',
+      front TEXT NOT NULL,
+      back TEXT NOT NULL,
+      difficulty INTEGER NOT NULL DEFAULT 1,
+      interval_days INTEGER NOT NULL DEFAULT 1,
+      repetitions INTEGER NOT NULL DEFAULT 0,
+      ease_factor INTEGER NOT NULL DEFAULT 250,
+      next_review_date TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS crm_contacts (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT '',
+      organization TEXT,
+      category TEXT NOT NULL DEFAULT 'colleague',
+      email TEXT,
+      phone TEXT,
+      last_interaction_at TEXT,
+      follow_up_days INTEGER NOT NULL DEFAULT 14,
+      notes TEXT,
+      never_cloud_ai BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_content_vis_status ON content_items(visibility, status);
     CREATE INDEX IF NOT EXISTS idx_content_slug ON content_items(slug);
     CREATE INDEX IF NOT EXISTS idx_pages_vis_status ON pages(visibility, status);

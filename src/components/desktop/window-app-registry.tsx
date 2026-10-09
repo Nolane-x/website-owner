@@ -67,12 +67,75 @@ export const DynamicSettingsApp = dynamic(
   { loading: LoadingFallback, ssr: false }
 );
 
+export const DynamicProjectsApp = dynamic(
+  () => import('@/components/desktop/apps/projects-app').then((m) => m.ProjectsApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicWorkflowsApp = dynamic(
+  () => import('@/components/desktop/apps/workflows-app').then((m) => m.WorkflowsApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicCreatorApp = dynamic(
+  () => import('@/components/desktop/apps/creator-app').then((m) => m.CreatorStudioApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicLearningApp = dynamic(
+  () => import('@/components/desktop/apps/learning-app').then((m) => m.LearningLabApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicCrmApp = dynamic(
+  () => import('@/components/desktop/apps/crm-app').then((m) => m.PersonalCrmApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicFocusApp = dynamic(
+  () => import('@/components/desktop/apps/focus-app').then((m) => m.FocusApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicFilesApp = dynamic(
+  () => import('@/components/desktop/apps/files-app').then((m) => m.FilesApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicPrivacyApp = dynamic(
+  () => import('@/components/desktop/apps/privacy-app').then((m) => m.PrivacyApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
+export const DynamicCalendarApp = dynamic(
+  () => import('@/components/desktop/apps/calendar-habits-app').then((m) => m.CalendarHabitsApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
 export function renderAppContent(appId: string) {
   switch (appId) {
     case 'inbox':
       return <DynamicInboxApp />;
     case 'tasks':
       return <DynamicTasksApp />;
+    case 'projects':
+      return <DynamicProjectsApp />;
+    case 'workflows':
+      return <DynamicWorkflowsApp />;
+    case 'creator':
+      return <DynamicCreatorApp />;
+    case 'learning':
+      return <DynamicLearningApp />;
+    case 'crm':
+      return <DynamicCrmApp />;
+    case 'focus':
+      return <DynamicFocusApp />;
+    case 'files':
+      return <DynamicFilesApp />;
+    case 'privacy':
+      return <DynamicPrivacyApp />;
+    case 'calendar':
+      return <DynamicCalendarApp />;
     case 'wallpapers':
       return <DynamicWallpapersApp />;
     case 'music':

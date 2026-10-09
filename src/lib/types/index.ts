@@ -382,3 +382,102 @@ export interface WindowState {
   size: { width: number; height: number };
   prevBounds?: WindowBounds;
 }
+
+// 5.0 Extended Domain Types
+
+export interface ProjectGoal {
+  id: string;
+  profileId: string;
+  title: string;
+  description?: string;
+  category: string;
+  targetDate: string;
+  status: 'active' | 'completed' | 'paused';
+  progress: number;
+  createdAt: string;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  projectId: string;
+  title: string;
+  dueDate: string;
+  isCompleted: boolean;
+}
+
+export interface ProjectHealth {
+  score: number;
+  overdueCount: number;
+  blockedCount: number;
+  velocity: number;
+  status: 'healthy' | 'warning' | 'critical';
+}
+
+export interface WorkflowNode {
+  id: string;
+  type: 'trigger' | 'condition' | 'action' | 'ai' | 'approval';
+  title: string;
+  config: Record<string, unknown>;
+  position: { x: number; y: number };
+}
+
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+}
+
+export interface WorkflowDefinition {
+  id: string;
+  profileId: string;
+  name: string;
+  description?: string;
+  triggerType: string;
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ContentPipelineStage = 'idea' | 'brief' | 'research' | 'draft' | 'review' | 'approved' | 'published';
+
+export interface ContentPipelineItem {
+  id: string;
+  title: string;
+  stage: ContentPipelineStage;
+  channel: string;
+  body: string;
+  outline?: string;
+  tags: string[];
+  scheduledAt?: string;
+  updatedAt: string;
+}
+
+export interface LearningCard {
+  id: string;
+  deckName: string;
+  front: string;
+  back: string;
+  difficulty: number;
+  intervalDays: number;
+  repetitions: number;
+  easeFactor: number;
+  nextReviewDate: string;
+}
+
+export interface CrmContact {
+  id: string;
+  name: string;
+  role: string;
+  organization?: string;
+  category: 'colleague' | 'mentor' | 'client' | 'partner' | 'other';
+  email?: string;
+  phone?: string;
+  lastInteractionAt?: string;
+  followUpDays: number;
+  notes?: string;
+  neverCloudAi: boolean;
+}
+

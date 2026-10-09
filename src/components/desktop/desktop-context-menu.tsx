@@ -10,6 +10,7 @@ import {
   Inbox,
   Code2,
   Lock,
+  Sparkles,
 } from 'lucide-react';
 
 interface DesktopContextMenuProps {
@@ -27,7 +28,7 @@ export function DesktopContextMenu({
   onOpenWallpaperStudio,
   onOpenScreensaver,
 }: DesktopContextMenuProps) {
-  const { minimizeAll, toggleDesktopMode, openWindow } = useWindowManager();
+  const { minimizeAll, toggleDesktopMode, openWindow, setOmniOpen } = useWindowManager();
 
   useEffect(() => {
     const handleClick = () => onClose();
@@ -58,6 +59,19 @@ export function DesktopContextMenu({
       onClick={(e) => e.stopPropagation()}
       className="fixed z-50 w-56 rounded-xl backdrop-blur-2xl bg-stone-900/95 border border-stone-700/80 shadow-2xl shadow-black p-1.5 text-xs text-stone-200 select-none animate-in fade-in zoom-in-95 duration-100"
     >
+      <button
+        onClick={() => {
+          onClose();
+          setOmniOpen(true);
+        }}
+        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-stone-800 hover:text-white transition text-left text-amber-300 font-medium"
+      >
+        <Sparkles className="w-4 h-4 text-amber-400" />
+        <span>Lệnh nhanh Omni (Ctrl+K)</span>
+      </button>
+
+      <div className="h-[1px] bg-stone-800 my-1" />
+
       <button
         onClick={() => {
           onClose();
