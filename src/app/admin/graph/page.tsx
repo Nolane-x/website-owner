@@ -47,45 +47,48 @@ export default function KnowledgeGraphPage() {
   const dragStartRef = useRef({ x: 0, y: 0 });
   const draggedNodeRef = useRef<CanvasNode | null>(null);
 
-  const fetchGraphData = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/admin/graph');
-      if (res.ok) {
-        const data = await res.json();
-        const rawNodes: GraphNode[] = data.nodes || [];
-        const rawEdges: GraphEdge[] = data.edges || [];
-
-        // Initialize node positions in a loose circular cluster
-        const canvas = canvasRef.current;
-        const width = canvas ? canvas.clientWidth : 800;
-        const height = canvas ? canvas.clientHeight : 600;
-
-        const initializedNodes: CanvasNode[] = rawNodes.map((n, i) => {
-          const angle = (i / Math.max(1, rawNodes.length)) * Math.PI * 2;
-          const radiusDist = 120 + Math.random() * 180;
-          return {
-            ...n,
-            x: width / 2 + Math.cos(angle) * radiusDist,
-            y: height / 2 + Math.sin(angle) * radiusDist,
-            vx: (Math.random() - 0.5) * 0.5,
-            vy: (Math.random() - 0.5) * 0.5,
-            radius: Math.min(18, Math.max(8, 7 + (n.connectionsCount || 0) * 2.5)),
-          };
-        });
-
-        setNodes(initializedNodes);
-        setEdges(rawEdges);
-      }
-    } catch (err) {
-      console.error('Lỗi nạp Knowledge Graph:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchGraphData();
+    let ignore = false;
+    async function loadInitialGraph() {
+      try {
+        const res = await fetch('/api/admin/graph');
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          const rawNodes: GraphNode[] = data.nodes || [];
+          const rawEdges: GraphEdge[] = data.edges || [];
+
+          const canvas = canvasRef.current;
+          const width = canvas ? canvas.clientWidth : 800;
+          const height = canvas ? canvas.clientHeight : 600;
+
+          const initializedNodes: CanvasNode[] = rawNodes.map((n, i) => {
+            const angle = (i / Math.max(1, rawNodes.length)) * Math.PI * 2;
+            const radiusDist = 120 + Math.random() * 180;
+            return {
+              ...n,
+              x: width / 2 + Math.cos(angle) * radiusDist,
+              y: height / 2 + Math.sin(angle) * radiusDist,
+              vx: (Math.random() - 0.5) * 0.5,
+              vy: (Math.random() - 0.5) * 0.5,
+              radius: Math.min(18, Math.max(8, 7 + (n.connectionsCount || 0) * 2.5)),
+            };
+          });
+
+          setNodes(initializedNodes);
+          setEdges(rawEdges);
+        }
+      } catch (err) {
+        console.error('Lỗi nạp Knowledge Graph:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    loadInitialGraph();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   // Force-directed Physics Simulation & Canvas Rendering Loop
@@ -353,6 +356,12 @@ export default function KnowledgeGraphPage() {
           onMouseLeave={handleMouseUp}
           className="w-full h-full cursor-grab active:cursor-grabbing block"
         />
+
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-20 text-xs text-zinc-300">
+            Đang nạp đồ thị tri thức...
+          </div>
+        )}
 
         {/* Floating Canvas Controls */}
         <div className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-[var(--bg-surface)]/90 backdrop-blur-md p-1.5 rounded-xl border border-[var(--border-color)] shadow-lg z-10">

@@ -71,8 +71,41 @@ export default function DailyJournalPage() {
   };
 
   useEffect(() => {
-    fetchJournalEntries();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let ignore = false;
+    async function loadJournalForDate() {
+      try {
+        const res = await fetch('/api/admin/content?type=journal');
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          const items: ContentItem[] = data.items || [];
+          setJournalEntries(items);
+
+          const match = items.find((i) => i.slug === `journal-${selectedDate}`);
+          if (match) {
+            setCurrentEntryId(match.id);
+            setEntryTitle(match.title);
+            setEntryContent(match.content || '');
+            const meta = (match.metadata || {}) as { mood?: JournalMood };
+            if (meta.mood) setEntryMood(meta.mood);
+          } else {
+            setCurrentEntryId(null);
+            setEntryTitle(`Nhật ký ngày ${selectedDate}`);
+            setEntryContent('');
+            setEntryMood('productive');
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi tải nhật ký:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    loadJournalForDate();
+    return () => {
+      ignore = true;
+    };
   }, [selectedDate]);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -214,7 +247,7 @@ export default function DailyJournalPage() {
             Bản đồ Hoạt động (365 Ngày qua)
           </span>
           <span className="text-xs text-[var(--text-muted)] font-mono">
-            {journalEntries.length} nhật ký đã lưu
+            {loading ? 'Đang đồng bộ...' : `${journalEntries.length} nhật ký đã lưu`}
           </span>
         </div>
 

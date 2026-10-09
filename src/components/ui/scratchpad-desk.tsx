@@ -29,23 +29,28 @@ export function ScratchpadDesk() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const saveTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
 
-  const fetchNotes = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/admin/scratchpads');
-      if (res.ok) {
-        const data = await res.json();
-        setNotes(data.scratchpads || []);
-      }
-    } catch (err) {
-      console.error('Lỗi tải ghi chú nháp:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    fetchNotes();
+    let ignore = false;
+    async function loadInitialNotes() {
+      try {
+        const res = await fetch('/api/admin/scratchpads');
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          setNotes(data.scratchpads || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải ghi chú nháp:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    loadInitialNotes();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleCreate = async () => {

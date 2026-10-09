@@ -7,14 +7,12 @@ import { playSound } from '@/lib/audio/sound-fx';
 export type WallpaperStyle = 'default' | 'aurora' | 'matrix' | 'starfield' | 'obsidian';
 
 export function WallpaperEngine() {
-  const [style, setStyle] = useState<WallpaperStyle>('default');
+  const [style, setStyle] = useState<WallpaperStyle>(() => {
+    if (typeof window === 'undefined') return 'default';
+    return (localStorage.getItem('webos_wallpaper_mode') as WallpaperStyle) || 'default';
+  });
 
   useEffect(() => {
-    const saved = localStorage.getItem('webos_wallpaper_mode') as WallpaperStyle | null;
-    if (saved) {
-      setStyle(saved);
-    }
-
     const handleStyleChange = (e: Event) => {
       const customEvent = e as CustomEvent<WallpaperStyle>;
       if (customEvent.detail) {
@@ -81,12 +79,10 @@ export function WallpaperSelectorModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const [current, setCurrent] = useState<WallpaperStyle>('default');
-
-  useEffect(() => {
-    const saved = (localStorage.getItem('webos_wallpaper_mode') as WallpaperStyle) || 'default';
-    setCurrent(saved);
-  }, [isOpen]);
+  const [current, setCurrent] = useState<WallpaperStyle>(() => {
+    if (typeof window === 'undefined') return 'default';
+    return (localStorage.getItem('webos_wallpaper_mode') as WallpaperStyle) || 'default';
+  });
 
   const handleSelect = (s: WallpaperStyle) => {
     playSound('snap');

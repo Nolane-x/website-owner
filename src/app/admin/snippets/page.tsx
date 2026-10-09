@@ -77,7 +77,26 @@ export default function CodeSnippetsPage() {
   };
 
   useEffect(() => {
-    fetchSnippets();
+    let ignore = false;
+    async function loadInitialSnippets() {
+      try {
+        const res = await fetch('/api/admin/snippets');
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          setSnippets(data.snippets || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải đoạn mã:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    loadInitialSnippets();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleOpenCreate = () => {

@@ -68,7 +68,26 @@ export default function SubscriptionsPage() {
   };
 
   useEffect(() => {
-    fetchSubscriptions();
+    let ignore = false;
+    async function loadInitialSubscriptions() {
+      try {
+        const res = await fetch('/api/admin/subscriptions');
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          setItems(data.subscriptions || []);
+        }
+      } catch (err) {
+        console.error('Lỗi nạp dịch vụ định kỳ:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    loadInitialSubscriptions();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleOpenCreate = () => {

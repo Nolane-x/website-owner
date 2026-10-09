@@ -75,7 +75,26 @@ export default function KanbanTasksPage() {
   };
 
   useEffect(() => {
-    fetchTasks();
+    let ignore = false;
+    async function loadInitialTasks() {
+      try {
+        const res = await fetch('/api/admin/tasks');
+        if (res.ok && !ignore) {
+          const data = await res.json();
+          setTasks(data.tasks || []);
+        }
+      } catch (err) {
+        console.error('Lỗi tải tác vụ:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    loadInitialTasks();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleOpenCreate = (initialStatus: TaskStatus = 'todo') => {
