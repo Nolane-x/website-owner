@@ -3,21 +3,48 @@ import { requireOwner } from '@/lib/auth/guard';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 function isPrivateIpOrHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
+  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (
     lower === 'localhost' ||
     lower === '127.0.0.1' ||
     lower === '::1' ||
+    lower === '::' ||
     lower === '0.0.0.0' ||
-    lower === '169.254.169.254'
+    lower === '169.254.169.254' ||
+    lower.endsWith('.localhost') ||
+    lower.endsWith('.local') ||
+    lower.endsWith('.internal') ||
+    lower.endsWith('.lan') ||
+    lower === 'metadata.google.internal'
   ) {
     return true;
   }
 
-  // IPv4 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16
+  // IPv6 private/link-local/unique local ranges
+  if (lower.includes(':')) {
+    if (
+      lower === '::1' ||
+      lower.startsWith('fe80:') ||
+      lower.startsWith('fc00:') ||
+      lower.startsWith('fd00:')
+    ) {
+      return true;
+    }
+    // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
+    if (lower.startsWith('::ffff:')) {
+      return isPrivateIpOrHost(lower.slice(7));
+    }
+  }
+
+  // Pure integer hostname notation (e.g., 2130706433 for 127.0.0.1)
+  if (/^\d+$/.test(lower)) {
+    return true;
+  }
+
+  // IPv4 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8, 0.0.0.0/8
   const parts = lower.split('.').map(Number);
   if (parts.length === 4 && parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
-    if (parts[0] === 10) return true;
+    if (parts[0] === 0 || parts[0] === 127 || parts[0] === 10) return true;
     if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
     if (parts[0] === 192 && parts[1] === 168) return true;
     if (parts[0] === 169 && parts[1] === 254) return true;
@@ -26,8 +53,12 @@ function isPrivateIpOrHost(hostname: string): boolean {
   return false;
 }
 
+const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB giới hạn tối đa tránh tấn công cạn kiệt bộ nhớ
+
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -52,8 +83,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // SSRF Guard
-    if (process.env.NODE_ENV === 'production' && isPrivateIpOrHost(parsedUrl.hostname)) {
+    // SSRF Guard (SEC-06): Chặn mọi địa chỉ nội bộ, link-local, loopback, private IP
+    if (isPrivateIpOrHost(parsedUrl.hostname)) {
       return NextResponse.json(
         { error: 'Bảo mật: Không được phép truy vấn địa chỉ mạng nội bộ hoặc siêu dữ liệu' },
         { status: 403 }
@@ -91,15 +122,40 @@ export async function POST(req: NextRequest) {
       }
 
       const response = await fetch(parsedUrl.toString(), fetchOptions);
-      clearTimeout(timeoutHandle);
-      const endTime = performance.now();
 
       const responseHeaders: Record<string, string> = {};
       response.headers.forEach((val, key) => {
         responseHeaders[key] = val;
       });
 
-      const textBody = await response.text();
+      // SEC-07: Giữ timeout bao trùm việc đọc response body và áp dụng giới hạn kích thước tối đa 5MB
+      let textBody = '';
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let receivedBytes = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            receivedBytes += value.length;
+            if (receivedBytes > MAX_BODY_BYTES) {
+              controller.abort();
+              clearTimeout(timeoutHandle);
+              return NextResponse.json(
+                { error: 'Phản hồi vượt quá giới hạn cho phép (5MB)' },
+                { status: 502 }
+              );
+            }
+            textBody += decoder.decode(value, { stream: true });
+          }
+        }
+        textBody += decoder.decode();
+      }
+
+      clearTimeout(timeoutHandle);
+      const endTime = performance.now();
       const sizeBytes = Buffer.byteLength(textBody, 'utf-8');
 
       return NextResponse.json({

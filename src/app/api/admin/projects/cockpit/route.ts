@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { projectGoals, decisionRecords, kanbanTasks, contentItems } from '@/lib/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, isNull } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -19,7 +19,7 @@ export async function GET() {
       db.select().from(projectGoals).where(eq(projectGoals.profileId, auth.profile.id)).orderBy(desc(projectGoals.createdAt)),
       db.select().from(decisionRecords).where(eq(decisionRecords.profileId, auth.profile.id)).orderBy(desc(decisionRecords.createdAt)),
       db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, auth.profile.id)),
-      db.select().from(contentItems).where(and(eq(contentItems.profileId, auth.profile.id), eq(contentItems.type, 'project'))),
+      db.select().from(contentItems).where(and(eq(contentItems.profileId, auth.profile.id), eq(contentItems.type, 'project'), isNull(contentItems.deletedAt))),
     ]);
 
     // Tính toán sức khỏe dự án minh bạch (Transparent Health Score)

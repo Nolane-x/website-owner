@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { collections, collectionItems } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 function generateSlug(text: string): string {
   return text
@@ -38,6 +39,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -68,36 +72,42 @@ export async function POST(req: NextRequest) {
     const sanitizedDesc = description ? sanitizePlain(description) : null;
     const shareToken = visibility === 'UNLISTED' ? crypto.randomBytes(16).toString('hex') : null;
 
-    await db.insert(collections).values({
-      id: colId,
-      profileId: auth.profile.id,
-      name: sanitizedName,
-      slug,
-      description: sanitizedDesc,
-      coverImage,
-      icon,
-      visibility,
-      status,
-      isFeatured: Boolean(isFeatured),
-      sortOrder: 0,
-      shareToken,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    await db.transaction(async (tx) => {
+      await tx.insert(collections).values({
+        id: colId,
+        profileId: auth.profile.id,
+        name: sanitizedName,
+        slug,
+        description: sanitizedDesc,
+        coverImage,
+        icon,
+        visibility,
+        status,
+        isFeatured: Boolean(isFeatured),
+        sortOrder: 0,
+        shareToken,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      if (Array.isArray(itemIds) && itemIds.length > 0) {
+        for (let i = 0; i < itemIds.length; i++) {
+          await tx.insert(collectionItems).values({
+            id: crypto.randomUUID(),
+            collectionId: colId,
+            contentItemId: itemIds[i],
+            sortOrder: i,
+            createdAt: new Date(),
+          });
+        }
+      }
     });
 
-    if (Array.isArray(itemIds) && itemIds.length > 0) {
-      for (let i = 0; i < itemIds.length; i++) {
-        await db.insert(collectionItems).values({
-          id: crypto.randomUUID(),
-          collectionId: colId,
-          contentItemId: itemIds[i],
-          sortOrder: i,
-          createdAt: new Date(),
-        });
-      }
-    }
-
-    const created = await db.select().from(collections).where(eq(collections.id, colId)).limit(1);
+    const created = await db
+      .select()
+      .from(collections)
+      .where(and(eq(collections.id, colId), eq(collections.profileId, auth.profile.id)))
+      .limit(1);
 
     return NextResponse.json({ success: true, collection: created[0] }, { status: 201 });
   } catch (error) {

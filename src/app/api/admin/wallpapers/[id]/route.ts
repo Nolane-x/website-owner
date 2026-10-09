@@ -11,7 +11,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -37,7 +38,17 @@ export async function PUT(
       updates.sourceUrl = body.sourceUrl ? sanitizePlain(body.sourceUrl) : null;
     }
     if (body.localDataUrl !== undefined) {
-      updates.localDataUrl = body.localDataUrl ? String(body.localDataUrl) : null;
+      const localDataUrl = body.localDataUrl ? String(body.localDataUrl) : null;
+      if (localDataUrl) {
+        if (localDataUrl.length > 7 * 1024 * 1024) {
+          return NextResponse.json({ error: 'Kích thước tệp hình nền vượt quá giới hạn 5MB.' }, { status: 400 });
+        }
+        const isAllowedDataUrl = /^data:(image\/(png|jpeg|jpg|webp|gif)|video\/(mp4|webm));base64,/i.test(localDataUrl);
+        if (!isAllowedDataUrl) {
+          return NextResponse.json({ error: 'Định dạng hình nền không hợp lệ. Chỉ chấp nhận PNG, JPEG, WEBP, GIF, MP4, WEBM.' }, { status: 400 });
+        }
+      }
+      updates.localDataUrl = localDataUrl;
     }
     if (body.type !== undefined) updates.type = body.type as WallpaperMediaType;
     if (body.isFavorite !== undefined) updates.isFavorite = Boolean(body.isFavorite);
@@ -61,9 +72,12 @@ export async function PUT(
     await db
       .update(customWallpapers)
       .set(updates)
-      .where(eq(customWallpapers.id, id));
+      .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
 
-    const [updated] = await db.select().from(customWallpapers).where(eq(customWallpapers.id, id));
+    const [updated] = await db
+      .select()
+      .from(customWallpapers)
+      .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
     return NextResponse.json({ wallpaper: updated });
   } catch (error) {
     console.error('Lỗi cập nhật hình nền:', error);
@@ -75,7 +89,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -93,7 +108,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Không tìm thấy hình nền.' }, { status: 404 });
     }
 
-    await db.delete(customWallpapers).where(eq(customWallpapers.id, id));
+    await db
+      .delete(customWallpapers)
+      .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
     return NextResponse.json({ success: true, deletedId: id });
   } catch (error) {
     console.error('Lỗi xóa hình nền:', error);

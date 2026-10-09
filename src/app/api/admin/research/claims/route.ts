@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -78,7 +79,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -109,8 +111,14 @@ export async function PUT(req: NextRequest) {
       updates.sourceIdsJson = body.sourceIdsJson.map((s: string) => sanitizePlain(s));
     }
 
-    await db.update(claims).set(updates).where(eq(claims.id, id));
-    const [updated] = await db.select().from(claims).where(eq(claims.id, id));
+    await db
+      .update(claims)
+      .set(updates)
+      .where(and(eq(claims.id, id), eq(claims.profileId, auth.profile.id)));
+    const [updated] = await db
+      .select()
+      .from(claims)
+      .where(and(eq(claims.id, id), eq(claims.profileId, auth.profile.id)));
     return NextResponse.json({ claim: updated });
   } catch (error) {
     console.error('Lỗi cập nhật mệnh đề:', error);
@@ -119,7 +127,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -142,7 +151,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Không tìm thấy mệnh đề.' }, { status: 404 });
     }
 
-    await db.delete(claims).where(eq(claims.id, id));
+    await db
+      .delete(claims)
+      .where(and(eq(claims.id, id), eq(claims.profileId, auth.profile.id)));
     return NextResponse.json({ success: true, deletedId: id });
   } catch (error) {
     console.error('Lỗi xóa mệnh đề:', error);

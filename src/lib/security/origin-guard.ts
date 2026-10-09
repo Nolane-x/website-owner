@@ -61,12 +61,9 @@ export function verifyRequestOrigin(request: NextRequest): boolean {
     }
   }
 
-  // Fail-closed in production if neither Origin nor Referer is present on browser mutation
+  // Fail-closed in production: state-mutating requests MUST provide a valid Origin or Referer header
   if (process.env.NODE_ENV === 'production') {
-    const secFetchMode = request.headers.get('sec-fetch-mode');
-    if (secFetchMode && secFetchMode !== 'navigate') {
-      return false;
-    }
+    return false;
   }
 
   return true;

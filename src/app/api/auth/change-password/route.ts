@@ -7,8 +7,12 @@ import { verifyPassword, hashPassword } from '@/lib/auth/password';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { rateLimiter, getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 export async function POST(req: NextRequest) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   try {
     const sessionData = await getSessionFromCookies();
     const ip = getClientIp(req.headers);
@@ -36,9 +40,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (newPassword.length < 8) {
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
       return NextResponse.json(
         { error: 'Mật khẩu mới phải có ít nhất 8 ký tự.' },
+        { status: 400 }
+      );
+    }
+
+    if (Buffer.byteLength(newPassword, 'utf8') > 72) {
+      return NextResponse.json(
+        { error: 'Mật khẩu mới không được vượt quá 72 bytes.' },
         { status: 400 }
       );
     }

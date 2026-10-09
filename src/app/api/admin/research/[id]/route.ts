@@ -11,7 +11,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -45,9 +46,12 @@ export async function PUT(
     await db
       .update(researchSources)
       .set(updates)
-      .where(eq(researchSources.id, id));
+      .where(and(eq(researchSources.id, id), eq(researchSources.profileId, auth.profile.id)));
 
-    const [updated] = await db.select().from(researchSources).where(eq(researchSources.id, id));
+    const [updated] = await db
+      .select()
+      .from(researchSources)
+      .where(and(eq(researchSources.id, id), eq(researchSources.profileId, auth.profile.id)));
     return NextResponse.json({ source: updated });
   } catch (error) {
     console.error('Lỗi cập nhật tài liệu nghiên cứu:', error);
@@ -59,7 +63,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -77,7 +82,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Không tìm thấy tài liệu nghiên cứu.' }, { status: 404 });
     }
 
-    await db.delete(researchSources).where(eq(researchSources.id, id));
+    await db
+      .delete(researchSources)
+      .where(and(eq(researchSources.id, id), eq(researchSources.profileId, auth.profile.id)));
     return NextResponse.json({ success: true, deletedId: id });
   } catch (error) {
     console.error('Lỗi xóa tài liệu nghiên cứu:', error);

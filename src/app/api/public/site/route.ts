@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { profiles, settings } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { ensureSeedData } from '@/lib/db/seed';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { toPublicSiteSettings } from '@/lib/api/public-serializer';
@@ -15,19 +16,23 @@ export async function GET() {
 
     // 1. Lấy thông tin hiển thị của Owner
     const profileList = await db.select({
+      id: profiles.id,
       displayName: profiles.displayName,
       bio: profiles.bio,
       avatarUrl: profiles.avatarUrl,
-    }).from(profiles).limit(1);
+    }).from(profiles).orderBy(profiles.createdAt).limit(1);
 
     const profile = profileList[0] || {
+      id: 'default',
       displayName: 'Chủ Sở Hữu',
       bio: 'Personal Web OS & Không gian số cá nhân.',
       avatarUrl: null,
     };
 
     // 2. Lấy cài đặt giao diện công khai và cấu hình bảo vệ mật mã khách
-    const settingList = await db.select().from(settings);
+    const settingList = profileList[0]?.id
+      ? await db.select().from(settings).where(eq(settings.profileId, profileList[0].id))
+      : [];
     const settingsMap: Record<string, unknown> = {};
     for (const s of settingList) {
       settingsMap[s.key] = s.valueJson;

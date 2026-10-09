@@ -55,7 +55,11 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (userResult.length === 0) {
-      await logSecurityEvent('unknown', SECURITY_EVENT_TYPES.LOGIN_FAILED, { username: username.trim(), reason: 'Không tìm thấy tài khoản' }, ip, userAgent);
+      // SEC-26: Constant-time dummy verify chống tấn công độ trễ đoán username
+      const DUMMY_HASH = '$2a$12$000000000000000000000uJ4v4cZzN7e01hV2v7X0oO1K7d1pX2gS';
+      await verifyPassword(password, DUMMY_HASH);
+      // SEC-12: Giới hạn độ dài username khi ghi audit
+      await logSecurityEvent('unknown', SECURITY_EVENT_TYPES.LOGIN_FAILED, { username: String(username).trim().slice(0, 32), reason: 'Thông tin đăng nhập không chính xác' }, ip, userAgent);
       return NextResponse.json(
         { error: 'Tên đăng nhập hoặc mật khẩu không chính xác.' },
         { status: 401 }

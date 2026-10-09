@@ -82,11 +82,14 @@ export async function validateSessionToken(token: string): Promise<{
     return null;
   }
 
-  // Cập nhật lastActiveAt
-  await db
-    .update(sessions)
-    .set({ lastActiveAt: new Date() })
-    .where(eq(sessions.id, session.id));
+  // SEC-15: Chỉ cập nhật lastActiveAt nếu lần cuối cập nhật cách đây hơn 5 phút để tránh write amplification
+  const lastActive = session.lastActiveAt ? new Date(session.lastActiveAt).getTime() : 0;
+  if (now.getTime() - lastActive > 5 * 60 * 1000) {
+    await db
+      .update(sessions)
+      .set({ lastActiveAt: new Date() })
+      .where(eq(sessions.id, session.id));
+  }
 
   return { session, profile };
 }
@@ -95,7 +98,7 @@ export async function revokeSession(sessionId: string, profileId: string): Promi
   await initializeDatabase();
   const db = getDb();
 
-  await db
+  const res = await db
     .update(sessions)
     .set({ isRevoked: true })
     .where(
@@ -103,28 +106,30 @@ export async function revokeSession(sessionId: string, profileId: string): Promi
         eq(sessions.id, sessionId),
         eq(sessions.profileId, profileId)
       )
-    );
+    )
+    .returning();
 
-  return true;
+  return res.length > 0;
 }
 
 export async function revokeAllSessions(profileId: string): Promise<boolean> {
   await initializeDatabase();
   const db = getDb();
 
-  await db
+  const res = await db
     .update(sessions)
     .set({ isRevoked: true })
-    .where(eq(sessions.profileId, profileId));
+    .where(eq(sessions.profileId, profileId))
+    .returning();
 
-  return true;
+  return res.length > 0;
 }
 
 export async function revokeOtherSessions(profileId: string, currentSessionId: string): Promise<boolean> {
   await initializeDatabase();
   const db = getDb();
 
-  await db
+  const res = await db
     .update(sessions)
     .set({ isRevoked: true })
     .where(
@@ -132,9 +137,10 @@ export async function revokeOtherSessions(profileId: string, currentSessionId: s
         eq(sessions.profileId, profileId),
         ne(sessions.id, currentSessionId)
       )
-    );
+    )
+    .returning();
 
-  return true;
+  return res.length > 0;
 }
 
 export async function getSessionFromCookies() {

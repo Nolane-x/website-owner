@@ -11,7 +11,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const originErr = await assertValidOrigin(req);
+  const originErr = assertValidOrigin(req);
   if (originErr) return originErr;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
@@ -71,7 +71,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const originErr = await assertValidOrigin(req);
+  const originErr = assertValidOrigin(req);
   if (originErr) return originErr;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;

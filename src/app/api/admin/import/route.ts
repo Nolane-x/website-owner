@@ -137,6 +137,7 @@ export async function POST(req: NextRequest) {
           isPinned: Boolean(item.isPinned),
           createdAt: new Date(),
           updatedAt: new Date(),
+          deletedAt: item.deletedAt ? new Date(String(item.deletedAt)) : null,
         });
         importedCount++;
       }
@@ -164,6 +165,7 @@ export async function POST(req: NextRequest) {
           isFeatured: Boolean(p.isFeatured),
           createdAt: new Date(),
           updatedAt: new Date(),
+          deletedAt: p.deletedAt ? new Date(String(p.deletedAt)) : null,
         });
         importedCount++;
       }
@@ -209,6 +211,7 @@ export async function POST(req: NextRequest) {
           isFeatured: Boolean(c.isFeatured),
           createdAt: new Date(),
           updatedAt: new Date(),
+          deletedAt: c.deletedAt ? new Date(String(c.deletedAt)) : null,
         });
         importedCount++;
       }

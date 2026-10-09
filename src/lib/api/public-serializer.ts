@@ -214,13 +214,36 @@ export function toPublicBlock(block: Record<string, unknown> | null | undefined)
   const content = (typeof block.contentJson === 'object' && block.contentJson !== null ? block.contentJson : {}) as Record<string, unknown>;
   const settings = (typeof block.settingsJson === 'object' && block.settingsJson !== null ? block.settingsJson : {}) as Record<string, unknown>;
 
-  // Xử lý text/markdown an toàn
+  // Xử lý text/markdown/html an toàn
   const sanitizedContent = { ...content };
   if (typeof sanitizedContent.text === 'string') {
     sanitizedContent.text = sanitizeHtml(sanitizedContent.text);
   }
   if (typeof sanitizedContent.markdown === 'string') {
     sanitizedContent.markdown = sanitizeHtml(sanitizedContent.markdown);
+  }
+  if (typeof sanitizedContent.html === 'string') {
+    sanitizedContent.html = sanitizeHtml(sanitizedContent.html);
+  }
+  if (typeof sanitizedContent.caption === 'string') {
+    sanitizedContent.caption = sanitizeHtml(sanitizedContent.caption);
+  }
+  if (typeof sanitizedContent.title === 'string') {
+    sanitizedContent.title = sanitizeHtml(sanitizedContent.title);
+  }
+
+  // Khử các URL scheme độc hại như javascript: hoặc data:text/html
+  for (const urlKey of ['url', 'href', 'src', 'link']) {
+    if (typeof sanitizedContent[urlKey] === 'string') {
+      const trimmed = (sanitizedContent[urlKey] as string).trim().toLowerCase();
+      if (
+        trimmed.startsWith('javascript:') ||
+        trimmed.startsWith('data:text/html') ||
+        trimmed.startsWith('vbscript:')
+      ) {
+        sanitizedContent[urlKey] = '';
+      }
+    }
   }
 
   return {

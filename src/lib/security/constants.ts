@@ -4,7 +4,9 @@ export const COOKIE_GUEST_SESSION_NAME = 'webos_guest_session_token';
 export const COOKIE_MAX_AGE_DAYS = 30;
 export const COOKIE_MAX_AGE_SECONDS = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
 
-export const SESSION_EXPIRY_DAYS = 30;
+export const SESSION_EXPIRY_DAYS = process.env.SESSION_MAX_AGE_DAYS
+  ? Math.max(1, parseInt(process.env.SESSION_MAX_AGE_DAYS, 10) || 30)
+  : 30;
 
 export const SECURITY_EVENT_TYPES = {
   LOGIN_SUCCESS: 'login_success',

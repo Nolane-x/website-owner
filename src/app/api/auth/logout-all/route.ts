@@ -3,8 +3,11 @@ import { getSessionFromCookies, revokeAllSessions, clearSessionCookie } from '@/
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 export async function POST(req: NextRequest) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   try {
     const sessionData = await getSessionFromCookies();
     const ip = getClientIp(req.headers);

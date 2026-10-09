@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
 
     const type = searchParams.get('type');
     const isFeatured = searchParams.get('isFeatured');
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50;
 
     // NGUYÊN TẮC BẢO MẬT: BẮT BUỘC KHÓA Ở CẤP TRUY VẤN DATABASE!
     const conditions: SQL[] = [
@@ -36,7 +38,8 @@ export async function GET(req: NextRequest) {
       .select()
       .from(contentItems)
       .where(and(...conditions))
-      .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt));
+      .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt))
+      .limit(limit);
 
     const items = rawItems
       .map((it) => toPublicContent(it as unknown as Record<string, unknown>))

@@ -44,7 +44,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const originErr = await assertValidOrigin(req);
+  const originErr = assertValidOrigin(req);
   if (originErr) return originErr;
 
   const auth = await requireOwner();

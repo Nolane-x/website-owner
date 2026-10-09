@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { securityEvents } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, or } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   const auth = await requireOwner();
@@ -14,10 +14,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Number(searchParams.get('limit') || 50), 100);
 
+    // SEC-27: Hiển thị cả sự kiện của chủ nhân lẫn các sự kiện không xác thực (như đăng nhập sai username)
     const events = await db
       .select()
       .from(securityEvents)
-      .where(eq(securityEvents.profileId, auth.profile.id))
+      .where(
+        or(
+          eq(securityEvents.profileId, auth.profile.id),
+          eq(securityEvents.profileId, 'unknown')
+        )
+      )
       .orderBy(desc(securityEvents.createdAt))
       .limit(limit);
 

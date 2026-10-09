@@ -98,26 +98,32 @@ export async function PUT(
 
     if (status !== undefined) updates.status = status;
 
-    await db
-      .update(collections)
-      .set(updates)
-      .where(and(eq(collections.id, id), eq(collections.profileId, auth.profile.id)));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(collections)
+        .set(updates)
+        .where(and(eq(collections.id, id), eq(collections.profileId, auth.profile.id)));
 
-    // Cập nhật lại danh sách items trong collection nếu truyền vào
-    if (Array.isArray(itemIds)) {
-      await db.delete(collectionItems).where(eq(collectionItems.collectionId, id));
-      for (let i = 0; i < itemIds.length; i++) {
-        await db.insert(collectionItems).values({
-          id: crypto.randomUUID(),
-          collectionId: id,
-          contentItemId: itemIds[i],
-          sortOrder: i,
-          createdAt: new Date(),
-        });
+      // DB-04 / P1-13: Cập nhật nguyên tử danh sách items bên trong transaction
+      if (Array.isArray(itemIds)) {
+        await tx.delete(collectionItems).where(eq(collectionItems.collectionId, id));
+        for (let i = 0; i < itemIds.length; i++) {
+          await tx.insert(collectionItems).values({
+            id: crypto.randomUUID(),
+            collectionId: id,
+            contentItemId: itemIds[i],
+            sortOrder: i,
+            createdAt: new Date(),
+          });
+        }
       }
-    }
+    });
 
-    const updated = await db.select().from(collections).where(eq(collections.id, id)).limit(1);
+    const updated = await db
+      .select()
+      .from(collections)
+      .where(and(eq(collections.id, id), eq(collections.profileId, auth.profile.id)))
+      .limit(1);
 
     return NextResponse.json({ success: true, collection: updated[0] });
   } catch (error) {

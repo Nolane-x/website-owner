@@ -17,7 +17,7 @@ export async function GET(
     await initializeDatabase();
     const db = getDb();
 
-    // 1. Thử tìm trong contentItems với visibility='UNLISTED' và chưa bị xóa
+    // 1. Thử tìm trong contentItems với visibility='UNLISTED', status='PUBLISHED' và chưa bị xóa
     const items = await db
       .select()
       .from(contentItems)
@@ -25,6 +25,7 @@ export async function GET(
         and(
           eq(contentItems.shareToken, shareToken),
           eq(contentItems.visibility, 'UNLISTED'),
+          eq(contentItems.status, 'PUBLISHED'),
           isNull(contentItems.deletedAt)
         )
       )
@@ -35,7 +36,7 @@ export async function GET(
       return NextResponse.json({ item: publicItem, itemType: 'content' });
     }
 
-    // 2. Thử tìm trong pages với visibility='UNLISTED' và chưa bị xóa
+    // 2. Thử tìm trong pages với visibility='UNLISTED', status='PUBLISHED' và chưa bị xóa
     const pageItems = await db
       .select()
       .from(pages)
@@ -43,6 +44,7 @@ export async function GET(
         and(
           eq(pages.shareToken, shareToken),
           eq(pages.visibility, 'UNLISTED'),
+          eq(pages.status, 'PUBLISHED'),
           isNull(pages.deletedAt)
         )
       )

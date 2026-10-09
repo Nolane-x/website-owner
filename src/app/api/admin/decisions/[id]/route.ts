@@ -11,7 +11,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -46,9 +47,12 @@ export async function PUT(
     await db
       .update(decisionRecords)
       .set(updates)
-      .where(eq(decisionRecords.id, id));
+      .where(and(eq(decisionRecords.id, id), eq(decisionRecords.profileId, auth.profile.id)));
 
-    const [updated] = await db.select().from(decisionRecords).where(eq(decisionRecords.id, id));
+    const [updated] = await db
+      .select()
+      .from(decisionRecords)
+      .where(and(eq(decisionRecords.id, id), eq(decisionRecords.profileId, auth.profile.id)));
     return NextResponse.json({ record: updated });
   } catch (error) {
     console.error('Lỗi cập nhật hồ sơ quyết định:', error);
@@ -60,7 +64,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -78,7 +83,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Không tìm thấy hồ sơ quyết định.' }, { status: 404 });
     }
 
-    await db.delete(decisionRecords).where(eq(decisionRecords.id, id));
+    await db
+      .delete(decisionRecords)
+      .where(and(eq(decisionRecords.id, id), eq(decisionRecords.profileId, auth.profile.id)));
     return NextResponse.json({ success: true, deletedId: id });
   } catch (error) {
     console.error('Lỗi xóa hồ sơ quyết định:', error);

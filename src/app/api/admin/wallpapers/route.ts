@@ -41,7 +41,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -58,6 +59,18 @@ export async function POST(req: NextRequest) {
     const type: WallpaperMediaType = body.type || 'image';
     const sourceUrl = body.sourceUrl ? sanitizePlain(body.sourceUrl) : null;
     const localDataUrl = body.localDataUrl ? String(body.localDataUrl) : null;
+
+    // P1-24: Giới hạn kích thước và định dạng an toàn cho Data URL hình nền
+    if (localDataUrl) {
+      if (localDataUrl.length > 7 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Kích thước tệp hình nền vượt quá giới hạn 5MB.' }, { status: 400 });
+      }
+      const isAllowedDataUrl = /^data:(image\/(png|jpeg|jpg|webp|gif)|video\/(mp4|webm));base64,/i.test(localDataUrl);
+      if (!isAllowedDataUrl) {
+        return NextResponse.json({ error: 'Định dạng hình nền không hợp lệ. Chỉ chấp nhận PNG, JPEG, WEBP, GIF, MP4, WEBM.' }, { status: 400 });
+      }
+    }
+
     const isFavorite = Boolean(body.isFavorite);
     const tagsJson: string[] = Array.isArray(body.tagsJson)
       ? body.tagsJson.map((t: string) => sanitizePlain(t))
@@ -88,7 +101,10 @@ export async function POST(req: NextRequest) {
       createdAt: new Date(),
     });
 
-    const [created] = await db.select().from(customWallpapers).where(eq(customWallpapers.id, id));
+    const [created] = await db
+      .select()
+      .from(customWallpapers)
+      .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
     return NextResponse.json({ wallpaper: created }, { status: 201 });
   } catch (error) {
     console.error('Lỗi lưu hình nền tùy chỉnh:', error);

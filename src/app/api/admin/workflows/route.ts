@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { automationWorkflows } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -14,7 +14,6 @@ export async function GET() {
   try {
     await initializeDatabase();
     const db = getDb();
-
     const workflows = await db
       .select()
       .from(automationWorkflows)
@@ -29,7 +28,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  await assertValidOrigin(req);
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       await db
         .update(automationWorkflows)
         .set(workflowData)
-        .where(eq(automationWorkflows.id, body.id));
+        .where(and(eq(automationWorkflows.id, body.id), eq(automationWorkflows.profileId, auth.profile.id)));
     } else {
       await db.insert(automationWorkflows).values({
         ...workflowData,

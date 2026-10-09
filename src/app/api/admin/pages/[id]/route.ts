@@ -8,6 +8,7 @@ import { sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 export async function GET(
   req: NextRequest,
@@ -51,6 +52,9 @@ export async function PUT(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -106,7 +110,11 @@ export async function PUT(
     const userAgent = req.headers.get('user-agent') || 'Unknown';
     await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.PAGE_UPDATED, { id, title: updates.title || currentPage.title, updates: Object.keys(updates) }, ip, userAgent);
 
-    const updated = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+    const updated = await db
+      .select()
+      .from(pages)
+      .where(and(eq(pages.id, id), eq(pages.profileId, auth.profile.id)))
+      .limit(1);
 
     return NextResponse.json({ success: true, page: updated[0] });
   } catch (error) {
@@ -119,6 +127,9 @@ export async function DELETE(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 

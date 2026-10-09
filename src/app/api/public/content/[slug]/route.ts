@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { toPublicContent } from '@/lib/api/public-serializer';
 
 export async function GET(
   req: NextRequest,
@@ -18,28 +19,16 @@ export async function GET(
     await initializeDatabase();
     const db = getDb();
 
-    // CHỈ QUERY NỘI DUNG PUBLIC VÀ PUBLISHED
+    // PUB-01 & PUB-11: CHỈ QUERY NỘI DUNG PUBLIC, PUBLISHED VÀ KHÔNG BỊ XÓA (NOT DELETED)
     const items = await db
-      .select({
-        id: contentItems.id,
-        title: contentItems.title,
-        slug: contentItems.slug,
-        type: contentItems.type,
-        description: contentItems.description,
-        content: contentItems.content,
-        coverImage: contentItems.coverImage,
-        icon: contentItems.icon,
-        tags: contentItems.tags,
-        category: contentItems.category,
-        metadata: contentItems.metadata,
-        publishedAt: contentItems.publishedAt,
-      })
+      .select()
       .from(contentItems)
       .where(
         and(
           eq(contentItems.slug, slug),
           eq(contentItems.visibility, 'PUBLIC'),
-          eq(contentItems.status, 'PUBLISHED')
+          eq(contentItems.status, 'PUBLISHED'),
+          isNull(contentItems.deletedAt)
         )
       )
       .limit(1);
@@ -49,7 +38,12 @@ export async function GET(
       return NextResponse.json({ error: 'Nội dung không tồn tại hoặc chưa được xuất bản.' }, { status: 404 });
     }
 
-    return NextResponse.json({ item: items[0] });
+    const publicItem = toPublicContent(items[0] as unknown as Record<string, unknown>);
+    if (!publicItem) {
+      return NextResponse.json({ error: 'Nội dung không tồn tại hoặc chưa được xuất bản.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ item: publicItem });
   } catch (error) {
     console.error('Lỗi lấy bài viết công khai:', error);
     return NextResponse.json({ error: 'Không thể tải nội dung.' }, { status: 500 });

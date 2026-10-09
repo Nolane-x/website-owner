@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionFromCookies } from './session';
 import { getDb, initializeDatabase } from '../db';
 import { profiles, sessions, settings } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { getGuestSessionFromCookies } from './guest-session';
 
 export type RequireOwnerResult =
@@ -36,10 +36,16 @@ export async function checkPublicAccessProtection(): Promise<{
   await initializeDatabase();
   const db = getDb();
 
+  const ownerProfiles = await db.select({ id: profiles.id }).from(profiles).orderBy(profiles.createdAt).limit(1);
+  const ownerId = ownerProfiles[0]?.id;
+  if (!ownerId) {
+    return { requirePassword: false, hasValidGuestSession: true };
+  }
+
   const publicSettings = await db
     .select()
     .from(settings)
-    .where(eq(settings.key, 'public_access'))
+    .where(and(eq(settings.key, 'public_access'), eq(settings.profileId, ownerId)))
     .limit(1);
 
   if (publicSettings.length === 0) {

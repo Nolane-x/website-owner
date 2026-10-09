@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { pages, contentBlocks } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 function generateSlug(text: string): string {
   return text
@@ -41,6 +42,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -121,7 +125,11 @@ export async function POST(req: NextRequest) {
     const userAgent = req.headers.get('user-agent') || 'Unknown';
     await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.PAGE_CREATED, { pageId, title: sanitizedTitle, slug }, ip, userAgent);
 
-    const created = await db.select().from(pages).where(eq(pages.id, pageId)).limit(1);
+    const created = await db
+      .select()
+      .from(pages)
+      .where(and(eq(pages.id, pageId), eq(pages.profileId, auth.profile.id)))
+      .limit(1);
 
     return NextResponse.json({ success: true, page: created[0] }, { status: 201 });
   } catch (error) {

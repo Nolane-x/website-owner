@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
-import { settings } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { profiles, settings } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
 import { createGuestSession, setGuestSessionCookie } from '@/lib/auth/guest-session';
 import { rateLimiter, getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 export async function POST(req: NextRequest) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   try {
     const ip = getClientIp(req.headers);
     const rateCheck = rateLimiter.check(`guest-pwd:${ip}`, 5, 60);
@@ -27,10 +31,16 @@ export async function POST(req: NextRequest) {
     await initializeDatabase();
     const db = getDb();
 
+    const ownerProfiles = await db.select({ id: profiles.id }).from(profiles).orderBy(profiles.createdAt).limit(1);
+    const ownerId = ownerProfiles[0]?.id;
+    if (!ownerId) {
+      return NextResponse.json({ success: true, message: 'Website không yêu cầu mật khẩu.' });
+    }
+
     const publicSettings = await db
       .select()
       .from(settings)
-      .where(eq(settings.key, 'public_access'))
+      .where(and(eq(settings.key, 'public_access'), eq(settings.profileId, ownerId)))
       .limit(1);
 
     if (publicSettings.length === 0) {

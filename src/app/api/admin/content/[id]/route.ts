@@ -8,6 +8,7 @@ import { sanitizeHtml, sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { getClientIp } from '@/lib/security/rate-limit';
+import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { syncContentLinks } from '@/lib/knowledge/wiki-links';
 
 export async function GET(
@@ -43,6 +44,9 @@ export async function PUT(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -111,28 +115,30 @@ export async function PUT(
       }
     }
 
-    // Ghi nhận phiên bản trước đó vào content_revisions (Version History)
-    const existingRevs = await db
-      .select()
-      .from(contentRevisions)
-      .where(and(eq(contentRevisions.targetId, id), eq(contentRevisions.targetType, 'content')));
+    // DB-05 / DB-06: Ghi nhận revision và cập nhật item trong Transaction nguyên tử
+    await db.transaction(async (tx) => {
+      const existingRevs = await tx
+        .select()
+        .from(contentRevisions)
+        .where(and(eq(contentRevisions.targetId, id), eq(contentRevisions.targetType, 'content')));
 
-    await db.insert(contentRevisions).values({
-      id: crypto.randomUUID(),
-      targetId: id,
-      targetType: 'content',
-      revisionNumber: existingRevs.length + 1,
-      titleSnapshot: currentItem.title,
-      bodySnapshot: currentItem.content,
-      metadataSnapshot: currentItem.metadata || {},
-      reason: 'Cập nhật trước khi lưu bản mới',
-      createdAt: new Date(),
+      await tx.insert(contentRevisions).values({
+        id: crypto.randomUUID(),
+        targetId: id,
+        targetType: 'content',
+        revisionNumber: existingRevs.length + 1,
+        titleSnapshot: currentItem.title,
+        bodySnapshot: currentItem.content,
+        metadataSnapshot: currentItem.metadata || {},
+        reason: 'Cập nhật trước khi lưu bản mới',
+        createdAt: new Date(),
+      });
+
+      await tx
+        .update(contentItems)
+        .set(updates)
+        .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)));
     });
-
-    await db
-      .update(contentItems)
-      .set(updates)
-      .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)));
 
     if (updates.content !== undefined) {
       await syncContentLinks(auth.profile.id, id, updates.content || '');
@@ -150,7 +156,11 @@ export async function PUT(
       await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.CONTENT_UPDATED, { id, updates: Object.keys(updates) }, ip, userAgent);
     }
 
-    const updated = await db.select().from(contentItems).where(eq(contentItems.id, id)).limit(1);
+    const updated = await db
+      .select()
+      .from(contentItems)
+      .where(and(eq(contentItems.id, id), eq(contentItems.profileId, auth.profile.id)))
+      .limit(1);
 
     return NextResponse.json({ success: true, item: updated[0] });
   } catch (error) {
@@ -163,6 +173,9 @@ export async function PATCH(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
@@ -191,6 +204,9 @@ export async function DELETE(
   req: NextRequest,
   segmentData: { params: Promise<{ id: string }> }
 ) {
+  const originError = assertValidOrigin(req);
+  if (originError) return originError;
+
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems, pages } from '@/lib/db/schema';
-import { eq, and, or, like, isNull } from 'drizzle-orm';
+import { eq, and, or, ilike, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 
 export async function GET(req: NextRequest) {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     await initializeDatabase();
     const db = getDb();
-    const q = `%${query.trim().toLowerCase()}%`;
+    const q = `%${query.trim()}%`;
 
     // 1. Tìm trong content_items: CHỈ PUBLIC VÀ PUBLISHED VÀ KHÔNG BỊ XÓA (NOT DELETED)
     const matchingItems = await db
@@ -42,8 +42,8 @@ export async function GET(req: NextRequest) {
           eq(contentItems.status, 'PUBLISHED'),
           isNull(contentItems.deletedAt),
           or(
-            like(contentItems.title, q),
-            like(contentItems.description, q)
+            ilike(contentItems.title, q),
+            ilike(contentItems.description, q)
           )
         )
       )
@@ -66,8 +66,8 @@ export async function GET(req: NextRequest) {
           eq(pages.status, 'PUBLISHED'),
           isNull(pages.deletedAt),
           or(
-            like(pages.title, q),
-            like(pages.description, q)
+            ilike(pages.title, q),
+            ilike(pages.description, q)
           )
         )
       )

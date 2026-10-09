@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { collections } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 
 export async function GET() {
@@ -29,7 +29,8 @@ export async function GET() {
       .where(
         and(
           eq(collections.visibility, 'PUBLIC'),
-          eq(collections.status, 'PUBLISHED')
+          eq(collections.status, 'PUBLISHED'),
+          isNull(collections.deletedAt)
         )
       )
       .orderBy(desc(collections.isFeatured), desc(collections.createdAt));

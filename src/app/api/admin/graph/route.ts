@@ -35,9 +35,10 @@ export async function GET() {
     }
 
     const itemIds = items.map((i) => i.id);
+    const itemIdSet = new Set(itemIds);
 
     // 2. Lấy tất cả các liên kết giữa các nội dung này
-    const links = await db
+    const rawLinks = await db
       .select({
         source: contentLinks.sourceId,
         target: contentLinks.targetId,
@@ -45,6 +46,9 @@ export async function GET() {
       })
       .from(contentLinks)
       .where(inArray(contentLinks.sourceId, itemIds));
+
+    // DB-12: Chỉ giữ lại các liên kết mà cả nguồn và đích đều còn hiệu lực
+    const links = rawLinks.filter((l) => itemIdSet.has(l.source) && itemIdSet.has(l.target));
 
     // Đếm số lượng kết nối cho mỗi nút
     const connectionCounts: Record<string, number> = {};
