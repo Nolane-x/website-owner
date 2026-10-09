@@ -238,6 +238,71 @@ export async function initializeDatabase() {
     ALTER TABLE pages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
     ALTER TABLE collections ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
 
+    CREATE TABLE IF NOT EXISTS kanban_tasks (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'todo',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      due_date TEXT,
+      tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+      subtasks_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      related_item_id TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'infrastructure',
+      cost INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'VND',
+      billing_cycle TEXT NOT NULL DEFAULT 'monthly',
+      next_billing_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      url TEXT,
+      notes TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS code_snippets (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      language TEXT NOT NULL DEFAULT 'typescript',
+      code TEXT NOT NULL,
+      tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+      is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS scratchpads (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT,
+      content TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT 'amber',
+      is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS content_links (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+      target_id TEXT NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+      link_text TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_content_vis_status ON content_items(visibility, status);
     CREATE INDEX IF NOT EXISTS idx_content_slug ON content_items(slug);
     CREATE INDEX IF NOT EXISTS idx_pages_vis_status ON pages(visibility, status);
@@ -246,6 +311,9 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_guest_sessions_token ON guest_sessions(token_hash);
     CREATE INDEX IF NOT EXISTS idx_content_revisions_target ON content_revisions(target_id, revision_number);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_profile_key ON settings(profile_id, key);
+    CREATE INDEX IF NOT EXISTS idx_kanban_status ON kanban_tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_scratchpads_pinned ON scratchpads(is_pinned, sort_order);
+    CREATE INDEX IF NOT EXISTS idx_content_links_target ON content_links(target_id);
   `;
 
   if (pgliteClient) {
