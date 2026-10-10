@@ -198,7 +198,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record DNS-pinned public-only HTTP proxy hardening and outbound request limits."
+      "shortDescription": "Record outbound HTTP security hardening and pinned Node 24-compatible GitHub Actions/runner maintenance."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -550,7 +550,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Chạy CI bằng Node.js 24.x đồng bộ với runtime production."
+      "shortDescription": "Use SHA-pinned Node 24-compatible checkout/setup-node actions and pin CI to Ubuntu 24.04 before ubuntu-latest image migration."
     },
     {
       "relativePath": "tests/sanitize-runtime.test.ts",
