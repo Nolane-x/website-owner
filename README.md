@@ -142,7 +142,7 @@ Bảng dưới đây phân biệt tính năng đang có mã thực thi với cá
 | :--- | :--- |
 | Desktop ảo / Window Manager | Có thao tác cửa sổ và lưu bố cục trong trình duyệt; đây không phải cửa sổ hệ điều hành thật. |
 | Inbox, Tasks, Notes, Projects, Research và các module dữ liệu | Nhiều luồng CRUD đã nối API và database; mức độ hoàn chỉnh khác nhau theo từng module. |
-| AI Copilot | Có lời gọi thật tới OpenAI-compatible API/Groq/Ollama và tìm kiếm từ khóa trong các API dữ liệu. Context riêng tư mặc định tắt. Chưa phải full RAG, multi-agent Mission Control hoặc agent tự chạy vô hạn. |
+| AI Copilot | Catalog đa provider dùng chung cho AI Copilot và Creator Studio: OpenAI, Anthropic, Google Gemini, Groq, DeepSeek, OpenRouter, Mistral, Together, Fireworks, xAI, Cerebras, Perplexity, Cohere, NVIDIA NIM, SambaNova, SiliconFlow, Hugging Face, DeepInfra, Hyperbolic, Novita, Nebius; local/self-hosted Ollama, LM Studio, vLLM, llama.cpp, LiteLLM; và custom OpenAI-compatible endpoint. Hỗ trợ adapter Anthropic native, tải model list theo giao thức tiêu chuẩn, Model ID thủ công và endpoint validation. Context riêng tư mặc định tắt; chưa phải full RAG/agent runtime. |
 | Workflow | Có executor legacy cho Inbox → Task và báo cáo quá hạn; thêm node executor có allowlist cho DAG: tải Inbox/task, kiểm tra task đã liên kết/quá hạn, tạo hoặc tái sử dụng task, đánh dấu Inbox và tạo báo cáo. Conditional branching dùng nhánh true/false, trace từng node được lưu cùng run history. Inbox → Task dùng transaction + row lock; unique partial index là lớp chống trùng cuối cùng. Scheduler Vercel hằng ngày chỉ chạy báo cáo quá hạn chỉ đọc và có claim chống chạy trùng theo ngày Việt Nam. Compiler xác minh DAG, chu trình, cạnh sai, node mồ côi và thứ tự ổn định. Cần `CRON_SECRET` trong Production. Node AI/approval và thao tác tùy ý chưa có executor, được từ chối fail-closed. |
 | Creator Studio | Nội dung được lưu qua API; có thể gọi model thật để tạo dàn ý. Trạng thái “published” trong pipeline không tự đăng nội dung ra mạng xã hội. |
 | Calendar & Habits | Sự kiện lịch nội bộ và ngày hoàn thành thói quen được lưu trong database. Chưa có đồng bộ Google Calendar/Apple Calendar hoặc nhắc lịch khi ứng dụng đóng. |
@@ -152,9 +152,10 @@ Bảng dưới đây phân biệt tính năng đang có mã thực thi với cá
 
 ### Quy trình sử dụng AI
 
-- Chọn provider/model và tự cung cấp API key nếu cần. Khóa được giữ trong state của cửa sổ khi đang mở; không được ghi vào database hoặc `localStorage` bởi các module AI vừa sửa.
-- Các request tới Groq/OpenAI/Ollama được gửi trực tiếp từ trình duyệt tới endpoint đã chọn; nhà cung cấp có thể xử lý prompt theo chính sách riêng và CORS có thể chặn request.
-- Chỉ bật tùy chọn context khi chủ động muốn đưa dữ liệu cá nhân đã truy xuất vào prompt; luôn kiểm tra nội dung trước khi gửi.
+- AI Copilot và Creator Studio dùng chung catalog provider. Có thể chọn provider cloud có sẵn, server local/self-hosted, hoặc `Custom OpenAI-compatible endpoint`; nhập Model ID thủ công hoặc thử tải danh sách qua `/models` (Ollama dùng `/api/tags`).
+- Adapter dùng OpenAI-compatible chat completions cho phần lớn provider, native Messages API cho Anthropic và `/api/chat` cho Ollama. Compatibility không đồng nghĩa mọi model/provider hỗ trợ mọi tính năng; model list, endpoint, quyền API và khả năng CORS có thể khác nhau.
+- API key được giữ trong state của component, gửi trực tiếp từ trình duyệt tới endpoint đã chọn và không được ghi vào database hoặc `localStorage`. Do đây là direct-from-browser, chỉ dùng endpoint tin cậy; nhà cung cấp nhận prompt theo chính sách của họ và một số endpoint có thể chặn CORS.
+- HTTP chỉ được phép cho loopback/localhost; endpoint bên ngoài phải dùng HTTPS. Không đặt API key trong URL/query string. Chỉ bật tùy chọn context khi chủ động muốn đưa dữ liệu cá nhân đã truy xuất vào prompt; mặc định tắt.
 
 ## 🧪 Kiểm Thử Hệ Thống (Testing)
 

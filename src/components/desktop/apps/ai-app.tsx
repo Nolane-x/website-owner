@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from 'react';
 import { Sparkles, Send, Bot, User, KeyRound, Loader2, Calendar, ShieldCheck, Search } from 'lucide-react';
-import { completeChat, type RemoteAIProvider, type ChatMessageInput } from '@/lib/ai/client';
+import { AI_PROVIDER_PRESETS, completeChat, getAIProviderPreset, listChatModels, type RemoteAIProvider, type ChatMessageInput } from '@/lib/ai/client';
 
 interface ChatMessage {
   id: string;
@@ -97,6 +97,8 @@ export function AiApp() {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('openai/gpt-oss-20b');
   const [baseUrl, setBaseUrl] = useState('http://localhost:11434');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [includeContext, setIncludeContext] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -104,6 +106,28 @@ export function AiApp() {
   const handleGenerateStandup = () => {
     setInput('Tóm tắt công việc, nhiệm vụ đang mở và nội dung gần đây của tôi.');
   };
+
+  const handleLoadModels = useCallback(async () => {
+    if (provider === 'search') return;
+    setLoadingModels(true);
+    setErrorMessage(null);
+    try {
+      const models = await listChatModels({ provider, apiKey, baseUrl });
+      setAvailableModels(models);
+      if (!models.length) {
+        setErrorMessage('Provider không trả model nào. Hãy kiểm tra endpoint/permission hoặc nhập Model ID thủ công.');
+      } else if (!models.includes(model)) {
+        setModel(models[0]);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Không tải được danh sách model.';
+      setErrorMessage(message === 'Failed to fetch'
+        ? 'Không tải được model list qua trình duyệt. CORS hoặc quyền provider có thể chặn endpoint /models; bạn vẫn có thể nhập Model ID thủ công.'
+        : message);
+    } finally {
+      setLoadingModels(false);
+    }
+  }, [apiKey, baseUrl, model, provider]);
 
   const handleSend = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -162,7 +186,7 @@ export function AiApp() {
           provider,
           apiKey,
           model,
-          baseUrl: provider === 'ollama' ? baseUrl : undefined,
+          baseUrl,
           messages: conversation,
           signal: controller.signal,
         });
@@ -193,7 +217,7 @@ export function AiApp() {
     }
   }, [apiKey, baseUrl, includeContext, input, loading, messages, model, provider]);
 
-  const providerLabel = provider === 'search' ? 'Tra cứu dữ liệu thật' : provider.toUpperCase();
+  const providerLabel = provider === 'search' ? 'Tra cứu dữ liệu thật' : getAIProviderPreset(provider).label;
 
   return (
     <div className="flex flex-col h-full bg-stone-950 text-stone-200 text-xs">
@@ -225,14 +249,25 @@ export function AiApp() {
               <select value={provider} onChange={(event) => {
                 const next = event.target.value as RemoteAIProvider | 'search';
                 setProvider(next);
-                if (next === 'groq') { setModel('openai/gpt-oss-20b'); setBaseUrl('https://api.groq.com/openai/v1'); }
-                if (next === 'openai') { setModel('gpt-4o-mini'); setBaseUrl('https://api.openai.com/v1'); }
-                if (next === 'ollama') { setModel('qwen3.5:2b'); setBaseUrl('http://localhost:11434'); }
+                setApiKey('');
+                setAvailableModels([]);
+                setErrorMessage(null);
+                if (next !== 'search') {
+                  const preset = getAIProviderPreset(next);
+                  setModel(preset.defaultModel);
+                  setBaseUrl(preset.defaultBaseUrl);
+                }
               }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-1.5 text-xs text-stone-200">
                 <option value="search">Tra cứu dữ liệu (không dùng AI cloud)</option>
-                <option value="groq">Groq API</option>
-                <option value="openai">OpenAI API</option>
-                <option value="ollama">Ollama / endpoint local</option>
+                <optgroup label="Cloud providers">
+                  {AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'cloud').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+                </optgroup>
+                <optgroup label="Local / self-hosted">
+                  {AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'local').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+                </optgroup>
+                <optgroup label="Custom">
+                  {AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'custom').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+                </optgroup>
               </select>
             </label>
             <label className="space-y-1">
@@ -242,19 +277,32 @@ export function AiApp() {
           </div>
           {provider !== 'search' && (
             <>
-              {provider !== 'ollama' && (
+              <div className="flex items-end gap-2">
+                <label className="block flex-1 min-w-0 space-y-1">
+                  <span className="block text-[11px] text-stone-400">API key {getAIProviderPreset(provider).requiresApiKey ? '(bắt buộc)' : '(tuỳ chọn)'}</span>
+                  <input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Dán API key; không lưu vào website/localStorage" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+                </label>
+                {apiKey && <button type="button" onClick={() => setApiKey('')} className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-[11px]">Xóa key</button>}
+              </div>
+              {['custom', 'ollama', 'lmstudio', 'vllm', 'llamacpp', 'litellm'].includes(provider) && (
                 <label className="block space-y-1">
-                  <span className="block text-[11px] text-stone-400">API key (chỉ giữ trong component khi đang mở)</span>
-                  <input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Dán API key; không được gửi cho website của bạn" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+                  <span className="block text-[11px] text-stone-400">Base URL / endpoint</span>
+                  <input value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setAvailableModels([]); }} placeholder="https://your-endpoint.example/v1" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
                 </label>
               )}
-              {provider === 'ollama' && (
-                <label className="block space-y-1">
-                  <span className="block text-[11px] text-stone-400">Ollama Base URL</span>
-                  <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="http://localhost:11434" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
-                </label>
-              )}
-              <p className="text-[10px] leading-relaxed text-amber-200/80">API key được gửi trực tiếp từ trình duyệt tới nhà cung cấp đã chọn và không được lưu ở server hay localStorage. Nhà cung cấp có thể xử lý prompt theo chính sách của họ. CORS có thể chặn một số endpoint.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void handleLoadModels()} disabled={loadingModels} className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-[11px]">
+                  {loadingModels ? 'Đang tải model…' : 'Tải danh sách model'}
+                </button>
+                {availableModels.length > 0 && (
+                  <select aria-label="Chọn model đã phát hiện" value={availableModels.includes(model) ? model : ''} onChange={(event) => setModel(event.target.value)} className="min-w-0 flex-1 bg-stone-950 border border-stone-700 rounded-lg px-2 py-1.5 text-xs text-stone-200">
+                    <option value="">Chọn model đã phát hiện…</option>
+                    {availableModels.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                )}
+              </div>
+              <p className="text-[10px] text-stone-500">{getAIProviderPreset(provider).description}</p>
+              <p className="text-[10px] leading-relaxed text-amber-200/80">API key và prompt được gửi trực tiếp từ trình duyệt tới endpoint đã chọn; ứng dụng không gửi chúng tới API của website và không lưu vào database/localStorage. Chỉ dùng endpoint bạn tin cậy. Một số provider chặn CORS hoặc /models; bạn vẫn có thể nhập Model ID thủ công.</p>
             </>
           )}
           <label className="flex items-start gap-2 text-[11px] text-stone-300">

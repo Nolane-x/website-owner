@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { PenTool, Sparkles, FileText, RefreshCw, Sliders, Save, AlertTriangle, KeyRound } from 'lucide-react';
-import { completeChat, type RemoteAIProvider } from '@/lib/ai/client';
+import { AI_PROVIDER_PRESETS, completeChat, getAIProviderPreset, listChatModels, type RemoteAIProvider } from '@/lib/ai/client';
 
 type Stage = 'idea' | 'brief' | 'research' | 'draft' | 'review' | 'approved' | 'published';
 interface ContentItem {
@@ -40,7 +40,9 @@ export function CreatorStudioApp() {
   const [aiProvider, setAiProvider] = useState<RemoteAIProvider>('groq');
   const [apiKey, setApiKey] = useState('');
   const [aiModel, setAiModel] = useState('openai/gpt-oss-20b');
-  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
+  const [ollamaUrl, setOllamaUrl] = useState('https://api.groq.com/openai/v1');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -145,9 +147,32 @@ export function CreatorStudioApp() {
     await handleSave({ ...selectedItem, stage });
   };
 
+  const handleLoadModels = async () => {
+    setLoadingModels(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const models = await listChatModels({ provider: aiProvider, apiKey, baseUrl: ollamaUrl });
+      setAvailableModels(models);
+      if (!models.length) {
+        setNotice('Provider không trả model nào; hãy kiểm tra quyền /models hoặc nhập Model ID thủ công.');
+      } else {
+        if (!models.includes(aiModel)) setAiModel(models[0]);
+        setNotice(`Đã tải ${models.length} model từ ${getAIProviderPreset(aiProvider).label}.`);
+      }
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Không tải được danh sách model.';
+      setError(message === 'Failed to fetch'
+        ? 'Không tải được model list qua trình duyệt. CORS hoặc quyền provider có thể chặn endpoint /models; bạn vẫn có thể nhập Model ID thủ công.'
+        : message);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
   const handleAiGenerateOutline = async () => {
     if (!selectedItem) return;
-    if (aiProvider !== 'ollama' && !apiKey.trim()) {
+    if (getAIProviderPreset(aiProvider).requiresApiKey && !apiKey.trim()) {
       setShowAiSettings(true);
       setError('Hãy nhập API key của nhà cung cấp đã chọn trước khi yêu cầu model tạo dàn ý. Chưa có lời gọi AI nào được thực hiện.');
       return;
@@ -160,7 +185,7 @@ export function CreatorStudioApp() {
         provider: aiProvider,
         apiKey,
         model: aiModel,
-        baseUrl: aiProvider === 'ollama' ? ollamaUrl : undefined,
+        baseUrl: ollamaUrl,
         messages: [
           {
             role: 'system',
@@ -249,11 +274,14 @@ export function CreatorStudioApp() {
               {showAiSettings && <section className="p-4 rounded-2xl border border-purple-800/60 bg-purple-950/15 space-y-3">
                 <div className="flex items-center gap-2 text-purple-200 text-xs font-bold"><Sliders className="w-4 h-4" />Model/provider (khóa không được lưu)</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <label className="space-y-1"><span className="block text-[10px] text-stone-500">Provider</span><select value={aiProvider} onChange={(event) => { const next = event.target.value as RemoteAIProvider; setAiProvider(next); if (next === 'groq') setAiModel('openai/gpt-oss-20b'); if (next === 'openai') setAiModel('gpt-4o-mini'); if (next === 'ollama') setAiModel('qwen3.5:2b'); }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="ollama">Ollama local</option></select></label>
+                  <label className="space-y-1"><span className="block text-[10px] text-stone-500">Provider</span><select value={aiProvider} onChange={(event) => { const next = event.target.value as RemoteAIProvider; const preset = getAIProviderPreset(next); setAiProvider(next); setApiKey(''); setAiModel(preset.defaultModel); setOllamaUrl(preset.defaultBaseUrl); setAvailableModels([]); setError(null); setNotice(null); }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs"><optgroup label="Cloud providers">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'cloud').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup><optgroup label="Local / self-hosted">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'local').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup><optgroup label="Custom">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'custom').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup></select></label>
                   <label className="space-y-1"><span className="block text-[10px] text-stone-500">Model ID</span><input value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>
                 </div>
-                {aiProvider === 'ollama' ? <label className="block space-y-1"><span className="block text-[10px] text-stone-500">Base URL</span><input value={ollamaUrl} onChange={(event) => setOllamaUrl(event.target.value)} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label> : <label className="block space-y-1"><span className="block text-[10px] text-stone-500">API key</span><input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Chỉ giữ trong phiên khi cửa sổ đang mở" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>}
-                <p className="text-[10px] text-amber-200/80">Khi nhấn AI tạo dàn ý, chỉ tiêu đề, kênh và nội dung hiện đang chọn được gửi trực tiếp tới provider. API key không được ghi vào database của Personal Web OS. CORS hoặc giới hạn provider có thể khiến request thất bại.</p>
+                {['custom', 'ollama', 'lmstudio', 'vllm', 'llamacpp', 'litellm'].includes(aiProvider) && <label className="block space-y-1"><span className="block text-[10px] text-stone-500">Base URL / endpoint</span><input value={ollamaUrl} onChange={(event) => { setOllamaUrl(event.target.value); setAvailableModels([]); }} placeholder="https://your-endpoint.example/v1" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>}
+                <div className="flex items-end gap-2"><label className="block flex-1 min-w-0 space-y-1"><span className="block text-[10px] text-stone-500">API key {getAIProviderPreset(aiProvider).requiresApiKey ? '(bắt buộc)' : '(tuỳ chọn)'}</span><input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Chỉ giữ trong phiên khi cửa sổ đang mở" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>{apiKey && <button type="button" onClick={() => setApiKey('')} className="px-2.5 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-[11px]">Xóa key</button>}</div>
+                <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => void handleLoadModels()} disabled={loadingModels || generatingAi} className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-[11px]">{loadingModels ? 'Đang tải model…' : 'Tải danh sách model'}</button>{availableModels.length > 0 && <select aria-label="Chọn model đã phát hiện" value={availableModels.includes(aiModel) ? aiModel : ''} onChange={(event) => setAiModel(event.target.value)} className="min-w-0 flex-1 bg-stone-950 border border-stone-700 rounded-lg px-2 py-1.5 text-xs"><option value="">Chọn model đã phát hiện…</option>{availableModels.map((item) => <option key={item} value={item}>{item}</option>)}</select>}</div>
+                <p className="text-[10px] text-stone-500">{getAIProviderPreset(aiProvider).description}</p>
+                <p className="text-[10px] text-amber-200/80">Khi tạo dàn ý, nội dung đã chọn và API key được gửi trực tiếp từ trình duyệt tới endpoint đã chọn, không qua API của website và không lưu vào database/localStorage. Chỉ dùng endpoint bạn tin cậy; CORS có thể chặn request. Model ID vẫn có thể nhập thủ công.</p>
               </section>}
 
               <section className="p-4 rounded-2xl border border-stone-800 bg-stone-900/40 space-y-3">

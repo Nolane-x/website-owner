@@ -39,7 +39,7 @@
       "edgeDeployment": ".github/workflows/cloudflare-worker.yml"
     },
     "functionalStatus": {
-      "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
+      "copilot": "Shared multi-provider AI catalog with OpenAI-compatible presets (OpenAI, Gemini, Groq, DeepSeek, OpenRouter, Mistral, Together, Fireworks, xAI, Cerebras, Perplexity, Cohere, NVIDIA NIM, SambaNova, SiliconFlow, Hugging Face, DeepInfra, Hyperbolic, Novita, Nebius), native Anthropic Messages, Ollama, LM Studio/vLLM/llama.cpp/LiteLLM and custom compatible endpoints; supports model-list discovery where available, manual model IDs, URL validation, per-request timeout and direct-browser key handling without persistence. Personal-data retrieval remains keyword-based, not full RAG or agent runtime.",
       "workflows": "Persistent workflow definitions and durable run history. Preflight compiler validates DAGs and true/false branches; allowlisted node executor supports Inbox/task reads, idempotent task create/reuse, Inbox conversion and read-only overdue reporting with per-node traces. Inbox conversion is transactional/row-locked and protected by a partial unique index. Daily Vercel Cron executes only recognized legacy overdue reports or DAGs composed entirely of allowlisted read-only overdue operations; custom graphs with write operations fail closed and record their failure. Candidates already claimed for the Vietnam day are filtered before the 50-workflow batch limit to prevent starvation. Arbitrary shell/code, AI and approval actions are not enabled. CRON_SECRET is required in production.",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
@@ -286,7 +286,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Thay câu trả lời giả bằng provider thật hoặc tra cứu từ API dữ liệu; context cá nhân opt-in."
+      "shortDescription": "AI Copilot dùng catalog đa provider chung, model-list discovery, Base URL tùy chỉnh cho server local/custom, xóa key một chạm và privacy context opt-in."
     },
     {
       "relativePath": "src/components/desktop/apps/calendar-habits-app.tsx",
@@ -302,7 +302,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Thêm luồng save có trạng thái, tải API thật và gọi model thật khi người dùng cấu hình provider."
+      "shortDescription": "Creator Studio dùng cùng catalog đa provider với AI Copilot, tải model list, cấu hình local/custom endpoint và xóa key khi đổi provider hoặc theo yêu cầu."
     },
     {
       "relativePath": "src/components/desktop/apps/files-app.tsx",
@@ -349,8 +349,8 @@
       "fileName": "client.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Adapter request thực cho OpenAI-compatible API/Groq và Ollama."
+      "status": "modified",
+      "shortDescription": "Shared 27-preset AI catalog: 20 mocked OpenAI-compatible cloud endpoints, native Anthropic Messages, Ollama, LM Studio/vLLM/llama.cpp/LiteLLM and custom endpoints; model discovery, API-key handling, timeout and HTTP/HTTPS URL safety."
     },
     {
       "relativePath": "src/lib/workflows/inbox-to-task.ts",
@@ -397,8 +397,8 @@
       "fileName": "ai-client.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Test adapter API thật, Ollama, API key bắt buộc và lỗi provider."
+      "status": "modified",
+      "shortDescription": "32 mocked regression tests cover 20 OpenAI-compatible cloud endpoints, Anthropic native Messages, Ollama chat/model discovery, optional custom endpoints, required API keys, unsafe URL rejection and provider errors."
     },
     {
       "relativePath": "tests/calendar-habits.test.ts",
