@@ -19,6 +19,8 @@ interface Workflow {
   nodesJson: WorkflowNode[];
   edgesJson: unknown[];
   isActive: boolean;
+  scheduleEnabled: boolean;
+  lastScheduledFor?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -63,6 +65,7 @@ const TEMPLATES: Array<Omit<Workflow, 'id' | 'createdAt' | 'updatedAt'>> = [
     description: 'Chuyển một mục Inbox thành task thật, giữ liên kết nguồn và có thể chạy lại mà không tạo task trùng.',
     triggerType: 'inbox_to_task',
     isActive: true,
+    scheduleEnabled: false,
     edgesJson: [],
     nodesJson: [
       { id: 'capture', type: 'trigger', title: 'Chọn mục Inbox', description: 'Đọc mục do chủ sở hữu chọn trong Inbox.' },
@@ -76,6 +79,7 @@ const TEMPLATES: Array<Omit<Workflow, 'id' | 'createdAt' | 'updatedAt'>> = [
     description: 'Đọc task thật, tính các deadline đã qua và xuất báo cáo. Quy trình này chỉ đọc, không thay đổi dữ liệu.',
     triggerType: 'overdue_report',
     isActive: true,
+    scheduleEnabled: false,
     edgesJson: [],
     nodesJson: [
       { id: 'load', type: 'trigger', title: 'Đọc danh sách task', description: 'Truy vấn task thuộc chủ sở hữu hiện tại.' },
@@ -174,6 +178,7 @@ export function WorkflowsApp() {
             nodes: template.nodesJson,
             edges: template.edgesJson,
             isActive: true,
+            scheduleEnabled: template.scheduleEnabled,
           }),
         });
         const payload = await response.json();
@@ -203,6 +208,7 @@ export function WorkflowsApp() {
         nodes: selectedWorkflow.nodesJson,
         edges: selectedWorkflow.edgesJson,
         isActive: !selectedWorkflow.isActive,
+        scheduleEnabled: selectedWorkflow.scheduleEnabled,
       }),
     });
     const payload = await response.json();
@@ -212,6 +218,42 @@ export function WorkflowsApp() {
     }
     await loadData();
     setNotice(!selectedWorkflow.isActive ? 'Đã bật workflow.' : 'Đã tắt workflow. Workflow đã tắt không thể chạy.');
+  };
+
+  const toggleSchedule = async () => {
+    if (!selectedWorkflow || selectedWorkflow.triggerType !== 'overdue_report') return;
+    if (!selectedWorkflow.isActive && !selectedWorkflow.scheduleEnabled) {
+      setError('Hãy bật workflow trước khi bật lịch chạy tự động.');
+      return;
+    }
+
+    const nextScheduleEnabled = !selectedWorkflow.scheduleEnabled;
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch('/api/admin/workflows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedWorkflow.id,
+          name: selectedWorkflow.name,
+          description: selectedWorkflow.description,
+          triggerType: selectedWorkflow.triggerType,
+          nodes: selectedWorkflow.nodesJson,
+          edges: selectedWorkflow.edgesJson,
+          isActive: selectedWorkflow.isActive,
+          scheduleEnabled: nextScheduleEnabled,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Không thể cập nhật lịch workflow.');
+      await loadData();
+      setNotice(nextScheduleEnabled
+        ? 'Đã bật lịch báo cáo chỉ đọc hằng ngày. Hãy bảo đảm CRON_SECRET đã được cấu hình trong Vercel Production.'
+        : 'Đã tắt lịch chạy tự động; chạy thủ công vẫn khả dụng.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không thể cập nhật lịch workflow.');
+    }
   };
 
   const runWorkflow = async () => {
@@ -310,6 +352,29 @@ export function WorkflowsApp() {
                   <button onClick={() => void toggleWorkflow()} disabled={loading || running} className="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs">{selectedWorkflow.isActive ? 'Tắt workflow' : 'Bật workflow'}</button>
                 </div>
                 {!['inbox_to_task','overdue_report'].includes(selectedWorkflow.triggerType) && <p className="text-[11px] text-amber-200">Executor cho trigger này chưa được triển khai. Nút chạy bị khóa; hệ thống không giả vờ thực thi.</p>}
+                {selectedWorkflow.triggerType === 'overdue_report' && (
+                  <div className="rounded-xl border border-stone-800 bg-stone-950/60 p-3 space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-xs font-semibold text-stone-100">Lịch chạy tự động</h3>
+                        <p className="text-[11px] text-stone-400 mt-1">Mỗi ngày, mốc 07:00 giờ Việt Nam (00:00 UTC). Chỉ đọc task và ghi kết quả vào lịch sử; không sửa task, không gọi AI và không gửi dữ liệu sang dịch vụ khác.</p>
+                        <p className="text-[10px] text-stone-500 mt-1">Vercel Cron cần biến Production CRON_SECRET dài tối thiểu 16 ký tự. Độ chính xác thời điểm thực thi còn phụ thuộc gói Vercel.</p>
+                      </div>
+                      <button
+                        onClick={() => void toggleSchedule()}
+                        disabled={loading || running || (!selectedWorkflow.isActive && !selectedWorkflow.scheduleEnabled)}
+                        className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 ${selectedWorkflow.scheduleEnabled ? 'bg-emerald-600/20 text-emerald-200 border border-emerald-700/60' : 'bg-stone-800 text-stone-200 hover:bg-stone-700'}`}
+                      >
+                        {selectedWorkflow.scheduleEnabled ? 'Tắt lịch hằng ngày' : 'Bật lịch hằng ngày'}
+                      </button>
+                    </div>
+                    <p className={`text-[10px] ${selectedWorkflow.scheduleEnabled ? 'text-emerald-300' : 'text-stone-500'}`}>
+                      {selectedWorkflow.scheduleEnabled
+                        ? `Đang bật · lần gần nhất đã claim: ${selectedWorkflow.lastScheduledFor || 'chưa chạy'}`
+                        : 'Đang tắt · workflow chỉ chạy khi bạn bấm nút thủ công.'}
+                    </p>
+                  </div>
+                )}
               </section>
 
               <section className="space-y-3">
@@ -401,7 +466,7 @@ export function WorkflowsApp() {
               <p className="text-sm">{loading ? 'Đang tải...' : 'Chọn workflow đã lưu hoặc tạo mẫu để bắt đầu.'}</p>
             </div>
           )}
-          <div className="text-[10px] text-stone-600 border-t border-stone-900 pt-3">Mỗi lần chạy gọi executor có phạm vi cụ thể và lịch sử thủ công được lưu trong database. Scheduler chạy nền chưa được bật; trigger không hỗ trợ sẽ được ghi là chưa hỗ trợ thay vì trả về thành công giả.</div>
+          <div className="text-[10px] text-stone-600 border-t border-stone-900 pt-3">Lịch sử chạy được lưu trong database. Lịch nền hằng ngày hiện chỉ hỗ trợ báo cáo task quá hạn dạng chỉ đọc; trigger khác vẫn cần executor riêng và không được giả vờ thành công.</div>
         </main>
       </div>
     </div>

@@ -40,7 +40,7 @@
     },
     "functionalStatus": {
       "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
-      "workflows": "Persistent workflow definitions and durable manual run history (succeeded/failed/unsupported/interrupted), bounded owner-scoped history API; run records stuck in running for over 30 minutes are reconciled to interrupted when history is queried. Supports Inbox-to-task and read-only overdue-report executors. No background scheduler or generic workflow compiler yet",
+      "workflows": "Persistent workflow definitions and durable run history (succeeded/failed/unsupported/interrupted), bounded owner-scoped history API and stale-run reconciliation. Inbox-to-task remains manual; active overdue reports can be scheduled daily by a CRON_SECRET-protected Vercel Cron with atomic once-per-Vietnam-day claims. No generic workflow compiler or arbitrary-action scheduler.",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
@@ -148,6 +148,9 @@
       "/api/public/search",
       "/api/public/unlisted/[shareToken]",
       "/api/public/verify-password"
+    ],
+    "cron": [
+      "/api/cron/workflows"
     ]
   },
   "routes": {
@@ -587,6 +590,62 @@
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Kiểm thử preview không ghi database, từ chối checksum sai, hỗ trợ manifest 26 nhóm của bản production trước và đánh dấu backup legacy chưa xác minh."
+    },
+    {
+      "relativePath": "src/lib/workflows/overdue-report.ts",
+      "fileName": "overdue-report.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Executor báo cáo task quá hạn chỉ đọc, áp dụng múi giờ Asia/Ho_Chi_Minh đúng cho deadline chỉ có ngày."
+    },
+    {
+      "relativePath": "src/lib/workflows/scheduler.ts",
+      "fileName": "scheduler.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Scheduler báo cáo quá hạn hằng ngày, claim nguyên tử theo owner/workflow/ngày Việt Nam, lưu lượt chạy bền vững và không hỗ trợ hành động tùy ý."
+    },
+    {
+      "relativePath": "src/app/api/cron/workflows/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Vercel Cron endpoint chỉ chấp nhận bearer secret CRON_SECRET tối thiểu 16 ký tự; từ chối request chưa xác thực trước khi truy cập database."
+    },
+    {
+      "relativePath": "vercel.json",
+      "fileName": "vercel.json",
+      "mimeType": "application/json",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Đăng ký cron hằng ngày 00:00 UTC (07:00 giờ Việt Nam) tới endpoint scheduler đã bảo vệ."
+    },
+    {
+      "relativePath": "tests/overdue-report.test.ts",
+      "fileName": "overdue-report.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm tra deadline theo ngày Việt Nam, deadline timestamp, task hoàn thành và báo cáo chỉ đọc."
+    },
+    {
+      "relativePath": "tests/workflow-scheduler.test.ts",
+      "fileName": "workflow-scheduler.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm thử database thật cho lịch chạy, phạm vi executor chỉ đọc, lịch sử và chống chạy trùng theo ngày."
+    },
+    {
+      "relativePath": "tests/cron-workflows-api.test.ts",
+      "fileName": "cron-workflows-api.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm thử cron endpoint không cho truy cập database trước khi bearer secret được xác thực và báo 503 khi thiếu cấu hình."
     }
   ]
 }

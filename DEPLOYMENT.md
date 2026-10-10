@@ -41,7 +41,9 @@ Mở trình duyệt:
 4. Cấu hình biến môi trường (Environment Variables) trong Vercel:
    - `DATABASE_URL`: Đường dẫn kết nối PostgreSQL (ví dụ Supabase connection string dạng `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres?sslmode=require`). **Bắt buộc trong Production**.
    - `NODE_ENV`: `production`
+   - `CRON_SECRET`: chuỗi ngẫu nhiên khó đoán, tối thiểu 16 ký tự. Vercel tự gửi biến này dưới dạng `Authorization: Bearer …` khi gọi cron. Không ghi secret thật vào Git hoặc tài liệu.
 5. Bấm **Deploy**. Vercel sẽ tự động build và cung cấp tên miền HTTPS bảo mật.
+6. **Workflow scheduler:** `vercel.json` đăng ký `/api/cron/workflows` mỗi ngày lúc 00:00 UTC (07:00 giờ Việt Nam). Endpoint trả về 503 nếu `CRON_SECRET` chưa được cấu hình và 401 nếu bearer secret không khớp. Chỉ workflow báo cáo task quá hạn (chế độ chỉ đọc), đang bật và có bật lịch mới được thực thi; mỗi workflow tối đa một lượt cho mỗi ngày Việt Nam. Độ chính xác thời điểm khởi chạy phụ thuộc gói Vercel. Sau khi thêm biến môi trường hoặc thay cron, triển khai lại Production và kiểm tra Cron Jobs trong Vercel Dashboard.
 6. **Khởi tạo tài khoản Chủ sở hữu lần đầu:**
    Truy cập `https://your-domain.com/admin/bootstrap`.
    Nhập Tên đăng nhập và Mật khẩu bạn mong muốn.
@@ -54,14 +56,14 @@ Mở trình duyệt:
 Tạo tập tin `Dockerfile`:
 
 ```dockerfile
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

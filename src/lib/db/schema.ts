@@ -363,6 +363,8 @@ export const automationWorkflows = pgTable('automation_workflows', {
   nodesJson: jsonb('nodes_json').$type<WorkflowNode[]>().default([]).notNull(),
   edgesJson: jsonb('edges_json').$type<WorkflowEdge[]>().default([]).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
+  scheduleEnabled: boolean('schedule_enabled').default(false).notNull(),
+  lastScheduledFor: text('last_scheduled_for'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

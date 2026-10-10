@@ -385,9 +385,16 @@ export async function initializeDatabase() {
       nodes_json JSONB NOT NULL DEFAULT '[]'::jsonb,
       edges_json JSONB NOT NULL DEFAULT '[]'::jsonb,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      schedule_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      last_scheduled_for TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+    -- Idempotent additive migration for databases created before daily workflow scheduling.
+    ALTER TABLE automation_workflows ADD COLUMN IF NOT EXISTS schedule_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE automation_workflows ADD COLUMN IF NOT EXISTS last_scheduled_for TEXT;
+    CREATE INDEX IF NOT EXISTS idx_automation_workflows_scheduler
+      ON automation_workflows(is_active, schedule_enabled, trigger_type);
 
     CREATE TABLE IF NOT EXISTS automation_workflow_runs (
       id TEXT PRIMARY KEY,

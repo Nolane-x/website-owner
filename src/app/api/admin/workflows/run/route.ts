@@ -5,6 +5,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { automationWorkflows, automationWorkflowRuns, inboxItems, kanbanTasks } from '@/lib/db/schema';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { buildInboxTaskPayload } from '@/lib/workflows/inbox-to-task';
+import { buildOverdueReport } from '@/lib/workflows/overdue-report';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -152,20 +153,13 @@ export async function POST(req: NextRequest) {
 
     if (workflow.triggerType === 'overdue_report') {
       const tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, auth.profile.id));
-      const now = new Date();
-      const overdue = tasks.filter((task) => {
-        if (!task.dueDate || task.status === 'done') return false;
-        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate);
-        const due = new Date(dateOnly ? `${task.dueDate}T23:59:59` : task.dueDate);
-        return Number.isFinite(due.getTime()) && due < now;
-      });
-      const overdueTasks = overdue.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, status: task.status }));
-      const resultMessage = `Đã kiểm tra ${tasks.length} task; ${overdue.length} task quá hạn chưa hoàn tất.`;
+      const report = buildOverdueReport(tasks, new Date());
+      const resultMessage = `Đã kiểm tra ${report.totalTasks} task; ${report.overdueCount} task quá hạn chưa hoàn tất.`;
       await finishRun('succeeded', {
         result: resultMessage,
-        totalTasks: tasks.length,
-        overdueCount: overdue.length,
-        overdueTasks,
+        totalTasks: report.totalTasks,
+        overdueCount: report.overdueCount,
+        overdueTasks: report.overdueTasks,
         sideEffects: false,
       });
       return NextResponse.json({
@@ -173,9 +167,9 @@ export async function POST(req: NextRequest) {
         runId,
         workflowId: workflow.id,
         result: resultMessage,
-        totalTasks: tasks.length,
-        overdueCount: overdue.length,
-        overdueTasks,
+        totalTasks: report.totalTasks,
+        overdueCount: report.overdueCount,
+        overdueTasks: report.overdueTasks,
         sideEffects: false,
       });
     }

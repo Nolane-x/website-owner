@@ -37,6 +37,15 @@ export async function POST(req: NextRequest) {
     await initializeDatabase();
     const db = getDb();
     const body = await req.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Nội dung yêu cầu không hợp lệ.' }, { status: 400 });
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'scheduleEnabled') && typeof body.scheduleEnabled !== 'boolean') {
+      return NextResponse.json({ error: 'scheduleEnabled phải là boolean.' }, { status: 400 });
+    }
+    if (body.scheduleEnabled === true && body.triggerType !== 'overdue_report') {
+      return NextResponse.json({ error: 'Chỉ workflow báo cáo quá hạn (chỉ đọc) được bật lịch tự động.' }, { status: 400 });
+    }
 
     const name = sanitizePlain(body.name || '');
     if (!name) {
@@ -53,6 +62,7 @@ export async function POST(req: NextRequest) {
       nodesJson: Array.isArray(body.nodes) ? body.nodes : [],
       edgesJson: Array.isArray(body.edges) ? body.edges : [],
       isActive: body.isActive !== false,
+      scheduleEnabled: body.scheduleEnabled === true,
       updatedAt: new Date(),
     };
 
@@ -60,16 +70,22 @@ export async function POST(req: NextRequest) {
       if (typeof body.id !== 'string' || !body.id.trim()) {
         return NextResponse.json({ error: 'ID workflow không hợp lệ.' }, { status: 400 });
       }
-      const [existing] = await db.select({ id: automationWorkflows.id })
+      const [existing] = await db.select()
         .from(automationWorkflows)
         .where(and(eq(automationWorkflows.id, body.id), eq(automationWorkflows.profileId, auth.profile.id)))
         .limit(1);
       if (!existing) {
         return NextResponse.json({ error: 'Không tìm thấy workflow thuộc tài khoản này.' }, { status: 404 });
       }
+      const scheduleEnabled = typeof body.scheduleEnabled === 'boolean'
+        ? body.scheduleEnabled
+        : existing.scheduleEnabled;
+      if (scheduleEnabled && workflowData.triggerType !== 'overdue_report') {
+        return NextResponse.json({ error: 'Hãy tắt lịch tự động trước khi đổi trigger sang loại khác.' }, { status: 400 });
+      }
       await db
         .update(automationWorkflows)
-        .set(workflowData)
+        .set({ ...workflowData, scheduleEnabled })
         .where(and(eq(automationWorkflows.id, body.id), eq(automationWorkflows.profileId, auth.profile.id)));
       const [updated] = await db.select().from(automationWorkflows)
         .where(and(eq(automationWorkflows.id, body.id), eq(automationWorkflows.profileId, auth.profile.id)))
