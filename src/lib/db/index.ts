@@ -432,6 +432,33 @@ export async function initializeDatabase() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS habits (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      target TEXT NOT NULL DEFAULT 'Hàng ngày',
+      completed_dates_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS calendar_events (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      start_at TEXT NOT NULL,
+      end_at TEXT,
+      timezone TEXT NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+      is_all_day BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_habits_profile_active ON habits(profile_id, is_active);
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_profile_start ON calendar_events(profile_id, start_at);
+
     CREATE INDEX IF NOT EXISTS idx_content_vis_status ON content_items(visibility, status);
     CREATE INDEX IF NOT EXISTS idx_content_slug ON content_items(slug);
     CREATE INDEX IF NOT EXISTS idx_pages_vis_status ON pages(visibility, status);

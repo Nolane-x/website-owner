@@ -19,7 +19,7 @@
 - **Phiên làm việc bảo mật:** Token ngẫu nhiên 256-bit được băm SHA-256 trong database và truyền qua Cookie **HttpOnly, Secure, SameSite=Lax**.
 - **Sliding-Window Rate Limiter:** Chống brute-force tự động tại API đăng nhập và các endpoint quan trọng.
 - **Khóa khẩn cấp (Panic Lock):** Phím tắt `Ctrl + Shift + L` che phủ tức thì màn hình tài liệu giả định.
-- **Két Sắt Bí Mật Zero-Knowledge (Vault):** Mã hóa đầu cuối tại trình duyệt bằng **AES-256-GCM + PBKDF2 (100,000 vòng lặp)**. Máy chủ không bao giờ biết mật mã két hay dữ liệu gốc.
+- **Két Sắt Bí Mật Zero-Knowledge (Vault):** Mã hóa phía trình duyệt bằng **AES-256-GCM + PBKDF2-HMAC-SHA-256 (600.000 vòng cho dữ liệu mới; vẫn hỗ trợ giải mã dữ liệu legacy 100.000 vòng)**. Máy chủ không bao giờ biết mật mã két hay dữ liệu gốc.
 
 ### 3. Trình Dựng Trang Dạng Khối (Canvas Block Page Builder)
 - Trình dựng trang trực quan hỗ trợ đa khối: **Heading, Text/Markdown, Code, Quote, Image, Button, Spacer, Divider, Card...**
@@ -29,7 +29,7 @@
 ### 4. Triết Lý Lưu Trữ Liên Kết Trước (Link-First Storage)
 - Quản lý tài nguyên số không làm nặng máy chủ cá nhân thông qua việc lưu trữ metadata và liên kết tới **Google Drive, GitHub, Mega, Notion, Figma...**
 
-### 5. Sao Lưu & Khôi Phục Hoàn Chỉnh (JSON Backup & Restore)
+### 5. Sao Lưu & Khôi Phục JSON (JSON Backup & Restore)
 - Xuất toàn bộ dữ liệu hệ thống ra một tập tin JSON duy nhất để lưu trữ ngoại tuyến và khôi phục lại bất cứ khi nào cần.
 
 ---
@@ -131,6 +131,28 @@ Truy cập:
 ```
 
 ---
+
+## 🧭 Trạng thái triển khai Web OS 5.0
+
+Bảng dưới đây phân biệt tính năng đang có mã thực thi với các mục tiêu dài hạn trong master specification. Không coi một màn hình hoặc nút bấm là bằng chứng tính năng đã hoàn tất.
+
+| Khu vực | Trạng thái hiện tại |
+| :--- | :--- |
+| Desktop ảo / Window Manager | Có thao tác cửa sổ và lưu bố cục trong trình duyệt; đây không phải cửa sổ hệ điều hành thật. |
+| Inbox, Tasks, Notes, Projects, Research và các module dữ liệu | Nhiều luồng CRUD đã nối API và database; mức độ hoàn chỉnh khác nhau theo từng module. |
+| AI Copilot | Có lời gọi thật tới OpenAI-compatible API/Groq/Ollama và tìm kiếm từ khóa trong các API dữ liệu. Context riêng tư mặc định tắt. Chưa phải full RAG, multi-agent Mission Control hoặc agent tự chạy vô hạn. |
+| Workflow | Có executor cho Inbox → Task và báo cáo task quá hạn chỉ đọc. Trigger khác sẽ bị từ chối nếu chưa có executor; chưa có scheduler chạy nền hay timeline lịch sử bền vững. |
+| Creator Studio | Nội dung được lưu qua API; có thể gọi model thật để tạo dàn ý. Trạng thái “published” trong pipeline không tự đăng nội dung ra mạng xã hội. |
+| Calendar & Habits | Sự kiện lịch nội bộ và ngày hoàn thành thói quen được lưu trong database. Chưa có đồng bộ Google Calendar/Apple Calendar hoặc nhắc lịch khi ứng dụng đóng. |
+| Virtual Explorer / Backup | Hiển thị số bản ghi từ API và tải JSON export thật. Đây chưa phải trình duyệt file của ổ đĩa máy; export hiện chưa có manifest/checksum độc lập để xác minh toàn bộ bundle. |
+| Local-first, offline, sync, plugin sandbox, native companion | Là các mục tiêu trong đặc tả. Chưa được phép coi là hoàn chỉnh chỉ vì có tên module hoặc giao diện. Production hiện dùng PostgreSQL qua `DATABASE_URL`; dữ liệu không được mặc định chỉ nằm trên thiết bị. |
+| Privacy / Panic Lock | Có audit viewer và overlay khóa giao diện; không xóa sạch RAM trình duyệt và không thay thế khóa màn hình hệ điều hành. |
+
+### Quy trình sử dụng AI
+
+- Chọn provider/model và tự cung cấp API key nếu cần. Khóa được giữ trong state của cửa sổ khi đang mở; không được ghi vào database hoặc `localStorage` bởi các module AI vừa sửa.
+- Các request tới Groq/OpenAI/Ollama được gửi trực tiếp từ trình duyệt tới endpoint đã chọn; nhà cung cấp có thể xử lý prompt theo chính sách riêng và CORS có thể chặn request.
+- Chỉ bật tùy chọn context khi chủ động muốn đưa dữ liệu cá nhân đã truy xuất vào prompt; luôn kiểm tra nội dung trước khi gửi.
 
 ## 🧪 Kiểm Thử Hệ Thống (Testing)
 

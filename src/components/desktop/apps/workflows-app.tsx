@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { GitBranch, Play, CheckCircle, Zap, ArrowRight, Terminal } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { GitBranch, Play, CheckCircle2, AlertTriangle, Plus, RefreshCw, Inbox as InboxIcon, ShieldCheck } from 'lucide-react';
+import type { InboxItem } from '@/lib/types';
 
 interface WorkflowNode {
   id: string;
@@ -13,215 +14,319 @@ interface WorkflowNode {
 interface Workflow {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
   triggerType: string;
-  nodes: WorkflowNode[];
+  nodesJson: WorkflowNode[];
+  edgesJson: unknown[];
   isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// Mẫu workflow có sẵn theo Section 34.4 (Deadline -> Nhắc việc & AI phân loại)
-const defaultWorkflows: Workflow[] = [
+interface TaskSummary {
+  id: string;
+  title: string;
+  dueDate?: string | null;
+  status: string;
+}
+
+interface RunResult {
+  status: string;
+  result?: string;
+  error?: string;
+  totalTasks?: number;
+  overdueCount?: number;
+  overdueTasks?: TaskSummary[];
+  task?: { id: string; title: string };
+  idempotentReplay?: boolean;
+  sideEffects?: boolean;
+}
+
+const TEMPLATES: Array<Omit<Workflow, 'id' | 'createdAt' | 'updatedAt'>> = [
   {
-    id: 'wf-1',
-    name: 'Thu nhận Thông minh: Inbox → Phân loại AI → Tạo Task',
-    description: 'Tự động kích hoạt khi có item mới vào Universal Inbox, gọi AI trích xuất hạn chót và thêm vào Kanban',
-    triggerType: 'inbox_created',
+    name: 'Universal Inbox → Kanban Task',
+    description: 'Chuyển một mục Inbox thành task thật, giữ liên kết nguồn và có thể chạy lại mà không tạo task trùng.',
+    triggerType: 'inbox_to_task',
     isActive: true,
-    nodes: [
-      { id: 'n1', type: 'trigger', title: 'Khi có Item vào Inbox', description: 'Bắt sự kiện Universal Inbox mới' },
-      { id: 'n2', type: 'ai', title: 'AI Trích xuất & Phân loại', description: 'Phân tích tiêu đề và độ khẩn cấp' },
-      { id: 'n3', type: 'condition', title: 'Kiểm tra Có hạn chót?', description: 'Nếu phát hiện ngày hoặc giờ cụ thể' },
-      { id: 'n4', type: 'action', title: 'Tạo Nhiệm vụ Kanban', description: 'Thêm thẻ việc vào cột Cần làm' },
-      { id: 'n5', type: 'approval', title: 'Cổng Phê duyệt Chủ sở hữu', description: 'Chờ người dùng xác nhận trước khi lưu' },
+    edgesJson: [],
+    nodesJson: [
+      { id: 'capture', type: 'trigger', title: 'Chọn mục Inbox', description: 'Đọc mục do chủ sở hữu chọn trong Inbox.' },
+      { id: 'dedupe', type: 'condition', title: 'Kiểm tra task liên kết', description: 'Tái sử dụng task đã có nếu cùng nguồn đã được chuyển trước đó.' },
+      { id: 'create', type: 'action', title: 'Tạo hoặc tái sử dụng task', description: 'Lưu task vào database với relatedItemId trỏ về Inbox.' },
+      { id: 'convert', type: 'action', title: 'Cập nhật trạng thái Inbox', description: 'Đánh dấu converted sau khi đã xác minh task.' },
     ],
   },
   {
-    id: 'wf-2',
-    name: 'Cảnh báo Tiến độ: Quá hạn → Cập nhật Sức khỏe Dự án',
-    description: 'Quét các task quá hạn vào 09:00 hàng ngày và tính toán lại điểm sức khỏe Project Cockpit',
-    triggerType: 'schedule_daily',
+    name: 'Overdue Task Audit',
+    description: 'Đọc task thật, tính các deadline đã qua và xuất báo cáo. Quy trình này chỉ đọc, không thay đổi dữ liệu.',
+    triggerType: 'overdue_report',
     isActive: true,
-    nodes: [
-      { id: 'n21', type: 'trigger', title: 'Lịch chạy hàng ngày 09:00', description: 'Bộ lập lịch tự động kích hoạt' },
-      { id: 'n22', type: 'action', title: 'Quét Nhiệm vụ quá hạn', description: 'Lọc các task có dueDate < hôm nay' },
-      { id: 'n23', type: 'action', title: 'Cập nhật Điểm Sức khỏe Cockpit', description: 'Áp dụng công thức trừ điểm minh bạch' },
-      { id: 'n24', type: 'action', title: 'Bắn Thông báo OS', description: 'Hiển thị toast cảnh báo lên Desktop Topbar' },
+    edgesJson: [],
+    nodesJson: [
+      { id: 'load', type: 'trigger', title: 'Đọc danh sách task', description: 'Truy vấn task thuộc chủ sở hữu hiện tại.' },
+      { id: 'check', type: 'condition', title: 'Kiểm tra deadline', description: 'Bỏ qua task đã hoàn thành hoặc chưa có deadline.' },
+      { id: 'report', type: 'action', title: 'Tạo báo cáo kiểm tra', description: 'Hiển thị số task quá hạn và danh sách chi tiết.' },
     ],
   },
 ];
 
+function triggerLabel(triggerType: string): string {
+  if (triggerType === 'inbox_to_task') return 'Chuyển Inbox → Task';
+  if (triggerType === 'overdue_report') return 'Kiểm tra quá hạn';
+  return `Chưa có executor: ${triggerType}`;
+}
+
 export function WorkflowsApp() {
-  const [workflows] = useState<Workflow[]>(defaultWorkflows);
-  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(defaultWorkflows[0]);
-  const [isRunning, setIsRunning] = useState(false);
-  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
-  const [activeStep, setActiveStep] = useState<number>(-1);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
+  const [tasks, setTasks] = useState<TaskSummary[]>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+  const [selectedInboxId, setSelectedInboxId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
 
-  const handleSimulateRun = async () => {
-    if (!selectedWorkflow) return;
-    setIsRunning(true);
-    setExecutionLogs([]);
-    setActiveStep(0);
+  const selectedWorkflow = useMemo(
+    () => workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? null,
+    [selectedWorkflowId, workflows],
+  );
+  const openInbox = useMemo(() => inboxItems.filter((item) => item.status === 'inbox'), [inboxItems]);
 
-    const logs: string[] = [];
-    const log = (msg: string) => {
-      logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
-      setExecutionLogs([...logs]);
-    };
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [workflowResponse, inboxResponse, taskResponse] = await Promise.all([
+        fetch('/api/admin/workflows', { cache: 'no-store' }),
+        fetch('/api/admin/inbox', { cache: 'no-store' }),
+        fetch('/api/admin/tasks', { cache: 'no-store' }),
+      ]);
+      const [workflowPayload, inboxPayload, taskPayload] = await Promise.all([
+        workflowResponse.json(),
+        inboxResponse.json(),
+        taskResponse.json(),
+      ]);
+      if (!workflowResponse.ok) throw new Error(workflowPayload.error || 'Không tải được workflow.');
+      if (!inboxResponse.ok) throw new Error(inboxPayload.error || 'Không tải được Inbox.');
+      if (!taskResponse.ok) throw new Error(taskPayload.error || 'Không tải được danh sách task.');
 
-    log(`Bắt đầu chạy thử nghiệm (Dry-Run): ${selectedWorkflow.name}`);
-
-    for (let i = 0; i < selectedWorkflow.nodes.length; i++) {
-      const node = selectedWorkflow.nodes[i];
-      setActiveStep(i);
-      log(`Đang thực thi Bước ${i + 1}: [${node.title}]...`);
-      await new Promise(r => setTimeout(r, 600));
-
-      if (node.type === 'trigger') {
-        log(`✓ Trigger xác nhận hợp lệ (${selectedWorkflow.triggerType}).`);
-      } else if (node.type === 'ai') {
-        log(`✓ AI trích xuất hoàn tất: Tìm thấy nhãn [Độ ưu tiên: Cao].`);
-      } else if (node.type === 'condition') {
-        log(`✓ Điều kiện thỏa mãn: Rẽ nhánh thành công.`);
-      } else if (node.type === 'action') {
-        log(`✓ Thực hiện hành động: Payload đã chuẩn bị sẵn sàng.`);
-      } else if (node.type === 'approval') {
-        log(`⚠ Cổng phê duyệt (Human Approval Gate): Đã gửi yêu cầu xác nhận tới người điều hành.`);
-      }
+      const nextWorkflows = (workflowPayload.workflows || []) as Workflow[];
+      setWorkflows(nextWorkflows);
+      setInboxItems((inboxPayload.items || []) as InboxItem[]);
+      setTasks((taskPayload.tasks || []) as TaskSummary[]);
+      setSelectedWorkflowId((current) => nextWorkflows.some((workflow) => workflow.id === current) ? current : (nextWorkflows[0]?.id || ''));
+      setSelectedInboxId((current) => {
+        const nextInbox = (inboxPayload.items || []) as InboxItem[];
+        return nextInbox.some((item) => item.id === current && item.status === 'inbox') ? current : (nextInbox.find((item) => item.status === 'inbox')?.id || '');
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu workflow.');
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    log(`=== Hoàn thành thử nghiệm luồng tự động hóa thành công 100% ===`);
-    setIsRunning(false);
+  useEffect(() => {
+    void Promise.resolve().then(() => { void loadData(); });
+  }, [loadData]);
+
+  const createTemplates = async () => {
+    setCreating(true);
+    setError(null);
+    setNotice(null);
+    try {
+      for (const template of TEMPLATES) {
+        if (workflows.some((workflow) => workflow.triggerType === template.triggerType)) continue;
+        const response = await fetch('/api/admin/workflows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: template.name,
+            description: template.description,
+            triggerType: template.triggerType,
+            nodes: template.nodesJson,
+            edges: template.edgesJson,
+            isActive: true,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `Không thể lưu workflow “${template.name}”.`);
+      }
+      await loadData();
+      setNotice('Đã lưu mẫu workflow vào database. Hai workflow này thực hiện các thao tác đọc/ghi thật ở các bước được hỗ trợ.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không thể tạo workflow mẫu.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const toggleWorkflow = async () => {
+    if (!selectedWorkflow) return;
+    setError(null);
+    setNotice(null);
+    const response = await fetch('/api/admin/workflows', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: selectedWorkflow.id,
+        name: selectedWorkflow.name,
+        description: selectedWorkflow.description,
+        triggerType: selectedWorkflow.triggerType,
+        nodes: selectedWorkflow.nodesJson,
+        edges: selectedWorkflow.edgesJson,
+        isActive: !selectedWorkflow.isActive,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      setError(payload.error || 'Không thể cập nhật trạng thái workflow.');
+      return;
+    }
+    await loadData();
+    setNotice(!selectedWorkflow.isActive ? 'Đã bật workflow.' : 'Đã tắt workflow. Workflow đã tắt không thể chạy.');
+  };
+
+  const runWorkflow = async () => {
+    if (!selectedWorkflow) return;
+    if (selectedWorkflow.triggerType === 'inbox_to_task' && !selectedInboxId) {
+      setError('Hãy chọn một mục Inbox đang chờ xử lý.');
+      return;
+    }
+    setRunning(true);
+    setError(null);
+    setNotice(null);
+    setRunResult(null);
+    try {
+      const response = await fetch('/api/admin/workflows/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workflowId: selectedWorkflow.id, inboxItemId: selectedWorkflow.triggerType === 'inbox_to_task' ? selectedInboxId : undefined }),
+      });
+      const payload = await response.json() as RunResult;
+      if (!response.ok || payload.status !== 'succeeded') {
+        throw new Error(payload.error || 'Workflow không hoàn tất. Không được ghi nhận là thành công.');
+      }
+      setRunResult(payload);
+      setNotice(payload.result || 'Workflow đã chạy và trả về kết quả.');
+      await loadData();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Workflow thất bại.');
+    } finally {
+      setRunning(false);
+    }
   };
 
   return (
     <div className="flex flex-col h-full bg-stone-950 text-stone-200">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800 bg-stone-900/60">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
-            <GitBranch className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-white">Visual Workflow Canvas & Automation Engine</h1>
-            <p className="text-xs text-stone-400">Trình thiết kế quy trình tự động hóa dạng node graph độc lập với kiểm duyệt an toàn</p>
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-stone-800 bg-stone-900/60">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl"><GitBranch className="w-5 h-5" /></div>
+          <div className="min-w-0">
+            <h1 className="text-base font-bold text-white">Workflow Runtime</h1>
+            <p className="text-xs text-stone-400">Workflow được lưu thật; chỉ các trigger có executor mới chạy được.</p>
           </div>
         </div>
-
-        {selectedWorkflow && (
-          <button
-            onClick={handleSimulateRun}
-            disabled={isRunning}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 disabled:opacity-50 transition"
-          >
-            <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
-            <span>{isRunning ? 'Đang chạy thử...' : 'Chạy thử nghiệm (Dry-Run)'}</span>
-          </button>
-        )}
+        <div className="flex gap-2 shrink-0">
+          <button onClick={() => void loadData()} disabled={loading} title="Làm mới dữ liệu" className="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+          <button onClick={() => void createTemplates()} disabled={creating || loading} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-50"><Plus className="w-4 h-4" />{creating ? 'Đang lưu...' : 'Thêm workflow mẫu'}</button>
+        </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar workflows */}
-        <div className="w-72 border-r border-stone-800 bg-stone-900/30 p-4 space-y-3 overflow-y-auto">
-          <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Quy trình đã lưu</div>
-          {workflows.map((wf) => (
-            <div
-              key={wf.id}
-              onClick={() => {
-                setSelectedWorkflow(wf);
-                setActiveStep(-1);
-                setExecutionLogs([]);
-              }}
-              className={`p-3.5 rounded-xl cursor-pointer transition border ${
-                selectedWorkflow?.id === wf.id
-                  ? 'bg-indigo-500/10 border-indigo-500/30 text-white'
-                  : 'bg-stone-900/60 border-stone-800/80 text-stone-400 hover:bg-stone-800/50'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-stone-200 line-clamp-1">{wf.name}</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <aside className="w-72 max-w-[42%] shrink-0 border-r border-stone-800 bg-stone-900/30 p-3 overflow-y-auto space-y-2">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-stone-500">Workflow đã lưu ({workflows.length})</div>
+          {loading && <div className="p-3 text-stone-500 text-xs">Đang tải...</div>}
+          {!loading && workflows.length === 0 && <div className="p-3 rounded-lg border border-dashed border-stone-700 text-xs text-stone-400">Chưa có workflow nào được lưu. Nhấn “Thêm workflow mẫu” để tạo quy trình có executor thực tế.</div>}
+          {workflows.map((workflow) => (
+            <button key={workflow.id} onClick={() => { setSelectedWorkflowId(workflow.id); setRunResult(null); setNotice(null); }} className={`w-full text-left p-3 rounded-xl border transition ${selectedWorkflowId === workflow.id ? 'bg-indigo-500/10 border-indigo-500/40' : 'bg-stone-900/70 border-stone-800 hover:border-stone-700'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-xs font-semibold text-stone-100">{workflow.name}</span>
+                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${workflow.isActive ? 'bg-emerald-400' : 'bg-stone-600'}`} />
               </div>
-              <p className="text-[11px] text-stone-400 mt-1 line-clamp-2">{wf.description}</p>
-            </div>
+              <p className="mt-1 text-[10px] text-stone-500">{triggerLabel(workflow.triggerType)}</p>
+              <p className="mt-1 text-[11px] text-stone-400 line-clamp-2">{workflow.description}</p>
+            </button>
           ))}
-        </div>
+        </aside>
 
-        {/* Canvas Area */}
-        <div className="flex-1 flex flex-col bg-stone-950 p-6 overflow-y-auto space-y-6">
+        <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-6 space-y-5">
+          {error && <div role="alert" className="p-3 rounded-xl border border-rose-700/60 bg-rose-950/30 text-rose-200 text-xs flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{error}</div>}
+          {notice && <div role="status" className="p-3 rounded-xl border border-emerald-800 bg-emerald-950/20 text-emerald-200 text-xs flex gap-2"><CheckCircle2 className="w-4 h-4 shrink-0" />{notice}</div>}
+
           {selectedWorkflow ? (
             <>
-              {/* Nodes Pipeline */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold text-stone-400 uppercase tracking-wider">Cấu trúc Node Pipeline</div>
-                <div className="flex flex-col space-y-3">
-                  {selectedWorkflow.nodes.map((node, index) => {
-                    const isStepActive = activeStep === index;
-                    const isPassed = activeStep > index;
-
-                    return (
-                      <React.Fragment key={node.id}>
-                        <div className={`p-4 rounded-2xl border transition flex items-center justify-between ${
-                          isStepActive
-                            ? 'bg-indigo-500/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10 ring-2 ring-indigo-500/50'
-                            : isPassed
-                            ? 'bg-emerald-500/10 border-emerald-500/40 text-stone-200'
-                            : 'bg-stone-900 border-stone-800 text-stone-300'
-                        }`}>
-                          <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-xl text-xs font-bold ${
-                              node.type === 'trigger' ? 'bg-amber-500/20 text-amber-400' :
-                              node.type === 'ai' ? 'bg-purple-500/20 text-purple-400' :
-                              node.type === 'condition' ? 'bg-sky-500/20 text-sky-400' :
-                              node.type === 'approval' ? 'bg-rose-500/20 text-rose-400' :
-                              'bg-emerald-500/20 text-emerald-400'
-                            }`}>
-                              {node.type.toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-sm font-semibold">{node.title}</div>
-                              <div className="text-xs text-stone-400">{node.description}</div>
-                            </div>
-                          </div>
-
-                          <div>
-                            {isPassed && <CheckCircle className="w-5 h-5 text-emerald-400" />}
-                            {isStepActive && <Zap className="w-5 h-5 text-indigo-400 animate-pulse" />}
-                          </div>
-                        </div>
-
-                        {index < selectedWorkflow.nodes.length - 1 && (
-                          <div className="flex justify-center -my-1">
-                            <ArrowRight className="w-4 h-4 text-stone-600 rotate-90" />
-                          </div>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Execution Console Logs */}
-              {executionLogs.length > 0 && (
-                <div className="p-4 rounded-2xl bg-stone-900 border border-stone-800 space-y-2">
-                  <div className="flex items-center space-x-2 text-xs font-bold text-stone-300">
-                    <Terminal className="w-4 h-4 text-emerald-400" />
-                    <span>Nhật ký Chạy Thử nghiệm (Simulator Audit Log)</span>
+              <section className="rounded-2xl border border-stone-800 bg-stone-900/50 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest font-bold text-indigo-300">{triggerLabel(selectedWorkflow.triggerType)}</div>
+                    <h2 className="text-lg font-bold text-white mt-1">{selectedWorkflow.name}</h2>
+                    <p className="text-xs text-stone-400 mt-1 max-w-2xl">{selectedWorkflow.description}</p>
+                    <p className="text-[10px] text-stone-500 mt-1">Ảnh chụp danh sách: {tasks.length} task. Executor sẽ kiểm tra lại dữ liệu tại thời điểm chạy.</p>
                   </div>
-                  <div className="bg-stone-950 p-3 rounded-xl font-mono text-[11px] text-stone-300 space-y-1 max-h-48 overflow-y-auto border border-stone-800/80">
-                    {executionLogs.map((l, i) => (
-                      <div key={i} className="leading-relaxed">{l}</div>
-                    ))}
-                  </div>
+                  <span className={`text-[10px] rounded-full px-2 py-1 ${selectedWorkflow.isActive ? 'bg-emerald-500/10 text-emerald-300' : 'bg-stone-800 text-stone-400'}`}>{selectedWorkflow.isActive ? 'Đang bật' : 'Đã tắt'}</span>
                 </div>
+                {selectedWorkflow.triggerType === 'inbox_to_task' && (
+                  <label className="block space-y-1.5">
+                    <span className="text-[11px] text-stone-400">Mục Inbox cần chuyển</span>
+                    <select value={selectedInboxId} onChange={(event) => setSelectedInboxId(event.target.value)} className="w-full max-w-2xl bg-stone-950 border border-stone-700 rounded-lg px-3 py-2 text-xs text-stone-200">
+                      <option value="">-- Chọn mục Inbox --</option>
+                      {openInbox.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                    </select>
+                    <span className="block text-[10px] text-stone-500">{openInbox.length} mục đang chờ. Chạy lại cùng mục sẽ tái sử dụng task đã tạo, không chủ động tạo bản trùng thứ hai.</span>
+                  </label>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => void runWorkflow()} disabled={running || loading || !selectedWorkflow.isActive || (selectedWorkflow.triggerType === 'inbox_to_task' && !selectedInboxId) || !['inbox_to_task','overdue_report'].includes(selectedWorkflow.triggerType)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40"><Play className={`w-4 h-4 ${running ? 'animate-pulse' : ''}`} />{running ? 'Đang thực thi...' : 'Chạy workflow thật'}</button>
+                  <button onClick={() => void toggleWorkflow()} disabled={loading || running} className="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs">{selectedWorkflow.isActive ? 'Tắt workflow' : 'Bật workflow'}</button>
+                </div>
+                {!['inbox_to_task','overdue_report'].includes(selectedWorkflow.triggerType) && <p className="text-[11px] text-amber-200">Executor cho trigger này chưa được triển khai. Nút chạy bị khóa; hệ thống không giả vờ thực thi.</p>}
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-stone-400">Các bước của workflow</h3>
+                  <span className="text-[10px] text-stone-500">{selectedWorkflow.nodesJson?.length || 0} bước</span>
+                </div>
+                <div className="space-y-2">
+                  {(selectedWorkflow.nodesJson || []).map((node, index) => (
+                    <div key={node.id} className="flex gap-3 p-3 rounded-xl bg-stone-900/70 border border-stone-800">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 flex items-center justify-center text-xs font-bold">{index + 1}</div>
+                        {index < (selectedWorkflow.nodesJson?.length || 0) - 1 && <div className="w-px flex-1 min-h-3 bg-stone-700" />}
+                      </div>
+                      <div className="min-w-0 pb-1">
+                        <div className="text-xs font-semibold text-stone-100">{node.title}</div>
+                        <p className="text-[11px] text-stone-400 mt-1">{node.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {runResult && (
+                <section className="rounded-2xl border border-emerald-800/70 bg-emerald-950/15 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-300 text-sm font-bold"><CheckCircle2 className="w-4 h-4" />Kết quả đã xác nhận từ API</div>
+                  <p className="text-xs text-stone-200">{runResult.result}</p>
+                  {runResult.task && <div className="text-xs text-stone-300">Task: <span className="font-mono">{runResult.task.id}</span> · {runResult.task.title}</div>}
+                  {typeof runResult.totalTasks === 'number' && <div className="grid grid-cols-2 gap-2"><div className="rounded-lg bg-stone-950/70 p-3"><div className="text-[10px] text-stone-500">Tổng task đã đọc</div><div className="text-xl font-bold">{runResult.totalTasks}</div></div><div className="rounded-lg bg-stone-950/70 p-3"><div className="text-[10px] text-stone-500">Task quá hạn</div><div className="text-xl font-bold text-amber-300">{runResult.overdueCount}</div></div></div>}
+                  {runResult.overdueTasks?.map((task) => <div key={task.id} className="flex justify-between gap-3 text-xs border-t border-stone-800 pt-2"><span>{task.title}</span><span className="text-amber-300 shrink-0">{task.dueDate}</span></div>)}
+                  {runResult.idempotentReplay && <p className="text-[10px] text-sky-300">Lần chạy này tái sử dụng dữ liệu đã có, không tạo trùng.</p>}
+                  {runResult.sideEffects === false && <p className="text-[10px] text-stone-500 flex gap-1"><ShieldCheck className="w-3 h-3" />Chỉ đọc; không thay đổi dữ liệu.</p>}
+                </section>
               )}
             </>
           ) : (
-            <div className="flex h-full items-center justify-center text-stone-500 text-sm">
-              Chọn một quy trình tự động hóa từ cột bên trái để bắt đầu.
+            <div className="h-full flex flex-col items-center justify-center text-center py-10 text-stone-500">
+              <InboxIcon className="w-8 h-8 mb-3 opacity-50" />
+              <p className="text-sm">{loading ? 'Đang tải...' : 'Chọn workflow đã lưu hoặc tạo mẫu để bắt đầu.'}</p>
             </div>
           )}
-        </div>
+          <div className="text-[10px] text-stone-600 border-t border-stone-900 pt-3">Mỗi lần chạy đều gọi executor có phạm vi cụ thể. Lịch chạy nền và log lịch sử lâu dài chưa được bật; các trigger không hỗ trợ sẽ bị từ chối thay vì trả về thành công giả.</div>
+        </main>
       </div>
     </div>
   );

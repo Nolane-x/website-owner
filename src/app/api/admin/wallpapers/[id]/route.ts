@@ -33,9 +33,28 @@ export async function PUT(
 
     const updates: Partial<typeof customWallpapers.$inferInsert> = {};
 
-    if (body.title !== undefined) updates.title = sanitizePlain(body.title);
+    if (body.title !== undefined) {
+      if (typeof body.title !== 'string' || !body.title.trim() || body.title.length > 200) {
+        return NextResponse.json({ error: 'Tiêu đề hình nền phải có từ 1 đến 200 ký tự.' }, { status: 400 });
+      }
+      updates.title = sanitizePlain(body.title).trim();
+    }
     if (body.sourceUrl !== undefined) {
-      updates.sourceUrl = body.sourceUrl ? sanitizePlain(body.sourceUrl) : null;
+      if (!body.sourceUrl) {
+        updates.sourceUrl = null;
+      } else if (typeof body.sourceUrl !== 'string') {
+        return NextResponse.json({ error: 'URL hình nền không hợp lệ.' }, { status: 400 });
+      } else {
+        try {
+          const parsedUrl = new URL(body.sourceUrl);
+          if ((parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') || !parsedUrl.hostname) {
+            return NextResponse.json({ error: 'URL hình nền chỉ được sử dụng HTTP hoặc HTTPS.' }, { status: 400 });
+          }
+          updates.sourceUrl = parsedUrl.toString();
+        } catch {
+          return NextResponse.json({ error: 'URL hình nền không hợp lệ.' }, { status: 400 });
+        }
+      }
     }
     if (body.localDataUrl !== undefined) {
       const localDataUrl = body.localDataUrl ? String(body.localDataUrl) : null;
@@ -50,11 +69,19 @@ export async function PUT(
       }
       updates.localDataUrl = localDataUrl;
     }
-    if (body.type !== undefined) updates.type = body.type as WallpaperMediaType;
+    if (body.type !== undefined) {
+      if (body.type !== 'image' && body.type !== 'video') {
+        return NextResponse.json({ error: 'Loại hình nền chỉ có thể là image hoặc video.' }, { status: 400 });
+      }
+      updates.type = body.type as WallpaperMediaType;
+    }
     if (body.isFavorite !== undefined) updates.isFavorite = Boolean(body.isFavorite);
 
     if (Array.isArray(body.tagsJson)) {
-      updates.tagsJson = body.tagsJson.map((t: string) => sanitizePlain(t));
+      if (body.tagsJson.length > 100 || !body.tagsJson.every((tag: unknown) => typeof tag === 'string' && tag.length <= 80)) {
+        return NextResponse.json({ error: 'Danh sách tag không hợp lệ.' }, { status: 400 });
+      }
+      updates.tagsJson = body.tagsJson.map((tag: string) => sanitizePlain(tag).trim()).filter(Boolean);
     }
 
     if (body.filtersJson && typeof body.filtersJson === 'object') {

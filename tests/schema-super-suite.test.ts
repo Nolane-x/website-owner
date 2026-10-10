@@ -8,6 +8,8 @@ describe('Schema Super Suite - Personal Web OS 3.0', () => {
     expect(schema.codeSnippets).toBeDefined();
     expect(schema.scratchpads).toBeDefined();
     expect(schema.contentLinks).toBeDefined();
+    expect(schema.habits).toBeDefined();
+    expect(schema.calendarEvents).toBeDefined();
   });
 
   it('bảng kanbanTasks có các cột chuẩn', () => {

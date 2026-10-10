@@ -5,6 +5,8 @@ import {
   contentItems,
   pages,
   contentBlocks,
+  contentLinks,
+  contentRevisions,
   collections,
   collectionItems,
   settings,
@@ -24,6 +26,8 @@ import {
   researchSources,
   claims,
   automationWorkflows,
+  habits,
+  calendarEvents,
   type WorkflowNode,
   type WorkflowEdge,
 } from '@/lib/db/schema';
@@ -62,6 +66,8 @@ export async function POST(req: NextRequest) {
         contentItems?: Array<Record<string, unknown>>;
         pages?: Array<Record<string, unknown>>;
         contentBlocks?: Array<Record<string, unknown>>;
+        contentLinks?: Array<Record<string, unknown>>;
+        contentRevisions?: Array<Record<string, unknown>>;
         folders?: Array<Record<string, unknown>>;
         collections?: Array<Record<string, unknown>>;
         collectionItems?: Array<Record<string, unknown>>;
@@ -82,6 +88,8 @@ export async function POST(req: NextRequest) {
         researchSources?: Array<Record<string, unknown>>;
         claims?: Array<Record<string, unknown>>;
         automationWorkflows?: Array<Record<string, unknown>>;
+        habits?: Array<Record<string, unknown>>;
+        calendarEvents?: Array<Record<string, unknown>>;
       };
     };
 
@@ -104,6 +112,8 @@ export async function POST(req: NextRequest) {
       contentItems: items,
       pages: importedPages,
       contentBlocks: importedBlocks,
+      contentLinks: importedLinks,
+      contentRevisions: importedRevisions,
       folders: importedFolders,
       collections: importedCollections,
       collectionItems: importedColItems,
@@ -124,6 +134,8 @@ export async function POST(req: NextRequest) {
       researchSources: importedResearch,
       claims: importedClaims,
       automationWorkflows: importedWorkflows,
+      habits: importedHabits,
+      calendarEvents: importedCalendarEvents,
     } = body.data;
 
     let importedCount = 0;
@@ -283,11 +295,15 @@ export async function POST(req: NextRequest) {
       }
 
       // 5. Nhập Universal Inbox
+      const inboxIdMap = new Map<string, string>();
       if (Array.isArray(importedInbox)) {
         for (const item of importedInbox) {
           if (!item.title) continue;
+          const oldInboxId = String(item.id || '');
+          const newInboxId = crypto.randomUUID();
+          if (oldInboxId) inboxIdMap.set(oldInboxId, newInboxId);
           await tx.insert(inboxItems).values({
-            id: crypto.randomUUID(),
+            id: newInboxId,
             profileId: auth.profile.id,
             title: sanitizePlain(String(item.title)),
             kind: String(item.kind || item.category || 'text'),
@@ -295,7 +311,7 @@ export async function POST(req: NextRequest) {
             sourceUri: item.sourceUri ? String(item.sourceUri) : (item.source ? String(item.source) : null),
             status: String(item.status || 'inbox'),
             tagsJson: Array.isArray(item.tagsJson) ? (item.tagsJson as string[]) : (Array.isArray(item.tags) ? (item.tags as string[]) : []),
-            projectId: item.projectId ? String(item.projectId) : null,
+            projectId: item.projectId ? (contentIdMap.get(String(item.projectId)) ?? null) : null,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -318,7 +334,9 @@ export async function POST(req: NextRequest) {
             tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
             subtasksJson: Array.isArray(t.subtasksJson) ? (t.subtasksJson as Array<{ id: string; title: string; completed: boolean }>) : [],
             sortOrder: typeof t.sortOrder === 'number' ? t.sortOrder : (typeof t.order === 'number' ? t.order : 0),
-            relatedItemId: t.relatedItemId ? String(t.relatedItemId) : null,
+            relatedItemId: t.relatedItemId
+              ? (contentIdMap.get(String(t.relatedItemId)) ?? inboxIdMap.get(String(t.relatedItemId)) ?? null)
+              : null,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -489,12 +507,16 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 14. Nhập Project Goals
+      // 14. Nhập Project Goals và lưu map để phục hồi quan hệ với Decision Records.
+      const projectGoalIdMap = new Map<string, string>();
       if (Array.isArray(importedGoals)) {
         for (const g of importedGoals) {
           if (!g.title) continue;
+          const oldGoalId = String(g.id || '');
+          const newGoalId = crypto.randomUUID();
+          if (oldGoalId) projectGoalIdMap.set(oldGoalId, newGoalId);
           await tx.insert(projectGoals).values({
-            id: crypto.randomUUID(),
+            id: newGoalId,
             profileId: auth.profile.id,
             title: sanitizePlain(String(g.title)),
             description: g.description ? sanitizePlain(String(g.description)) : null,
@@ -515,7 +537,7 @@ export async function POST(req: NextRequest) {
           await tx.insert(decisionRecords).values({
             id: crypto.randomUUID(),
             profileId: auth.profile.id,
-            projectId: d.projectId ? String(d.projectId) : null,
+            projectId: d.projectId ? (projectGoalIdMap.get(String(d.projectId)) ?? null) : null,
             title: sanitizePlain(String(d.title)),
             context: sanitizePlain(String(d.context || '')),
             decision: sanitizePlain(String(d.decision || '')),
@@ -599,11 +621,15 @@ export async function POST(req: NextRequest) {
       }
 
       // 18. Nhập Nguồn Nghiên cứu (Research Sources)
+      const researchSourceIdMap = new Map<string, string>();
       if (Array.isArray(importedResearch)) {
         for (const r of importedResearch) {
           if (!r.title) continue;
+          const oldSourceId = String(r.id || '');
+          const newSourceId = crypto.randomUUID();
+          if (oldSourceId) researchSourceIdMap.set(oldSourceId, newSourceId);
           await tx.insert(researchSources).values({
-            id: crypto.randomUUID(),
+            id: newSourceId,
             profileId: auth.profile.id,
             title: sanitizePlain(String(r.title)),
             url: r.url ? String(r.url) : null,
@@ -626,7 +652,9 @@ export async function POST(req: NextRequest) {
             profileId: auth.profile.id,
             statement: sanitizePlain(String(c.statement)),
             status: String(c.status || 'unreviewed'),
-            sourceIdsJson: Array.isArray(c.sourceIdsJson) ? (c.sourceIdsJson as string[]) : [],
+            sourceIdsJson: Array.isArray(c.sourceIdsJson)
+              ? (c.sourceIdsJson as string[]).map((sourceId) => researchSourceIdMap.get(String(sourceId))).filter((sourceId): sourceId is string => Boolean(sourceId))
+              : [],
             notes: c.notes ? sanitizePlain(String(c.notes)) : null,
             createdAt: new Date(),
           });
@@ -649,6 +677,99 @@ export async function POST(req: NextRequest) {
             isActive: Boolean(w.isActive),
             createdAt: new Date(),
             updatedAt: new Date(),
+          });
+          importedCount++;
+        }
+      }
+
+      // 21. Restore habits with validated, deduplicated local-date completion history.
+      if (Array.isArray(importedHabits)) {
+        for (const habit of importedHabits) {
+          if (typeof habit.name !== 'string' || !habit.name.trim()) continue;
+          const dates = Array.isArray(habit.completedDatesJson)
+            ? [...new Set((habit.completedDatesJson as unknown[]).filter((value): value is string =>
+                typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)))].slice(-1000).sort()
+            : [];
+          await tx.insert(habits).values({
+            id: crypto.randomUUID(),
+            profileId: auth.profile.id,
+            name: sanitizePlain(habit.name).slice(0, 160),
+            target: typeof habit.target === 'string' ? sanitizePlain(habit.target).slice(0, 100) : 'Hàng ngày',
+            completedDatesJson: dates,
+            isActive: typeof habit.isActive === 'boolean' ? habit.isActive : true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          importedCount++;
+        }
+      }
+
+      // 22. Restore calendar records only if their timestamps and timezone are valid.
+      if (Array.isArray(importedCalendarEvents)) {
+        for (const event of importedCalendarEvents) {
+          if (typeof event.title !== 'string' || !event.title.trim() ||
+              typeof event.startAt !== 'string' || !Number.isFinite(Date.parse(event.startAt))) continue;
+          const endAt = typeof event.endAt === 'string' && event.endAt.trim() ? event.endAt : null;
+          if (endAt && (!Number.isFinite(Date.parse(endAt)) || Date.parse(endAt) < Date.parse(event.startAt))) continue;
+          const timezone = typeof event.timezone === 'string' ? event.timezone : 'Asia/Ho_Chi_Minh';
+          try { new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(); }
+          catch { continue; }
+          await tx.insert(calendarEvents).values({
+            id: crypto.randomUUID(),
+            profileId: auth.profile.id,
+            title: sanitizePlain(event.title).slice(0, 180),
+            description: typeof event.description === 'string' ? sanitizePlain(event.description).slice(0, 6000) : null,
+            startAt: event.startAt,
+            endAt,
+            timezone,
+            isAllDay: event.isAllDay === true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          importedCount++;
+        }
+      }
+
+      // 23. Restore wiki links using remapped content IDs; stale references are not silently imported.
+      if (Array.isArray(importedLinks)) {
+        for (const link of importedLinks) {
+          const sourceId = contentIdMap.get(String(link.sourceId || ''));
+          const targetId = contentIdMap.get(String(link.targetId || ''));
+          if (!sourceId || !targetId || !link.linkText) continue;
+          await tx.insert(contentLinks).values({
+            id: crypto.randomUUID(),
+            sourceId,
+            targetId,
+            linkText: sanitizePlain(String(link.linkText)),
+            createdAt: new Date(),
+          });
+          importedCount++;
+        }
+      }
+
+      // 22. Restore content/page revision snapshots against the newly imported target IDs.
+      if (Array.isArray(importedRevisions)) {
+        for (const revision of importedRevisions) {
+          const targetType = String(revision.targetType || 'content');
+          const oldTargetId = String(revision.targetId || '');
+          const targetId = targetType === 'page'
+            ? pageIdMap.get(oldTargetId)
+            : contentIdMap.get(oldTargetId);
+          if (!targetId || !revision.titleSnapshot) continue;
+          await tx.insert(contentRevisions).values({
+            id: crypto.randomUUID(),
+            targetId,
+            targetType,
+            revisionNumber: typeof revision.revisionNumber === 'number' && revision.revisionNumber > 0
+              ? revision.revisionNumber
+              : 1,
+            titleSnapshot: sanitizePlain(String(revision.titleSnapshot)),
+            bodySnapshot: typeof revision.bodySnapshot === 'string' ? revision.bodySnapshot : null,
+            metadataSnapshot: (typeof revision.metadataSnapshot === 'object' && revision.metadataSnapshot !== null
+              ? revision.metadataSnapshot
+              : {}) as Record<string, unknown>,
+            reason: revision.reason ? sanitizePlain(String(revision.reason)) : null,
+            createdAt: new Date(),
           });
           importedCount++;
         }

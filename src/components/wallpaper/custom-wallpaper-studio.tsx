@@ -29,6 +29,7 @@ export function CustomWallpaperStudio() {
     url: string;
     filters: WallpaperFilters;
     shader: ShaderMode;
+    wallpaperId?: string | null;
   }>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -43,6 +44,7 @@ export function CustomWallpaperStudio() {
       url: '/images/hero-bg.jpg',
       filters: { dim: 20, blur: 0, contrast: 100, saturation: 100, vignette: false, scanlines: false },
       shader: 'none',
+      wallpaperId: null,
     };
   });
 
@@ -52,26 +54,36 @@ export function CustomWallpaperStudio() {
   const [inputType, setInputType] = useState<WallpaperMediaType>('image');
   const [localDataUrl, setLocalDataUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const saveActiveWallpaper = (wp: typeof currentWallpaper) => {
-    setCurrentWallpaper(wp);
+  const saveActiveWallpaper = (wp: typeof currentWallpaper, wallpaperId: string | null = currentWallpaper.wallpaperId || null) => {
+    const nextWallpaper = { ...wp, wallpaperId };
+    setCurrentWallpaper(nextWallpaper);
     try {
-      localStorage.setItem('webos_active_wallpaper_v5', JSON.stringify(wp));
-      window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: wp }));
+      // Persist the database ID for uploaded assets instead of duplicating a large Base64 URL in localStorage.
+      const persisted = nextWallpaper.url.startsWith('data:') && wallpaperId
+        ? { ...nextWallpaper, url: '' }
+        : nextWallpaper;
+      localStorage.setItem('webos_active_wallpaper_v5', JSON.stringify(persisted));
+      window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: nextWallpaper }));
+      setErrorMessage(null);
+      setStatusMessage('Đã áp dụng hình nền và lưu cấu hình trên trình duyệt.');
     } catch {
-      // Ignore
+      setErrorMessage('Hình nền đang được áp dụng trong phiên này nhưng không thể lưu cấu hình. Khi tải lại trang, lựa chọn có thể không được khôi phục.');
     }
   };
 
   const fetchWallpapers = useCallback(async () => {
+    setErrorMessage(null);
     try {
-      const res = await fetch('/api/admin/wallpapers');
-      if (res.ok) {
-        const data = await res.json();
-        setWallpapers(data.wallpapers || []);
-      }
+      const res = await fetch('/api/admin/wallpapers', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || ('Không tải được thư viện (HTTP ' + res.status + ').'));
+      if (!Array.isArray(data.wallpapers)) throw new Error('API hình nền trả về dữ liệu không đúng định dạng.');
+      setWallpapers(data.wallpapers as CustomWallpaper[]);
     } catch (e) {
-      console.error('Lỗi tải hình nền:', e);
+      setErrorMessage(e instanceof Error ? e.message : 'Không tải được thư viện hình nền.');
     } finally {
       setLoading(false);
     }
@@ -83,19 +95,60 @@ export function CustomWallpaperStudio() {
     });
   }, [fetchWallpapers]);
 
+  // Uploaded assets are stored in the database; localStorage keeps only their ID to avoid quota failures.
+  useEffect(() => {
+    if (!currentWallpaper.wallpaperId || currentWallpaper.url || wallpapers.length === 0) return;
+    const savedWallpaper = wallpapers.find((item) => item.id === currentWallpaper.wallpaperId);
+    const resolvedUrl = savedWallpaper?.localDataUrl || savedWallpaper?.sourceUrl || '';
+    if (!savedWallpaper || !resolvedUrl) return;
+    const restored = {
+      ...currentWallpaper,
+      type: savedWallpaper.type,
+      url: resolvedUrl,
+      filters: savedWallpaper.filtersJson || currentWallpaper.filters,
+    };
+    void Promise.resolve().then(() => {
+      setCurrentWallpaper(restored);
+      window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: restored }));
+    });
+  }, [currentWallpaper, wallpapers]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setErrorMessage(null);
+    setStatusMessage(null);
+    const supportedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm'];
+    if (!supportedTypes.includes(file.type)) {
+      setLocalDataUrl(null);
+      setErrorMessage('Định dạng không được hỗ trợ. Chỉ chọn PNG, JPEG, WEBP, GIF, MP4 hoặc WEBM.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setLocalDataUrl(null);
+      setErrorMessage('Tệp vượt quá giới hạn 5 MB của API. Hãy dùng URL HTTPS hoặc một tệp nhỏ hơn.');
+      e.target.value = '';
+      return;
+    }
 
     const isVideo = file.type.startsWith('video/');
     setInputType(isVideo ? 'video' : 'image');
     setInputTitle(file.name.replace(/\.[^/.]+$/, ''));
-
     const reader = new FileReader();
     reader.onload = (event) => {
-      const res = event.target?.result as string;
-      setLocalDataUrl(res);
+      const result = event.target?.result;
+      if (typeof result !== 'string' || !result.startsWith('data:')) {
+        setLocalDataUrl(null);
+        setErrorMessage('Không đọc được tệp hình nền. Hãy thử lại.');
+        return;
+      }
+      setLocalDataUrl(result);
       setInputUrl('');
+    };
+    reader.onerror = () => {
+      setLocalDataUrl(null);
+      setErrorMessage('Trình duyệt không thể đọc tệp đã chọn.');
     };
     reader.readAsDataURL(file);
   };
@@ -103,38 +156,50 @@ export function CustomWallpaperStudio() {
   const handleSaveToLibrary = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputTitle.trim()) return;
+    setErrorMessage(null);
+    setStatusMessage(null);
 
     try {
       setIsSaving(true);
+      let sourceUrl: string | null = null;
+      if (inputUrl.trim()) {
+        const parsed = new URL(inputUrl.trim());
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          throw new Error('URL hình nền chỉ được dùng HTTP hoặc HTTPS.');
+        }
+        sourceUrl = parsed.toString();
+      }
+      if (!localDataUrl && !sourceUrl) throw new Error('Hãy tải tệp lên hoặc nhập URL HTTP/HTTPS trước khi lưu.');
       const res = await fetch('/api/admin/wallpapers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: inputTitle.trim(),
-          sourceUrl: inputUrl.trim() || null,
+          sourceUrl,
           localDataUrl: localDataUrl || null,
           type: inputType,
           filtersJson: currentWallpaper.filters,
         }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || ('Không lưu được hình nền (HTTP ' + res.status + ').'));
+      if (!data.wallpaper?.id) throw new Error('Server không trả về bản ghi hình nền đã xác minh.');
 
-      if (res.ok) {
-        // Also apply as active
-        saveActiveWallpaper({
-          type: inputType,
-          url: localDataUrl || inputUrl,
-          filters: currentWallpaper.filters,
-          shader: currentWallpaper.shader,
-        });
-
-        setInputTitle('');
-        setInputUrl('');
-        setLocalDataUrl(null);
-        fetchWallpapers();
-        setActiveTab('library');
-      }
+      saveActiveWallpaper({
+        type: inputType,
+        url: localDataUrl || sourceUrl || '',
+        filters: currentWallpaper.filters,
+        shader: currentWallpaper.shader,
+        wallpaperId: data.wallpaper.id,
+      }, data.wallpaper.id);
+      setInputTitle('');
+      setInputUrl('');
+      setLocalDataUrl(null);
+      await fetchWallpapers();
+      setStatusMessage('Đã lưu hình nền vào database và áp dụng cho phiên hiện tại.');
+      setActiveTab('library');
     } catch (e) {
-      console.error('Lỗi lưu hình nền:', e);
+      setErrorMessage(e instanceof Error ? e.message : 'Lỗi không xác định khi lưu hình nền.');
     } finally {
       setIsSaving(false);
     }
@@ -142,27 +207,40 @@ export function CustomWallpaperStudio() {
 
   const handleToggleFavorite = async (wp: CustomWallpaper) => {
     const nextFav = !wp.isFavorite;
-    setWallpapers((prev) =>
-      prev.map((w) => (w.id === wp.id ? { ...w, isFavorite: nextFav } : w))
-    );
+    setErrorMessage(null);
+    setStatusMessage(null);
     try {
-      await fetch(`/api/admin/wallpapers/${wp.id}`, {
+      const res = await fetch('/api/admin/wallpapers/' + encodeURIComponent(wp.id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isFavorite: nextFav }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || ('Cập nhật yêu thích thất bại (HTTP ' + res.status + ').'));
+      if (!data.wallpaper) throw new Error('Server không trả lại bản ghi sau khi cập nhật.');
+      setWallpapers((prev) => prev.map((item) => item.id === wp.id ? data.wallpaper as CustomWallpaper : item));
+      setStatusMessage(nextFav ? 'Đã thêm vào yêu thích.' : 'Đã bỏ khỏi yêu thích.');
     } catch (e) {
-      console.error('Lỗi yêu thích hình nền:', e);
+      setErrorMessage(e instanceof Error ? e.message : 'Lỗi không xác định khi cập nhật yêu thích.');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Xóa hình nền này khỏi thư viện?')) return;
-    setWallpapers((prev) => prev.filter((w) => w.id !== id));
+    setErrorMessage(null);
+    setStatusMessage(null);
     try {
-      await fetch(`/api/admin/wallpapers/${id}`, { method: 'DELETE' });
+      const res = await fetch('/api/admin/wallpapers/' + encodeURIComponent(id), { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || data.success !== true) throw new Error(data.error || ('Xóa hình nền thất bại (HTTP ' + res.status + ').'));
+      setWallpapers((prev) => prev.filter((wp) => wp.id !== id));
+      if (currentWallpaper.url && wallpapers.find((wp) => wp.id === id)?.localDataUrl === currentWallpaper.url) {
+        setStatusMessage('Đã xóa tệp khỏi thư viện; hình nền hiện tại vẫn có thể hiển thị cho tới khi bạn đổi hoặc tải lại trang.');
+      } else {
+        setStatusMessage('Đã xóa hình nền khỏi thư viện.');
+      }
     } catch (e) {
-      console.error('Lỗi xóa hình nền:', e);
+      setErrorMessage(e instanceof Error ? e.message : 'Lỗi không xác định khi xóa hình nền.');
     }
   };
 
@@ -173,7 +251,8 @@ export function CustomWallpaperStudio() {
       url,
       filters: wp.filtersJson || currentWallpaper.filters,
       shader: currentWallpaper.shader,
-    });
+      wallpaperId: wp.id,
+    }, wp.id);
   };
 
   const updateFilters = (changes: Partial<WallpaperFilters>) => {
@@ -241,6 +320,13 @@ export function CustomWallpaperStudio() {
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {(errorMessage || statusMessage) && (
+        <div className="px-4 pt-3 space-y-2">
+          {errorMessage && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-800 bg-rose-950/25 p-3 text-rose-200 text-xs"><span className="font-semibold">Thao tác chưa hoàn tất:</span><span>{errorMessage}</span></div>}
+          {statusMessage && <div role="status" className="flex items-start gap-2 rounded-xl border border-emerald-800 bg-emerald-950/20 p-3 text-emerald-200 text-xs"><Check className="w-4 h-4 shrink-0" /><span>{statusMessage}</span></div>}
+        </div>
+      )}
 
       {/* Main Tab Content */}
       <div className="flex-1 overflow-y-auto p-4">

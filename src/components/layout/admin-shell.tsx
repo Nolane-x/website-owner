@@ -118,8 +118,13 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
         setDevToolsOpen((prev) => !prev);
       }
     };
+    const handleGlobalPanicLock = () => setIsPanicLocked(true);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('webos:panic-lock', handleGlobalPanicLock);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('webos:panic-lock', handleGlobalPanicLock);
+    };
   }, []);
 
   if (isAuthExemptPage) {

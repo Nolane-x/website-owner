@@ -47,7 +47,7 @@ Hệ thống **Personal Web OS** được thiết kế theo nguyên tắc **Sing
 ## 4. Két Sắt Bảo Mật Zero-Knowledge (Vault & Secret Notes)
 
 - Sử dụng chuẩn mã hóa cấp quân sự **AES-256-GCM** thông qua tiêu chuẩn **Web Crypto API**.
-- Khóa mã hóa được dẫn xuất trực tiếp từ Master Passkey của chủ sở hữu qua thuật toán **PBKDF2** (với 100,000 vòng lặp HMAC-SHA-256 và salt ngẫu nhiên).
+- Khóa mã hóa được dẫn xuất trực tiếp từ Master Passkey của chủ sở hữu qua thuật toán **PBKDF2-HMAC-SHA-256** (600.000 vòng cho dữ liệu mã hóa mới, với salt ngẫu nhiên; hỗ trợ giải mã dữ liệu legacy dùng 100.000 vòng).
 - Dữ liệu mật khẩu và ghi chú tối mật được mã hóa hoàn toàn tại trình duyệt của người dùng trước khi gửi lên máy chủ. Máy chủ chỉ lưu trữ Ciphertext dạng Base64 và không bao giờ biết được nội dung thật hay Master Passkey.
 
 ---

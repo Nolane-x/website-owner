@@ -481,3 +481,27 @@ export interface CrmContact {
   neverCloudAi: boolean;
 }
 
+export interface Habit {
+  id: string;
+  profileId: string;
+  name: string;
+  target: string;
+  completedDatesJson: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  profileId: string;
+  title: string;
+  description?: string | null;
+  startAt: string;
+  endAt?: string | null;
+  timezone: string;
+  isAllDay: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+

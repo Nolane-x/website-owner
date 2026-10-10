@@ -1,33 +1,50 @@
 {
   "name": "personal-webos",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "productVersionTarget": "5.0.0",
+  "releaseStatus": "development",
   "title": "Personal Web OS — Personal CMS & Private Workspace",
   "author": "admin",
   "architecture": {
     "framework": "Next.js 16 (App Router) + React 19 + TypeScript",
     "styling": "Tailwind CSS v4 + Nolane UI (NUI) Editorial Bàn Giấy Design Tokens",
     "orm": "Drizzle ORM",
-    "database": "Dual-Engine (PostgreSQL / Supabase + Zero-Config Embedded PGlite WASM)",
+    "database": "Production: PostgreSQL configured via DATABASE_URL; development/test: embedded PGlite WASM. Production data is server-backed; local-first remains a target rather than a completed guarantee.",
     "security": {
       "passwordHashing": "Bcrypt (12 rounds salt)",
       "sessionTokens": "256-bit cryptographically secure, SHA-256 hashed in DB",
-      "cookiePolicy": "HttpOnly, Secure, SameSite=Lax",
-      "rateLimiter": "In-memory sliding-window limiter on auth and sensitive endpoints",
+      "cookiePolicy": "HttpOnly, Secure in production, SameSite=Lax",
+      "rateLimiter": "In-memory sliding-window limiter; not a shared global counter across every production instance",
       "xssProtection": "isomorphic-dompurify HTML sanitization",
-      "vaultEncryption": "Client-side Web Crypto AES-256-GCM + PBKDF2 (100,000 iterations)",
-      "panicLock": "Global hotkey Ctrl+Shift+L, instant privacy overlay",
+      "vaultEncryption": "Client-side Web Crypto AES-256-GCM; PBKDF2-HMAC-SHA-256 at 600000 iterations for new items, legacy 100000-iteration decryption fallback",
+      "panicLock": "Global Ctrl+Shift+L privacy overlay with account re-authentication; not a secure RAM wipe or OS lock",
       "zeroDefaultCredentials": true,
       "guestSessionZeroKnowledge": true,
       "contentRevisions": true,
-      "softDeleteTrash": true
+      "softDeleteTrash": true,
+      "aiDataFlow": "Copilot API key is session/component state only; retrieval context is opt-in; external provider requests leave the browser and are subject to provider/network policies"
     },
     "edgeGateway": {
       "engine": "Cloudflare Worker (Wrangler)",
-      "features": ["Bot Scanner Blocking", "Edge Rate Limiting", "HSTS & Security Headers Injection", "Upstream Proxy"]
+      "features": [
+        "Bot Scanner Blocking",
+        "Per-isolate in-memory rate limiting",
+        "HSTS & Security Headers Injection",
+        "Upstream Proxy"
+      ]
     },
     "ciCd": {
       "pipeline": ".github/workflows/ci.yml",
       "edgeDeployment": ".github/workflows/cloudflare-worker.yml"
+    },
+    "functionalStatus": {
+      "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
+      "workflows": "Persistent workflows; currently supports Inbox-to-task and read-only overdue-report executors; other trigger types are explicitly unsupported",
+      "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
+      "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
+      "backups": "Versioned JSON export and transactional import; wiki links, revisions, habits and calendar events are included, but standalone export checksum/manifest verification is not yet implemented",
+      "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
+      "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage"
     }
   },
   "tables": [
@@ -44,7 +61,24 @@
     "vault_items",
     "security_events",
     "guest_sessions",
-    "content_revisions"
+    "content_revisions",
+    "kanban_tasks",
+    "subscriptions",
+    "code_snippets",
+    "scratchpads",
+    "content_links",
+    "inbox_items",
+    "custom_wallpapers",
+    "research_sources",
+    "claims",
+    "decision_records",
+    "project_goals",
+    "automation_workflows",
+    "content_pipelines",
+    "learning_cards",
+    "crm_contacts",
+    "habits",
+    "calendar_events"
   ],
   "apiEndpoints": {
     "auth": [
@@ -67,8 +101,36 @@
       "/api/admin/settings",
       "/api/admin/security-events",
       "/api/admin/vault",
+      "/api/admin/vault/[id]",
       "/api/admin/export",
-      "/api/admin/import"
+      "/api/admin/import",
+      "/api/admin/tasks",
+      "/api/admin/tasks/[id]",
+      "/api/admin/subscriptions",
+      "/api/admin/subscriptions/[id]",
+      "/api/admin/scratchpads",
+      "/api/admin/scratchpads/[id]",
+      "/api/admin/inbox",
+      "/api/admin/inbox/[id]",
+      "/api/admin/wallpapers",
+      "/api/admin/wallpapers/[id]",
+      "/api/admin/research",
+      "/api/admin/research/[id]",
+      "/api/admin/research/claims",
+      "/api/admin/decisions",
+      "/api/admin/decisions/[id]",
+      "/api/admin/workflows",
+      "/api/admin/workflows/run",
+      "/api/admin/creator",
+      "/api/admin/learning",
+      "/api/admin/crm",
+      "/api/admin/graph",
+      "/api/admin/links/backlinks",
+      "/api/admin/projects/cockpit",
+      "/api/admin/habits",
+      "/api/admin/habits/[id]",
+      "/api/admin/calendar-events",
+      "/api/admin/calendar-events/[id]"
     ],
     "public": [
       "/api/public/site",
@@ -110,7 +172,313 @@
       "/admin/collections",
       "/admin/vault",
       "/admin/security",
-      "/admin/settings"
+      "/admin/settings",
+      "/admin/tasks",
+      "/admin/subscriptions",
+      "/admin/inbox",
+      "/admin/journal",
+      "/admin/graph",
+      "/admin/research",
+      "/admin/snippets",
+      "/admin/api-tester"
     ]
-  }
+  },
+  "changeManifest": [
+    {
+      "relativePath": "project-manifest.json",
+      "fileName": "project-manifest.json",
+      "mimeType": "application/json",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Cập nhật mô hình dữ liệu, endpoint, giới hạn bảo mật và trạng thái chức năng thực tế."
+    },
+    {
+      "relativePath": "src/app/api/admin/export/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Bổ sung export wiki-links, content/page revisions, habits và calendar events; nhật ký thống kê payload có 26 module dữ liệu."
+    },
+    {
+      "relativePath": "src/app/api/admin/import/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Import transaction và remap ID cho wiki-links, revisions, project goals/decisions, Inbox/task relationships, research claims, habits và calendar events."
+    },
+    {
+      "relativePath": "src/app/api/admin/workflows/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Xác minh ownership và kết quả thực lưu khi tạo/cập nhật workflow."
+    },
+    {
+      "relativePath": "src/app/api/admin/workflows/run/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Executor có phạm vi giới hạn cho Inbox-to-task và báo cáo task quá hạn; từ chối trigger chưa hỗ trợ."
+    },
+    {
+      "relativePath": "src/app/api/admin/habits/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "API có owner guard và origin guard cho liệt kê/tạo thói quen."
+    },
+    {
+      "relativePath": "src/app/api/admin/habits/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "API cập nhật/xóa thói quen và lưu ngày hoàn thành hợp lệ."
+    },
+    {
+      "relativePath": "src/app/api/admin/calendar-events/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "API tạo/liệt kê sự kiện lịch nội bộ có xác thực múi giờ và thời gian."
+    },
+    {
+      "relativePath": "src/app/api/admin/calendar-events/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "API cập nhật/xóa sự kiện lịch theo owner scope."
+    },
+    {
+      "relativePath": "src/app/api/admin/creator/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Xác thực input, kiểm tra ownership và xác minh record thật sau khi lưu."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/ai-app.tsx",
+      "fileName": "ai-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Thay câu trả lời giả bằng provider thật hoặc tra cứu từ API dữ liệu; context cá nhân opt-in."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/calendar-habits-app.tsx",
+      "fileName": "calendar-habits-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Lịch nội bộ và habit tracker dùng dữ liệu database thật."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/creator-app.tsx",
+      "fileName": "creator-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Thêm luồng save có trạng thái, tải API thật và gọi model thật khi người dùng cấu hình provider."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/files-app.tsx",
+      "fileName": "files-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Thay số liệu/folder giả bằng API counts và JSON export có xác minh; cảnh báo nếu backup vượt giới hạn import 4.5 MB."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/notes-app.tsx",
+      "fileName": "notes-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Autosave debounce, tuần tự hóa write, báo lỗi HTTP và cảnh báo khi bỏ thay đổi chưa xác nhận."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/privacy-app.tsx",
+      "fileName": "privacy-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Loại tuyên bố bảo mật tuyệt đối và nối Panic Lock về overlay toàn cục."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/workflows-app.tsx",
+      "fileName": "workflows-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Thay workflow log giả bằng tạo/lưu/bật/tắt và thực thi API có kết quả thật."
+    },
+    {
+      "relativePath": "src/components/layout/admin-shell.tsx",
+      "fileName": "admin-shell.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Nhận sự kiện khóa khẩn cấp từ Privacy Center."
+    },
+    {
+      "relativePath": "src/lib/ai/client.ts",
+      "fileName": "client.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Adapter request thực cho OpenAI-compatible API/Groq và Ollama."
+    },
+    {
+      "relativePath": "src/lib/workflows/inbox-to-task.ts",
+      "fileName": "inbox-to-task.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Mapper task giữ link về Inbox nguồn."
+    },
+    {
+      "relativePath": "src/lib/db/index.ts",
+      "fileName": "index.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Khởi tạo bảng/index lịch và thói quen cho PostgreSQL/PGlite."
+    },
+    {
+      "relativePath": "src/lib/db/schema.ts",
+      "fileName": "schema.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Schema drizzle cho calendar events và habits."
+    },
+    {
+      "relativePath": "src/lib/types/index.ts",
+      "fileName": "index.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Types cho CalendarEvent và Habit."
+    },
+    {
+      "relativePath": "tests/ai-client.test.ts",
+      "fileName": "ai-client.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test adapter API thật, Ollama, API key bắt buộc và lỗi provider."
+    },
+    {
+      "relativePath": "tests/calendar-habits.test.ts",
+      "fileName": "calendar-habits.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test round-trip database cho event/habit và cleanup profile kiểm thử."
+    },
+    {
+      "relativePath": "tests/workflows-runtime.test.ts",
+      "fileName": "workflows-runtime.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test mapping Inbox-to-task và liên kết nguồn."
+    },
+    {
+      "relativePath": "tests/schema-super-suite.test.ts",
+      "fileName": "schema-super-suite.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Bổ sung schema assertions cho habits và calendar events."
+    },
+    {
+      "relativePath": "README.md",
+      "fileName": "README.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Bổ sung trạng thái triển khai thật của Web OS 5.0 và cách dùng Copilot không giả lập."
+    },
+    {
+      "relativePath": "DEPLOYMENT.md",
+      "fileName": "DEPLOYMENT.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Sửa yêu cầu Node.js theo Next.js 16: tối thiểu 20.9 và khuyên dùng Node 22 LTS."
+    },
+    {
+      "relativePath": "SECURITY.md",
+      "fileName": "SECURITY.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Cập nhật mô tả KDF vault: 600000 vòng cho dữ liệu mới và hỗ trợ dữ liệu legacy."
+    },
+    {
+      "relativePath": "src/lib/audio/ambient-mixer.ts",
+      "fileName": "ambient-mixer.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Bộ trộn nhiều lớp âm thanh Web Audio với gain độc lập và phổ tần số thực từ AnalyserNode."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/music-app.tsx",
+      "fileName": "music-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Thay thanh phổ giả bằng dữ liệu analyser thật, hỗ trợ nhiều lớp âm đồng thời và hiển thị lỗi stream."
+    },
+    {
+      "relativePath": "src/components/wallpaper/custom-wallpaper-studio.tsx",
+      "fileName": "custom-wallpaper-studio.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Kiểm tra tệp/URL, hiện lỗi API, xác minh phản hồi và khôi phục hình nền từ ID database."
+    },
+    {
+      "relativePath": "src/components/ui/wallpaper-engine.tsx",
+      "fileName": "wallpaper-engine.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Tải lại hình nền đã upload bằng wallpaper ID, không cần nhét Data URL lớn vào localStorage."
+    },
+    {
+      "relativePath": "src/app/api/admin/wallpapers/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Kiểm tra title, type, URL scheme, Data URL và giới hạn tags phía backend."
+    },
+    {
+      "relativePath": "src/app/api/admin/wallpapers/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Xác thực URL/type/tags khi cập nhật; API error được giao diện thể hiện thay vì giả thành công."
+    },
+    {
+      "relativePath": "tests/ambient-mixer.test.ts",
+      "fileName": "ambient-mixer.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm tra độ an toàn của mixer đa lớp khi Web Audio API không khả dụng."
+    }
+  ]
 }

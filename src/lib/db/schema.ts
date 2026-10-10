@@ -413,6 +413,32 @@ export const crmContacts = pgTable('crm_contacts', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 30. Habit tracker thực sự: completion lưu theo ngày local (YYYY-MM-DD).
+export const habits = pgTable('habits', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  target: text('target').notNull().default('Hàng ngày'),
+  completedDatesJson: jsonb('completed_dates_json').$type<string[]>().default([]).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 31. Lịch nội bộ với timezone tường minh, không giả vờ là calendar sync bên ngoài.
+export const calendarEvents = pgTable('calendar_events', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  startAt: text('start_at').notNull(),
+  endAt: text('end_at'),
+  timezone: text('timezone').notNull().default('Asia/Ho_Chi_Minh'),
+  isAllDay: boolean('is_all_day').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Relations
 export const pagesRelations = relations(pages, ({ many }) => ({
   blocks: many(contentBlocks),

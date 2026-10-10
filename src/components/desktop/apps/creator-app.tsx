@@ -1,291 +1,273 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { PenTool, Sparkles, FileText, RefreshCw, Sliders } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { PenTool, Sparkles, FileText, RefreshCw, Sliders, Save, AlertTriangle, KeyRound } from 'lucide-react';
+import { completeChat, type RemoteAIProvider } from '@/lib/ai/client';
 
+type Stage = 'idea' | 'brief' | 'research' | 'draft' | 'review' | 'approved' | 'published';
 interface ContentItem {
   id: string;
   title: string;
-  stage: 'idea' | 'brief' | 'research' | 'draft' | 'review' | 'approved' | 'published';
+  stage: Stage;
   channel: string;
   body: string;
-  outline?: string;
+  outline?: string | null;
   tagsJson: string[];
-  scheduledAt?: string;
+  scheduledAt?: string | null;
 }
+const STAGES: { key: Stage; label: string }[] = [
+  { key: 'idea', label: 'Ý tưởng' },
+  { key: 'brief', label: 'Đề cương' },
+  { key: 'research', label: 'Nghiên cứu' },
+  { key: 'draft', label: 'Bản nháp' },
+  { key: 'review', label: 'Biên tập' },
+  { key: 'approved', label: 'Đã duyệt' },
+  { key: 'published', label: 'Xuất bản' },
+];
 
 export function CreatorStudioApp() {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
-
-  // Form thêm mới
   const [newTitle, setNewTitle] = useState('');
   const [newChannel, setNewChannel] = useState('blog');
-
-  // Voice Profile
-  const voiceTone = 'Chuyên nghiệp, sâu sắc, thực tiễn';
-  const voiceAudience = 'Kỹ sư phần mềm & Nhà sáng lập';
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showAiSettings, setShowAiSettings] = useState(false);
+  const [aiProvider, setAiProvider] = useState<RemoteAIProvider>('groq');
+  const [apiKey, setApiKey] = useState('');
+  const [aiModel, setAiModel] = useState('openai/gpt-oss-20b');
+  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
 
   const loadItems = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch('/api/admin/creator');
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items || []);
-        if (data.items?.length > 0) {
-          setSelectedItem((prev) => prev ?? data.items[0]);
-        }
-      }
-    } catch (e) {
-      console.error(e);
+      const response = await fetch('/api/admin/creator', { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Không tải được nội dung Creator Studio.');
+      const nextItems = (data.items || []) as ContentItem[];
+      setItems(nextItems);
+      setSelectedItem((previous) => nextItems.find((item) => item.id === previous?.id) ?? nextItems[0] ?? null);
+      setDirty(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không tải được Creator Studio.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void Promise.resolve().then(() => {
-      loadItems();
-    });
+    void Promise.resolve().then(() => { void loadItems(); });
   }, [loadItems]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  const persistItem = async (item: ContentItem): Promise<ContentItem> => {
+    const response = await fetch('/api/admin/creator', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Không lưu được nội dung.');
+    return (payload.item || item) as ContentItem;
+  };
 
+  const chooseItem = (item: ContentItem) => {
+    if (dirty && selectedItem && selectedItem.id !== item.id) {
+      const confirmed = window.confirm('Bạn có thay đổi chưa lưu. Bỏ các thay đổi chưa lưu và chuyển sang nội dung khác?');
+      if (!confirmed) return;
+    }
+    setSelectedItem(item);
+    setDirty(false);
+    setError(null);
+    setNotice(null);
+  };
+
+  const updateSelected = (updates: Partial<ContentItem>) => {
+    setSelectedItem((previous) => previous ? { ...previous, ...updates } : previous);
+    setDirty(true);
+    setNotice(null);
+  };
+
+  const handleSave = async (itemOverride?: ContentItem) => {
+    const item = itemOverride ?? selectedItem;
+    if (!item) return false;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
     try {
-      const res = await fetch('/api/admin/creator', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTitle,
-          channel: newChannel,
-          stage: 'idea',
-          body: '',
-        }),
-      });
-      if (res.ok) {
-        setNewTitle('');
-        loadItems();
-      }
-    } catch (e) {
-      console.error(e);
+      const saved = await persistItem(item);
+      setSelectedItem(saved);
+      setItems((previous) => previous.map((existing) => existing.id === saved.id ? saved : existing));
+      setDirty(false);
+      setNotice('Đã lưu nội dung vào database.');
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Lưu nội dung thất bại.');
+      setDirty(true);
+      return false;
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleAdvanceStage = async (nextStage: ContentItem['stage']) => {
-    if (!selectedItem) return;
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newTitle.trim()) return;
+    setError(null);
+    setNotice(null);
     try {
-      const res = await fetch('/api/admin/creator', {
+      setSaving(true);
+      const response = await fetch('/api/admin/creator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...selectedItem,
-          stage: nextStage,
-        }),
+        body: JSON.stringify({ title: newTitle.trim(), channel: newChannel, stage: 'idea', body: '', tagsJson: [] }),
       });
-      if (res.ok) {
-        setSelectedItem({ ...selectedItem, stage: nextStage });
-        loadItems();
-      }
-    } catch (e) {
-      console.error(e);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Không tạo được nội dung.');
+      setNewTitle('');
+      await loadItems();
+      setSelectedItem((payload.item || null) as ContentItem | null);
+      setDirty(false);
+      setNotice('Đã tạo nội dung mới.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không tạo được nội dung.');
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const handleAdvanceStage = async (stage: Stage) => {
+    if (!selectedItem) return;
+    await handleSave({ ...selectedItem, stage });
   };
 
   const handleAiGenerateOutline = async () => {
     if (!selectedItem) return;
+    if (aiProvider !== 'ollama' && !apiKey.trim()) {
+      setShowAiSettings(true);
+      setError('Hãy nhập API key của nhà cung cấp đã chọn trước khi yêu cầu model tạo dàn ý. Chưa có lời gọi AI nào được thực hiện.');
+      return;
+    }
     setGeneratingAi(true);
+    setError(null);
+    setNotice(null);
     try {
-      const outline = `1. Đặt vấn đề: Tại sao chủ đề "${selectedItem.title}" lại quan trọng trong năm 2026?\n2. Phân tích thực trạng & Thách thức cốt lõi.\n3. Giải pháp công nghệ & Kiến trúc đề xuất.\n4. Thực nghiệm & Số liệu kiểm chứng thực tế.\n5. Kết luận & Các bước triển khai tiếp theo.`;
-      const updated = {
-        ...selectedItem,
-        outline,
-        body: selectedItem.body || outline,
-      };
-      setSelectedItem(updated);
-      await fetch('/api/admin/creator', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
+      const answer = await completeChat({
+        provider: aiProvider,
+        apiKey,
+        model: aiModel,
+        baseUrl: aiProvider === 'ollama' ? ollamaUrl : undefined,
+        messages: [
+          {
+            role: 'system',
+            content: 'Bạn là biên tập viên. Tạo dàn ý thực dụng cho một nội dung; không tự bịa số liệu hay tuyên bố đã xác minh dữ kiện. Trả về dàn ý tiếng Việt có cấu trúc rõ ràng, phù hợp kênh nội dung.',
+          },
+          {
+            role: 'user',
+            content: `Tạo dàn ý cho nội dung sau. Chỉ dùng thông tin trong brief; đánh dấu nội dung cần nghiên cứu nếu chưa có bằng chứng.\nTiêu đề: ${selectedItem.title}\nKênh: ${selectedItem.channel}\nGiai đoạn: ${selectedItem.stage}\nNội dung đã có: ${selectedItem.body.slice(0, 5000) || '(chưa có)'}`,
+          },
+        ],
       });
-      loadItems();
-    } catch (e) {
-      console.error(e);
+      const updated: ContentItem = {
+        ...selectedItem,
+        outline: answer,
+        body: selectedItem.body.trim() ? selectedItem.body : answer,
+      };
+      const saved = await persistItem(updated);
+      setSelectedItem(saved);
+      setItems((previous) => previous.map((item) => item.id === saved.id ? saved : item));
+      setDirty(false);
+      setNotice(`Model ${aiModel} đã tạo dàn ý và dàn ý đã được lưu.`);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Không thể tạo dàn ý.';
+      setError(message === 'Failed to fetch'
+        ? 'Không kết nối được với model. Kiểm tra API key, mạng, CORS hoặc endpoint Ollama. Nội dung cũ vẫn được giữ.'
+        : message);
     } finally {
       setGeneratingAi(false);
     }
   };
 
-  const stages: { key: ContentItem['stage']; label: string }[] = [
-    { key: 'idea', label: 'Ý tưởng' },
-    { key: 'brief', label: 'Đề cương' },
-    { key: 'research', label: 'Nghiên cứu' },
-    { key: 'draft', label: 'Bản nháp' },
-    { key: 'review', label: 'Biên tập' },
-    { key: 'approved', label: 'Đã duyệt' },
-    { key: 'published', label: 'Xuất bản' },
-  ];
-
   return (
     <div className="flex flex-col h-full bg-stone-950 text-stone-200">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800 bg-stone-900/60">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
-            <PenTool className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-white">Creator Studio & Content Pipeline</h1>
-            <p className="text-xs text-stone-400">Quy trình sản xuất nội dung bài bản từ phác thảo, dàn ý đến xuất bản</p>
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-stone-800 bg-stone-900/60">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl"><PenTool className="w-5 h-5" /></div>
+          <div className="min-w-0">
+            <h1 className="text-base font-bold text-white">Creator Studio</h1>
+            <p className="text-xs text-stone-400">Pipeline nội dung có lưu database, trạng thái lưu rõ ràng và AI qua provider do bạn cấu hình.</p>
           </div>
         </div>
-
-        <button
-          onClick={loadItems}
-          className="p-1.5 rounded-lg bg-stone-800 text-stone-300 hover:bg-stone-700 transition"
-          title="Làm mới"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <button onClick={() => { if (dirty && !window.confirm('Bỏ các thay đổi chưa lưu để tải lại?')) return; void loadItems(); }} disabled={loading || saving} className="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-50" title="Tải lại dữ liệu"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Pipeline Column Left */}
-        <div className="w-80 border-r border-stone-800 bg-stone-900/30 p-4 flex flex-col space-y-4">
+      {error && <div role="alert" className="mx-4 mt-3 p-3 rounded-xl border border-rose-800 bg-rose-950/30 text-rose-200 text-xs flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{error}</div>}
+      {notice && <div role="status" className="mx-4 mt-3 p-3 rounded-xl border border-emerald-800 bg-emerald-950/20 text-emerald-200 text-xs">{notice}</div>}
+
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <aside className="w-72 max-w-[42%] border-r border-stone-800 bg-stone-900/30 p-3 flex flex-col gap-3 overflow-y-auto">
           <form onSubmit={handleCreate} className="space-y-2">
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Nhập tiêu đề nội dung mới..."
-              className="w-full px-3 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500"
-            />
-            <div className="flex items-center space-x-2">
-              <select
-                value={newChannel}
-                onChange={(e) => setNewChannel(e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded-xl bg-stone-950 border border-stone-800 text-xs text-stone-300 focus:outline-none"
-              >
-                <option value="blog">Bài viết Blog / Tech</option>
-                <option value="video">Kịch bản Video</option>
-                <option value="social">Mạng xã hội</option>
-                <option value="newsletter">Bản tin Email</option>
+            <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Tiêu đề nội dung mới..." className="w-full px-3 py-2 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-200 focus:border-amber-500 outline-none" />
+            <div className="flex gap-2">
+              <select value={newChannel} onChange={(event) => setNewChannel(event.target.value)} className="flex-1 min-w-0 px-2 py-2 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-300">
+                <option value="blog">Bài viết Blog</option><option value="video">Kịch bản Video</option><option value="social">Mạng xã hội</option><option value="newsletter">Bản tin Email</option>
               </select>
-              <button
-                type="submit"
-                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition"
-              >
-                Tạo
-              </button>
+              <button type="submit" disabled={saving || !newTitle.trim()} className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs disabled:opacity-50">Tạo</button>
             </div>
           </form>
-
-          <div className="flex-1 overflow-y-auto space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">Nội dung đã lưu ({items.length})</div>
+          {loading && <p className="text-xs text-stone-500">Đang tải...</p>}
+          {!loading && !items.length && <p className="p-3 border border-dashed border-stone-700 rounded-lg text-xs text-stone-400">Chưa có nội dung. Tạo một mục để bắt đầu.</p>}
+          <div className="space-y-2">
             {items.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => setSelectedItem(item)}
-                className={`p-3 rounded-xl cursor-pointer transition border ${
-                  selectedItem?.id === item.id
-                    ? 'bg-amber-500/10 border-amber-500/30 text-white'
-                    : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:bg-stone-800/40'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-stone-800 text-amber-300">
-                    {item.channel}
-                  </span>
-                  <span className="text-[10px] text-stone-400 capitalize">{item.stage}</span>
-                </div>
-                <h4 className="text-xs font-semibold text-stone-200 mt-1 line-clamp-2">{item.title}</h4>
-              </div>
+              <button key={item.id} onClick={() => chooseItem(item)} className={`w-full text-left p-3 rounded-xl border ${selectedItem?.id === item.id ? 'bg-amber-500/10 border-amber-500/40' : 'bg-stone-900/60 border-stone-800 hover:border-stone-700'}`}>
+                <div className="flex items-center justify-between gap-2"><span className="text-[10px] uppercase font-mono text-amber-300">{item.channel}</span><span className="text-[10px] text-stone-500">{item.stage}</span></div>
+                <div className="mt-1 text-xs font-semibold text-stone-100">{item.title}</div>
+                <div className="mt-1 text-[10px] text-stone-500">{item.body ? `${item.body.length} ký tự` : 'Chưa có nội dung'}</div>
+              </button>
             ))}
           </div>
-        </div>
+        </aside>
 
-        {/* Editor Area Right */}
-        <div className="flex-1 flex flex-col p-6 overflow-y-auto space-y-6">
+        <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-6 space-y-5">
           {selectedItem ? (
             <>
-              {/* Stage Progress Bar */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-stone-900 border border-stone-800 overflow-x-auto">
-                {stages.map((st, idx) => {
-                  const currentIdx = stages.findIndex((s) => s.key === selectedItem.stage);
-                  const isCurrent = st.key === selectedItem.stage;
-                  const isPast = idx < currentIdx;
-
-                  return (
-                    <button
-                      key={st.key}
-                      onClick={() => handleAdvanceStage(st.key)}
-                      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                        isCurrent
-                          ? 'bg-amber-500 text-stone-950 font-bold'
-                          : isPast
-                          ? 'text-emerald-400 hover:bg-stone-800'
-                          : 'text-stone-500 hover:bg-stone-800'
-                      }`}
-                    >
-                      <span>{st.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Title and Controls */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-white">{selectedItem.title}</h2>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={handleAiGenerateOutline}
-                      disabled={generatingAi}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 text-xs font-medium transition"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>{generatingAi ? 'Đang tạo...' : 'AI Lập Dàn ý'}</span>
-                    </button>
-                  </div>
+              <section className="p-4 rounded-2xl border border-stone-800 bg-stone-900/50 space-y-3">
+                <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-bold text-white">Thông tin nội dung</h2><span className={`text-[10px] ${dirty ? 'text-amber-300' : 'text-emerald-300'}`}>{saving ? 'Đang lưu...' : dirty ? 'Có thay đổi chưa lưu' : 'Đã đồng bộ với database'}</span></div>
+                <label className="block space-y-1"><span className="text-[10px] uppercase tracking-wider text-stone-500">Tiêu đề</span><input value={selectedItem.title} onChange={(event) => updateSelected({ title: event.target.value })} className="w-full p-2.5 rounded-lg bg-stone-950 border border-stone-700 text-sm text-stone-100 focus:border-amber-500 outline-none" /></label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => void handleSave()} disabled={!dirty || saving} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-40"><Save className="w-4 h-4" />{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</button>
+                  <button onClick={() => setShowAiSettings((open) => !open)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs"><KeyRound className="w-4 h-4" />Cấu hình AI</button>
+                  <button onClick={() => void handleAiGenerateOutline()} disabled={generatingAi || saving} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold disabled:opacity-50"><Sparkles className="w-4 h-4" />{generatingAi ? 'Đang hỏi model...' : 'AI tạo dàn ý'}</button>
                 </div>
+              </section>
 
-                {/* Voice Profile Badge */}
-                <div className="flex items-center space-x-4 p-3 rounded-xl bg-stone-900/60 border border-stone-800 text-xs text-stone-400">
-                  <Sliders className="w-4 h-4 text-amber-400" />
-                  <span><strong>Giọng văn (Voice Profile):</strong> {voiceTone}</span>
-                  <span><strong>Đối tượng:</strong> {voiceAudience}</span>
+              {showAiSettings && <section className="p-4 rounded-2xl border border-purple-800/60 bg-purple-950/15 space-y-3">
+                <div className="flex items-center gap-2 text-purple-200 text-xs font-bold"><Sliders className="w-4 h-4" />Model/provider (khóa không được lưu)</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <label className="space-y-1"><span className="block text-[10px] text-stone-500">Provider</span><select value={aiProvider} onChange={(event) => { const next = event.target.value as RemoteAIProvider; setAiProvider(next); if (next === 'groq') setAiModel('openai/gpt-oss-20b'); if (next === 'openai') setAiModel('gpt-4o-mini'); if (next === 'ollama') setAiModel('qwen3.5:2b'); }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="ollama">Ollama local</option></select></label>
+                  <label className="space-y-1"><span className="block text-[10px] text-stone-500">Model ID</span><input value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>
                 </div>
+                {aiProvider === 'ollama' ? <label className="block space-y-1"><span className="block text-[10px] text-stone-500">Base URL</span><input value={ollamaUrl} onChange={(event) => setOllamaUrl(event.target.value)} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label> : <label className="block space-y-1"><span className="block text-[10px] text-stone-500">API key</span><input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Chỉ giữ trong phiên khi cửa sổ đang mở" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>}
+                <p className="text-[10px] text-amber-200/80">Khi nhấn AI tạo dàn ý, chỉ tiêu đề, kênh và nội dung hiện đang chọn được gửi trực tiếp tới provider. API key không được ghi vào database của Personal Web OS. CORS hoặc giới hạn provider có thể khiến request thất bại.</p>
+              </section>}
 
-                {/* Outline Preview if any */}
-                {selectedItem.outline && (
-                  <div className="p-4 rounded-2xl bg-stone-900/40 border border-stone-800/80 space-y-1">
-                    <div className="text-xs font-bold text-amber-300 flex items-center">
-                      <FileText className="w-3.5 h-3.5 mr-1.5" /> Dàn ý Nội dung:
-                    </div>
-                    <pre className="text-xs text-stone-300 whitespace-pre-wrap font-sans leading-relaxed">
-                      {selectedItem.outline}
-                    </pre>
-                  </div>
-                )}
+              <section className="p-4 rounded-2xl border border-stone-800 bg-stone-900/40 space-y-3">
+                <h3 className="text-xs font-bold text-stone-300 flex items-center gap-2"><FileText className="w-4 h-4 text-amber-400" />Pipeline trạng thái</h3>
+                <div className="flex flex-wrap gap-2">{STAGES.map((stage) => <button key={stage.key} onClick={() => void handleAdvanceStage(stage.key)} disabled={saving || generatingAi} className={`px-3 py-2 rounded-lg text-[11px] font-semibold border disabled:opacity-50 ${selectedItem.stage === stage.key ? 'bg-amber-500 text-stone-950 border-amber-400' : 'bg-stone-950 border-stone-800 text-stone-400 hover:text-stone-200'}`}>{stage.label}</button>)}</div>
+                <p className="text-[10px] text-stone-500">Chuyển trạng thái sẽ lưu cả trạng thái lẫn các thay đổi hiện tại. Trạng thái “Xuất bản” chỉ là trạng thái trong pipeline, không tự đăng bài ra nền tảng bên ngoài.</p>
+              </section>
 
-                {/* Body Editor */}
-                <textarea
-                  value={selectedItem.body}
-                  onChange={(e) => setSelectedItem({ ...selectedItem, body: e.target.value })}
-                  placeholder="Soạn thảo nội dung bản nháp..."
-                  rows={14}
-                  className="w-full p-4 rounded-2xl bg-stone-900 border border-stone-800 text-stone-200 text-sm focus:outline-none focus:border-amber-500 leading-relaxed font-sans"
-                />
-              </div>
+              {selectedItem.outline && <section className="p-4 rounded-2xl border border-amber-900/50 bg-amber-950/10 space-y-2"><h3 className="text-xs font-bold text-amber-300">Dàn ý đã lưu</h3><pre className="text-xs whitespace-pre-wrap font-sans leading-relaxed text-stone-300">{selectedItem.outline}</pre></section>}
+
+              <section className="space-y-2"><div className="text-xs font-bold text-stone-300">Nội dung bản nháp</div><textarea value={selectedItem.body} onChange={(event) => updateSelected({ body: event.target.value })} placeholder="Soạn nội dung. Nhấn Lưu thay đổi để ghi xuống database." rows={16} className="w-full p-4 rounded-2xl bg-stone-900 border border-stone-800 text-stone-200 text-sm focus:outline-none focus:border-amber-500 leading-relaxed font-sans" /></section>
             </>
-          ) : (
-            <div className="flex h-full items-center justify-center text-stone-500 text-sm">
-              Chọn hoặc tạo nội dung mới để bắt đầu quy trình biên tập.
-            </div>
-          )}
-        </div>
+          ) : <div className="h-full flex flex-col items-center justify-center text-stone-500 text-center"><FileText className="w-8 h-8 mb-3 opacity-50" /><p className="text-sm">{loading ? 'Đang tải nội dung...' : 'Chọn nội dung hoặc tạo mục mới để bắt đầu.'}</p></div>}
+        </main>
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ interface ActiveWallpaper5State {
   url: string;
   filters: WallpaperFilters;
   shader: ShaderMode;
+  wallpaperId?: string | null;
 }
 
 export function WallpaperEngine() {
@@ -55,6 +56,34 @@ export function WallpaperEngine() {
       window.removeEventListener('webos_wallpaper_change', handleCustomChange);
     };
   }, []);
+
+  // Rehydrate uploaded local assets by ID; avoid storing multi-megabyte Base64 payloads in localStorage.
+  useEffect(() => {
+    if (!activeCustom?.wallpaperId || activeCustom.url) return;
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      try {
+        const response = await fetch('/api/admin/wallpapers', { cache: 'no-store' });
+        const payload = await response.json();
+        if (!response.ok || !Array.isArray(payload.wallpapers)) return;
+        const saved = (payload.wallpapers as Array<{
+          id: string; type: WallpaperMediaType; localDataUrl?: string | null; sourceUrl?: string | null; filtersJson?: WallpaperFilters;
+        }>).find((item) => item.id === activeCustom.wallpaperId);
+        const url = saved?.localDataUrl || saved?.sourceUrl || '';
+        if (cancelled || !saved || !url) return;
+        const restored: ActiveWallpaper5State = {
+          ...activeCustom,
+          type: saved.type,
+          url,
+          filters: saved.filtersJson || activeCustom.filters,
+        };
+        setActiveCustom(restored);
+      } catch {
+        // The desktop keeps its built-in fallback when the saved asset cannot be loaded.
+      }
+    });
+    return () => { cancelled = true; };
+  }, [activeCustom]);
 
   // 1. If 5.0 Custom Wallpaper is configured
   if (activeCustom && activeCustom.url) {

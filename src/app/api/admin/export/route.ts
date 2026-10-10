@@ -20,10 +20,14 @@ import {
   contentPipelines,
   projectGoals,
   decisionRecords,
+  contentLinks,
+  contentRevisions,
   subscriptions,
   researchSources,
   claims,
   automationWorkflows,
+  habits,
+  calendarEvents,
 } from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { logSecurityEvent } from '@/lib/security/audit';
@@ -58,6 +62,8 @@ export async function GET() {
       allResearch,
       allClaims,
       allWorkflows,
+      allHabits,
+      allCalendarEvents,
     ] = await Promise.all([
       db.select().from(contentItems).where(eq(contentItems.profileId, auth.profile.id)),
       db.select().from(pages).where(eq(pages.profileId, auth.profile.id)),
@@ -79,11 +85,21 @@ export async function GET() {
       db.select().from(researchSources).where(eq(researchSources.profileId, auth.profile.id)),
       db.select().from(claims).where(eq(claims.profileId, auth.profile.id)),
       db.select().from(automationWorkflows).where(eq(automationWorkflows.profileId, auth.profile.id)),
+      db.select().from(habits).where(eq(habits.profileId, auth.profile.id)),
+      db.select().from(calendarEvents).where(eq(calendarEvents.profileId, auth.profile.id)),
     ]);
 
     const pageIds = allPages.map((p) => p.id);
+    const contentIds = items.map((item) => item.id);
     const allBlocks = pageIds.length > 0
       ? await db.select().from(contentBlocks).where(inArray(contentBlocks.pageId, pageIds))
+      : [];
+    const allContentLinks = contentIds.length > 0
+      ? await db.select().from(contentLinks).where(inArray(contentLinks.sourceId, contentIds))
+      : [];
+    const revisionTargets = [...contentIds, ...pageIds];
+    const allContentRevisions = revisionTargets.length > 0
+      ? await db.select().from(contentRevisions).where(inArray(contentRevisions.targetId, revisionTargets))
       : [];
 
     const colIds = allCollections.map((c) => c.id);
@@ -102,6 +118,8 @@ export async function GET() {
         contentItems: items,
         pages: allPages,
         contentBlocks: allBlocks,
+        contentLinks: allContentLinks,
+        contentRevisions: allContentRevisions,
         folders: allFolders,
         collections: allCollections,
         collectionItems: allColItems,
@@ -120,6 +138,8 @@ export async function GET() {
         researchSources: allResearch,
         claims: allClaims,
         automationWorkflows: allWorkflows,
+        habits: allHabits,
+        calendarEvents: allCalendarEvents,
         settings: allSettings.map((s) => {
           const val = (typeof s.valueJson === 'object' && s.valueJson !== null ? s.valueJson : {}) as Record<string, unknown>;
           return {
@@ -136,7 +156,7 @@ export async function GET() {
       blocksCount: allBlocks.length,
       collectionsCount: allCollections.length,
       tasksCount: allTasks.length,
-      modulesCount: 20,
+      modulesCount: 26,
     });
 
     return new NextResponse(JSON.stringify(exportPayload, null, 2), {
