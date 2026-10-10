@@ -72,3 +72,14 @@ Hệ thống **Personal Web OS** được thiết kế theo nguyên tắc **Sing
   - Tự động chặn các yêu cầu quét lỗ hổng phổ biến (`.env`, `.git`, `wp-login`, path traversal `../`).
   - Tiêm các tiêu đề bảo mật chuẩn hiện đại: `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`.
   - Rate limiting tại biên mạng trước khi gói tin chạm đến máy chủ ứng dụng.
+
+
+## 8. HTTP API Tester — Ranh Giới Request Ra Ngoài
+
+- Endpoint /api/admin/http-proxy chỉ hoạt động sau khi xác thực owner và kiểm tra Origin.
+- Chỉ chấp nhận URL dùng giao thức HTTP hoặc HTTPS; không chấp nhận username/password nhúng trong URL, hostname nội bộ hoặc địa chỉ IP không công khai. Bộ lọc bao gồm các dải private, loopback, link-local/metadata, carrier-grade NAT, benchmarking, documentation, multicast và địa chỉ reserved của IPv4; IPv6 chỉ chấp nhận global-unicast sau khi loại các dải đặc biệt/transition.
+- Với hostname, máy chủ phân giải cả tập bản ghi A/AAAA và từ chối toàn bộ yêu cầu nếu bất kỳ địa chỉ trả về nào không công khai. Kết nối TCP/TLS được mở tới chính IP đã kiểm tra, không dùng lại hostname để tra DNS lần hai; với HTTPS, hostname ban đầu vẫn được dùng cho TLS SNI/certificate verification và HTTP Host header.
+- Proxy không tự động theo redirect. Mỗi redirect sẽ cần một request mới và một quyết định chính sách đích mới; response redirect chỉ được trả về cho người vận hành.
+- Có giới hạn body JSON đầu vào 1MB, tối đa 100 headers và 32KB tổng headers, body outbound 1MB, response 5MB và timeout tối đa 30 giây. Header hop-by-hop, Host, Content-Length, Transfer-Encoding, Proxy-Authorization và các header quản lý kết nối/encoding bị loại bỏ hoặc đặt lại.
+- Lỗi DNS/network được trả về thông báo tổng quát; không trả raw exception nội bộ cho client.
+- Đây là công cụ kiểm thử dịch vụ công cộng, không phải sandbox để thăm dò mạng riêng. Chỉ gọi API mà chủ sở hữu có quyền kiểm thử; lớp chặn địa chỉ không thay thế các chính sách egress ở hạ tầng.

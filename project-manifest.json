@@ -198,7 +198,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Cập nhật mô hình dữ liệu, backup checksum/preview, cron workflow, API biên dịch DAG, bảo mật và trạng thái chức năng thực tế."
+      "shortDescription": "Record DNS-pinned public-only HTTP proxy hardening and outbound request limits."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -446,7 +446,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Cập nhật giới hạn Workflow Runtime sau khi thêm preflight compiler và xác thực DAG."
+      "shortDescription": "Document API Tester network-target restrictions, DNS pinning, redirect policy, and request/response limits."
     },
     {
       "relativePath": "DEPLOYMENT.md",
@@ -462,7 +462,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Cập nhật mô tả KDF vault: 600000 vòng cho dữ liệu mới và hỗ trợ dữ liệu legacy."
+      "shortDescription": "Document HTTP API Tester outbound destination policy and DNS rebinding mitigation."
     },
     {
       "relativePath": "src/lib/audio/ambient-mixer.ts",
@@ -727,6 +727,30 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Kiểm thử database đảm bảo scheduler chạy được DAG báo cáo chỉ đọc theo nhánh thật, nhưng từ chối đồ thị tùy chỉnh có operation Inbox hoặc ghi dữ liệu."
+    },
+    {
+      "relativePath": "src/app/api/admin/http-proxy/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Bound JSON input, validate method and headers, and use the DNS-pinned outbound HTTP client with safe error mapping."
+    },
+    {
+      "relativePath": "src/lib/security/http-target.ts",
+      "fileName": "http-target.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Resolve and validate every DNS address, reject non-public IP ranges, pin HTTP/TLS connections to the vetted IP, and enforce one timeout covering DNS plus connection/body with bounded headers/body/response."
+    },
+    {
+      "relativePath": "tests/outbound-http-security.test.ts",
+      "fileName": "outbound-http-security.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Regression tests for public IP classification, internal host variants, mixed DNS responses, URL credentials, DNS errors, pinned target selection, and timeout during DNS resolution."
     }
   ]
 }

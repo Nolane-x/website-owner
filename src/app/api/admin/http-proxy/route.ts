@@ -1,74 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
+import {
+  requestPublicHttp,
+  OutboundInvalidHeaderError,
+  OutboundPayloadTooLargeError,
+  OutboundRequestTimeoutError,
+  OutboundResponseTooLargeError,
+  OutboundTargetDeniedError,
+  OutboundTargetResolutionError,
+} from '@/lib/security/http-target';
 
-function isPrivateIpOrHost(hostname: string): boolean {
-  let lower = hostname.toLowerCase().trim().replace(/^\[|\]$/g, '');
-  // F2-02: Loại bỏ trailing dots (ví dụ localhost.)
-  lower = lower.replace(/\.+$/, '');
+export const runtime = 'nodejs';
 
-  if (
-    lower === 'localhost' ||
-    lower === '127.0.0.1' ||
-    lower === '::1' ||
-    lower === '::' ||
-    lower === '0.0.0.0' ||
-    lower === '169.254.169.254' ||
-    lower.endsWith('.localhost') ||
-    lower.endsWith('.local') ||
-    lower.endsWith('.internal') ||
-    lower.endsWith('.lan') ||
-    lower === 'metadata.google.internal'
-  ) {
-    return true;
+const MAX_REQUEST_BYTES = 1024 * 1024;
+const MAX_HEADER_COUNT = 100;
+const MAX_HEADER_BYTES = 32 * 1024;
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
+class RequestBodyTooLargeError extends Error {}
+class InvalidRequestJsonError extends Error {}
+
+async function readBoundedJson(req: NextRequest): Promise<unknown> {
+  const contentLength = req.headers.get('content-length');
+  if (contentLength && Number.isFinite(Number(contentLength)) && Number(contentLength) > MAX_REQUEST_BYTES) {
+    throw new RequestBodyTooLargeError();
   }
 
-  // IPv6 private/link-local/unique local ranges
-  if (lower.includes(':')) {
-    if (
-      lower === '::1' ||
-      lower.startsWith('fe80:') ||
-      lower.startsWith('fc00:') ||
-      lower.startsWith('fd00:')
-    ) {
-      return true;
+  const reader = req.body?.getReader();
+  if (!reader) throw new InvalidRequestJsonError();
+
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_REQUEST_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new RequestBodyTooLargeError();
     }
-    // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
-    if (lower.startsWith('::ffff:')) {
-      return isPrivateIpOrHost(lower.slice(7));
-    }
+    chunks.push(Buffer.from(value));
   }
 
-  // Pure integer / hex hostname notation (e.g., 2130706433 hoặc 0x7f000001 for 127.0.0.1)
-  if (/^0x[0-9a-f]+$/i.test(lower) || /^\d+$/.test(lower)) {
-    return true;
+  try {
+    const raw = Buffer.concat(chunks, totalBytes).toString('utf8');
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new InvalidRequestJsonError();
   }
-
-  // F2-02: IPv4 private ranges với hỗ trợ octal (0177...), hex (0x7f...), và shorthand
-  const rawParts = lower.split('.');
-  if (rawParts.length >= 1 && rawParts.length <= 4) {
-    const isAllNumeric = rawParts.every((p) => /^(0x[0-9a-f]+|\d+)$/i.test(p));
-    if (isAllNumeric) {
-      const parts = rawParts.map((p) => {
-        if (/^0x/i.test(p)) return parseInt(p, 16);
-        if (p.length > 1 && p.startsWith('0')) return parseInt(p, 8);
-        return parseInt(p, 10);
-      });
-      if (parts.length === 4 && parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
-        if (parts[0] === 0 || parts[0] === 127 || parts[0] === 10) return true;
-        if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-        if (parts[0] === 192 && parts[1] === 168) return true;
-        if (parts[0] === 169 && parts[1] === 254) return true;
-      } else {
-        return true;
-      }
-    }
-  }
-
-  return false;
 }
-
-const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB giới hạn tối đa tránh tấn công cạn kiệt bộ nhớ
 
 export async function POST(req: NextRequest) {
   const originError = assertValidOrigin(req);
@@ -77,127 +60,107 @@ export async function POST(req: NextRequest) {
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
+  let payload: unknown;
   try {
-    const { url, method = 'GET', headers = {}, body, timeoutMs = 10000 } = await req.json();
+    payload = await readBoundedJson(req);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: 'Dữ liệu yêu cầu vượt quá giới hạn 1MB.' }, { status: 413 });
+    }
+    return NextResponse.json({ error: 'Body yêu cầu phải là JSON hợp lệ.' }, { status: 400 });
+  }
 
-    if (!url || typeof url !== 'string') {
-      return NextResponse.json({ error: 'URL không hợp lệ' }, { status: 400 });
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return NextResponse.json({ error: 'Body yêu cầu phải là một object JSON.' }, { status: 400 });
+  }
+
+  const input = payload as Record<string, unknown>;
+  const url = input.url;
+  if (typeof url !== 'string' || !url.trim() || url.length > 4096) {
+    return NextResponse.json({ error: 'URL không hợp lệ hoặc vượt quá 4096 ký tự.' }, { status: 400 });
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return NextResponse.json({ error: 'Định dạng URL không hợp lệ.' }, { status: 400 });
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return NextResponse.json({ error: 'Chỉ hỗ trợ giao thức HTTP hoặc HTTPS.' }, { status: 400 });
+  }
+
+  const rawMethod = input.method === undefined ? 'GET' : input.method;
+  if (typeof rawMethod !== 'string' || !ALLOWED_METHODS.has(rawMethod.toUpperCase())) {
+    return NextResponse.json({ error: 'Phương thức HTTP không được hỗ trợ.' }, { status: 400 });
+  }
+  const method = rawMethod.toUpperCase();
+
+  const rawHeaders = input.headers === undefined ? {} : input.headers;
+  if (!rawHeaders || typeof rawHeaders !== 'object' || Array.isArray(rawHeaders)) {
+    return NextResponse.json({ error: 'Headers phải là một object JSON.' }, { status: 400 });
+  }
+
+  const headerEntries = Object.entries(rawHeaders);
+  if (headerEntries.length > MAX_HEADER_COUNT) {
+    return NextResponse.json({ error: 'Tối đa 100 HTTP headers cho mỗi yêu cầu.' }, { status: 400 });
+  }
+
+  const cleanHeaders: Record<string, string> = {};
+  let headerBytes = 0;
+  for (const [key, value] of headerEntries) {
+    if (!key.trim()) continue;
+    if (typeof value !== 'string') {
+      return NextResponse.json({ error: 'Giá trị header "' + key + '" phải là chuỗi.' }, { status: 400 });
+    }
+    headerBytes += Buffer.byteLength(key, 'utf8') + Buffer.byteLength(value, 'utf8');
+    if (headerBytes > MAX_HEADER_BYTES) {
+      return NextResponse.json({ error: 'Tổng kích thước HTTP headers vượt quá 32KB.' }, { status: 400 });
+    }
+    cleanHeaders[key.trim()] = value;
+  }
+
+  const requestedTimeout = Number(input.timeoutMs);
+  const safeTimeout = Number.isFinite(requestedTimeout) && requestedTimeout > 0
+    ? Math.min(Math.max(1000, requestedTimeout), 30000)
+    : 10000;
+
+  let outboundBody: string | undefined;
+  if (['POST', 'PUT', 'PATCH'].includes(method) && input.body !== undefined) {
+    outboundBody = typeof input.body === 'string' ? input.body : JSON.stringify(input.body);
+  }
+
+  try {
+    const result = await requestPublicHttp({
+      url: parsedUrl,
+      method,
+      headers: cleanHeaders,
+      body: outboundBody,
+      timeoutMs: safeTimeout,
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof OutboundTargetDeniedError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof OutboundRequestTimeoutError) {
+      return NextResponse.json({ error: error.message }, { status: 504 });
+    }
+    if (error instanceof OutboundTargetResolutionError) {
+      return NextResponse.json({ error: error.message }, { status: 502 });
+    }
+    if (error instanceof OutboundPayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    if (error instanceof OutboundResponseTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 502 });
+    }
+    if (error instanceof OutboundInvalidHeaderError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return NextResponse.json({ error: 'Định dạng URL không hợp lệ' }, { status: 400 });
-    }
-
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      return NextResponse.json(
-        { error: 'Chỉ hỗ trợ giao thức HTTP hoặc HTTPS' },
-        { status: 400 }
-      );
-    }
-
-    // SSRF Guard (SEC-06): Chặn mọi địa chỉ nội bộ, link-local, loopback, private IP
-    if (isPrivateIpOrHost(parsedUrl.hostname)) {
-      return NextResponse.json(
-        { error: 'Bảo mật: Không được phép truy vấn địa chỉ mạng nội bộ hoặc siêu dữ liệu' },
-        { status: 403 }
-      );
-    }
-
-    const validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-    const safeMethod = validMethods.includes(String(method).toUpperCase())
-      ? String(method).toUpperCase()
-      : 'GET';
-
-    const cleanHeaders: Record<string, string> = {};
-    if (headers && typeof headers === 'object') {
-      for (const [key, val] of Object.entries(headers)) {
-        if (typeof val === 'string' && !['host', 'connection'].includes(key.toLowerCase())) {
-          cleanHeaders[key] = val;
-        }
-      }
-    }
-
-    const safeTimeout = Math.min(Math.max(1000, Number(timeoutMs) || 10000), 30000);
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), safeTimeout);
-
-    const startTime = performance.now();
-    try {
-      const fetchOptions: RequestInit = {
-        method: safeMethod,
-        headers: cleanHeaders,
-        signal: controller.signal,
-        redirect: 'manual', // F2-01: Chống redirect bypass SSRF guard
-      };
-
-      if (['POST', 'PUT', 'PATCH'].includes(safeMethod) && body !== undefined) {
-        fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
-      }
-
-      const response = await fetch(parsedUrl.toString(), fetchOptions);
-
-      const responseHeaders: Record<string, string> = {};
-      response.headers.forEach((val, key) => {
-        responseHeaders[key] = val;
-      });
-
-      // SEC-07: Giữ timeout bao trùm việc đọc response body và áp dụng giới hạn kích thước tối đa 5MB
-      let textBody = '';
-      if (response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let receivedBytes = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            receivedBytes += value.length;
-            if (receivedBytes > MAX_BODY_BYTES) {
-              controller.abort();
-              clearTimeout(timeoutHandle);
-              return NextResponse.json(
-                { error: 'Phản hồi vượt quá giới hạn cho phép (5MB)' },
-                { status: 502 }
-              );
-            }
-            textBody += decoder.decode(value, { stream: true });
-          }
-        }
-        textBody += decoder.decode();
-      }
-
-      clearTimeout(timeoutHandle);
-      const endTime = performance.now();
-      const sizeBytes = Buffer.byteLength(textBody, 'utf-8');
-
-      return NextResponse.json({
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders,
-        body: textBody,
-        durationMs: Math.round(endTime - startTime),
-        sizeBytes,
-      });
-    } catch (fetchErr: unknown) {
-      clearTimeout(timeoutHandle);
-      const endTime = performance.now();
-      const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError';
-
-      return NextResponse.json(
-        {
-          error: isTimeout ? `Yêu cầu hết thời gian (${safeTimeout}ms)` : 'Không thể kết nối đến đích',
-          details: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
-          durationMs: Math.round(endTime - startTime),
-        },
-        { status: 502 }
-      );
-    }
-  } catch (err) {
-    console.error('Lỗi HTTP Proxy API Tester:', err);
-    return NextResponse.json({ error: 'Lỗi xử lý yêu cầu HTTP tester' }, { status: 500 });
+    // Do not expose low-level network errors, destination internals, or resolver details.
+    return NextResponse.json({ error: 'Không thể kết nối đến đích HTTP công cộng.' }, { status: 502 });
   }
 }
