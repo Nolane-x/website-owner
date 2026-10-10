@@ -198,7 +198,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record outbound HTTP security hardening and pinned Node 24-compatible GitHub Actions/runner maintenance."
+      "shortDescription": "Track task API validation and desktop Kanban reliability improvements."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -446,7 +446,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Document API Tester network-target restrictions, DNS pinning, redirect policy, and request/response limits."
+      "shortDescription": "Document the validated task API and expanded desktop Kanban filters, deadlines, subtasks and error recovery."
     },
     {
       "relativePath": "DEPLOYMENT.md",
@@ -751,6 +751,46 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Regression tests for public IP classification, internal host variants, mixed DNS responses, URL credentials, DNS errors, pinned target selection, and timeout during DNS resolution."
+    },
+    {
+      "relativePath": "src/app/api/admin/tasks/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Validate task create input and GET status filters before database access; return client errors for invalid JSON/payloads."
+    },
+    {
+      "relativePath": "src/app/api/admin/tasks/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Validate partial task updates, enforce input limits and enum values, and return 404 for missing or already-deleted owner-scoped tasks."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/tasks-app.tsx",
+      "fileName": "tasks-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Desktop Kanban now renders all five statuses; supports search, priority and overdue filters, due dates, tags/subtask progress, explicit errors and rollback on failed writes."
+    },
+    {
+      "relativePath": "src/lib/tasks/validation.ts",
+      "fileName": "validation.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Shared typed validation for task create/patch payloads: enum allowlists, string/date/array limits, deduplicated tags and safe partial updates."
+    },
+    {
+      "relativePath": "tests/task-validation.test.ts",
+      "fileName": "task-validation.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "25 regression tests for task defaults, allowed status/priority, deadlines, field lengths, tag/subtask limits, sort order and sparse patches."
     }
   ]
 }

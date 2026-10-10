@@ -5,8 +5,7 @@ import { kanbanTasks } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
-import { TaskStatus, TaskPriority } from '@/lib/types';
-import crypto from 'crypto';
+import { parseTaskPatchInput, TaskValidationError } from '@/lib/tasks/validation';
 
 export async function PUT(
   req: NextRequest,
@@ -21,39 +20,33 @@ export async function PUT(
     const { id } = await params;
     await initializeDatabase();
     const db = getDb();
-    const body = await req.json();
-
     const [existing] = await db
       .select()
       .from(kanbanTasks)
       .where(and(eq(kanbanTasks.id, id), eq(kanbanTasks.profileId, auth.profile.id)));
 
-    if (!existing) {
-      return NextResponse.json({ error: 'Không tìm thấy công việc.' }, { status: 404 });
+    if (!existing) return NextResponse.json({ error: 'Không tìm thấy công việc.' }, { status: 404 });
+
+    const input = parseTaskPatchInput(await req.json());
+    const updates: Partial<typeof kanbanTasks.$inferInsert> = { updatedAt: new Date() };
+
+    if ('title' in input) {
+      const title = sanitizePlain(input.title ?? '');
+      if (!title) throw new TaskValidationError('Tiêu đề công việc không hợp lệ sau khi làm sạch.');
+      updates.title = title;
     }
-
-    const updates: Partial<typeof kanbanTasks.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-
-    if (body.title !== undefined) updates.title = sanitizePlain(body.title);
-    if (body.description !== undefined) updates.description = body.description ? sanitizePlain(body.description) : null;
-    if (body.status !== undefined) updates.status = body.status as TaskStatus;
-    if (body.priority !== undefined) updates.priority = body.priority as TaskPriority;
-    if (body.dueDate !== undefined) updates.dueDate = body.dueDate ? sanitizePlain(body.dueDate) : null;
-    if (body.sortOrder !== undefined) updates.sortOrder = Number(body.sortOrder);
-    if (body.relatedItemId !== undefined) updates.relatedItemId = body.relatedItemId ? sanitizePlain(body.relatedItemId) : null;
-
-    if (Array.isArray(body.tags)) {
-      updates.tags = body.tags.map((t: string) => sanitizePlain(t));
-    }
-
-    if (Array.isArray(body.subtasksJson)) {
-      updates.subtasksJson = body.subtasksJson.map((st: { id?: string; title: string; completed?: boolean }) => ({
-        id: st.id || 'sub-' + crypto.randomUUID(),
-        title: sanitizePlain(st.title || ''),
-        completed: Boolean(st.completed),
-      }));
+    if ('description' in input) updates.description = input.description ? sanitizePlain(input.description) : null;
+    if ('status' in input) updates.status = input.status;
+    if ('priority' in input) updates.priority = input.priority;
+    if ('dueDate' in input) updates.dueDate = input.dueDate;
+    if ('sortOrder' in input) updates.sortOrder = input.sortOrder;
+    if ('relatedItemId' in input) updates.relatedItemId = input.relatedItemId ? sanitizePlain(input.relatedItemId) : null;
+    if ('tags' in input) updates.tags = (input.tags ?? []).map((tag) => sanitizePlain(tag)).filter(Boolean);
+    if ('subtasksJson' in input) {
+      updates.subtasksJson = (input.subtasksJson ?? []).map((subtask) => ({
+        ...subtask,
+        title: sanitizePlain(subtask.title),
+      })).filter((subtask) => subtask.title.length > 0);
     }
 
     await db
@@ -66,8 +59,14 @@ export async function PUT(
       .from(kanbanTasks)
       .where(and(eq(kanbanTasks.id, id), eq(kanbanTasks.profileId, auth.profile.id)));
 
+    if (!updated) return NextResponse.json({ error: 'Công việc đã biến mất trong lúc cập nhật.' }, { status: 409 });
     return NextResponse.json({ task: updated });
   } catch (error) {
+    if (error instanceof TaskValidationError || error instanceof SyntaxError) {
+      return NextResponse.json({
+        error: error instanceof TaskValidationError ? error.message : 'Body yêu cầu phải là JSON hợp lệ.',
+      }, { status: 400 });
+    }
     console.error('Lỗi cập nhật công việc:', error);
     return NextResponse.json({ error: 'Không thể cập nhật công việc.' }, { status: 500 });
   }
@@ -86,12 +85,18 @@ export async function DELETE(
     const { id } = await params;
     await initializeDatabase();
     const db = getDb();
+    const [existing] = await db
+      .select({ id: kanbanTasks.id })
+      .from(kanbanTasks)
+      .where(and(eq(kanbanTasks.id, id), eq(kanbanTasks.profileId, auth.profile.id)));
 
-    const result = await db
+    if (!existing) return NextResponse.json({ error: 'Không tìm thấy công việc.' }, { status: 404 });
+
+    await db
       .delete(kanbanTasks)
       .where(and(eq(kanbanTasks.id, id), eq(kanbanTasks.profileId, auth.profile.id)));
 
-    return NextResponse.json({ success: true, deleted: result });
+    return NextResponse.json({ success: true, deletedId: existing.id });
   } catch (error) {
     console.error('Lỗi xóa công việc:', error);
     return NextResponse.json({ error: 'Không thể xóa công việc.' }, { status: 500 });
