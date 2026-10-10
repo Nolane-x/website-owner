@@ -41,10 +41,21 @@ export async function GET() {
     const publicAccess = await checkPublicAccessProtection();
     const siteSettings = toPublicSiteSettings(settingsMap);
 
+    const isLocked = publicAccess.requirePassword && !publicAccess.hasValidGuestSession;
+    const safeProfile = isLocked
+      ? {
+          id: profile.id,
+          displayName: profile.displayName,
+          bio: 'Trang web yêu cầu mật khẩu khách để mở khóa.',
+          avatarUrl: null,
+        }
+      : profile;
+    const safeNavigation = isLocked ? [] : siteSettings.navigation;
+
     return NextResponse.json({
-      profile,
+      profile: safeProfile,
       theme: siteSettings.theme,
-      navigation: siteSettings.navigation,
+      navigation: safeNavigation,
       accessProtection: {
         requirePassword: publicAccess.requirePassword,
         passwordHint: publicAccess.passwordHint,

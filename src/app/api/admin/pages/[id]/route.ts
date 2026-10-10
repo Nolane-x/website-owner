@@ -89,8 +89,12 @@ export async function PUT(
 
     if (visibility !== undefined) {
       updates.visibility = visibility;
-      if (visibility === 'UNLISTED' && !currentPage.shareToken) {
+      if (visibility === 'UNLISTED') {
+        // F2-11: Luôn sinh share token mới khi chuyển sang UNLISTED
         updates.shareToken = crypto.randomBytes(16).toString('hex');
+      } else {
+        // Thu hồi token cũ khi không còn UNLISTED
+        updates.shareToken = null;
       }
     }
 

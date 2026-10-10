@@ -98,36 +98,31 @@ export function VaultApp() {
       setItems(list);
 
       if (list.length > 0) {
-        // Test decrypt first item
-        const first = list[0];
-        try {
-          const plain = await decryptVaultSecret(
-            {
-              ciphertext: first.ciphertext,
-              iv: first.iv,
-              salt: first.salt,
-            },
-            masterPassword
-          );
-          const decryptedMap: Record<string, string> = { [first.id]: plain };
-          for (let i = 1; i < list.length; i++) {
-            const item = list[i];
-            try {
-              decryptedMap[item.id] = await decryptVaultSecret(
-                {
-                  ciphertext: item.ciphertext,
-                  iv: item.iv,
-                  salt: item.salt,
-                },
-                masterPassword
-              );
-            } catch {
-              // Ignore
-            }
+        // F2-25: Kiểm tra giải mã trên toàn bộ items, tránh việc 1 item hỏng khóa toàn bộ két
+        let anySuccess = false;
+        const decryptedMap: Record<string, string> = {};
+
+        for (const item of list) {
+          try {
+            const plain = await decryptVaultSecret(
+              {
+                ciphertext: item.ciphertext,
+                iv: item.iv,
+                salt: item.salt,
+              },
+              masterPassword
+            );
+            decryptedMap[item.id] = plain;
+            anySuccess = true;
+          } catch {
+            // Mục lỗi không khóa toàn bộ két mà được ghi nhận
           }
+        }
+
+        if (anySuccess) {
           setDecryptedSecrets(decryptedMap);
           setIsUnlocked(true);
-        } catch {
+        } else {
           setUnlockError('Mật khẩu Master không chính xác.');
         }
       } else {
@@ -146,6 +141,11 @@ export function VaultApp() {
     setMasterPassword('');
     setDecryptedSecrets({});
     setRevealedIds({});
+    // F2-26: Xóa form state và thông tin nhạy cảm khi khóa
+    setServiceName('');
+    setUsername('');
+    setSecretVal('');
+    setUnlockError('');
   };
 
   const handleCreate = async (e: React.FormEvent) => {

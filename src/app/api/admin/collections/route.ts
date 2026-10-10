@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
-import { collections, collectionItems } from '@/lib/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { collections, collectionItems, contentItems } from '@/lib/db/schema';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -91,6 +91,18 @@ export async function POST(req: NextRequest) {
       });
 
       if (Array.isArray(itemIds) && itemIds.length > 0) {
+        // F2-09: Xác minh mọi item ID đều thuộc sở hữu của auth.profile.id
+        const userItems = await tx
+          .select({ id: contentItems.id })
+          .from(contentItems)
+          .where(and(inArray(contentItems.id, itemIds), eq(contentItems.profileId, auth.profile.id)));
+        const validItemIds = new Set(userItems.map((u) => u.id));
+        for (const itemId of itemIds) {
+          if (!validItemIds.has(itemId)) {
+            throw new Error('INVALID_ITEM_OWNERSHIP');
+          }
+        }
+
         for (let i = 0; i < itemIds.length; i++) {
           await tx.insert(collectionItems).values({
             id: crypto.randomUUID(),
@@ -111,6 +123,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, collection: created[0] }, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === 'INVALID_ITEM_OWNERSHIP') {
+      return NextResponse.json({ error: 'Một hoặc nhiều mục nội dung không thuộc quyền sở hữu của bạn.' }, { status: 400 });
+    }
     console.error('Lỗi khi tạo bộ sưu tập:', error);
     return NextResponse.json({ error: 'Không thể tạo bộ sưu tập mới.' }, { status: 500 });
   }

@@ -24,7 +24,11 @@ function base64ToBuffer(base64: string): Uint8Array {
   return bytes;
 }
 
-export async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+export async function deriveKey(
+  password: string,
+  salt: Uint8Array,
+  iterations = 600000
+): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -38,7 +42,7 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Cry
     {
       name: 'PBKDF2',
       salt: salt as BufferSource,
-      iterations: 100000,
+      iterations,
       hash: 'SHA-256',
     },
     keyMaterial,
@@ -55,7 +59,7 @@ export async function encryptVaultSecret(
   const enc = new TextEncoder();
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(masterPassword, salt);
+  const key = await deriveKey(masterPassword, salt, 600000);
 
   const encrypted = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
@@ -77,14 +81,25 @@ export async function decryptVaultSecret(
   const salt = base64ToBuffer(payload.salt);
   const iv = base64ToBuffer(payload.iv);
   const ciphertext = base64ToBuffer(payload.ciphertext);
-  const key = await deriveKey(masterPassword, salt);
 
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
-    key,
-    ciphertext as BufferSource
-  );
+  // F2-23: Thử 600.000 iterations (OWASP standard) trước, fallback 100.000 iterations cho legacy items
+  const iterationsCandidates = [600000, 100000];
+  let lastError: unknown;
 
-  const dec = new TextDecoder();
-  return dec.decode(decrypted);
+  for (const iter of iterationsCandidates) {
+    try {
+      const key = await deriveKey(masterPassword, salt, iter);
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv as BufferSource },
+        key,
+        ciphertext as BufferSource
+      );
+      const dec = new TextDecoder();
+      return dec.decode(decrypted);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Không thể giải mã dữ liệu két bảo mật.');
 }

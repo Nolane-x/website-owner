@@ -103,8 +103,12 @@ export async function PUT(
 
     if (visibility !== undefined) {
       updates.visibility = visibility;
-      if (visibility === 'UNLISTED' && !currentItem.shareToken) {
+      if (visibility === 'UNLISTED') {
+        // F2-11: Luôn sinh token mới khi chuyển sang UNLISTED
         updates.shareToken = crypto.randomBytes(16).toString('hex');
+      } else {
+        // Thu hồi token cũ khi không còn UNLISTED
+        updates.shareToken = null;
       }
     }
 
@@ -115,18 +119,20 @@ export async function PUT(
       }
     }
 
-    // DB-05 / DB-06: Ghi nhận revision và cập nhật item trong Transaction nguyên tử
+    // DB-05 / DB-06 / F2-40: Ghi nhận revision và cập nhật item trong Transaction nguyên tử
     await db.transaction(async (tx) => {
       const existingRevs = await tx
-        .select()
+        .select({ revisionNumber: contentRevisions.revisionNumber })
         .from(contentRevisions)
         .where(and(eq(contentRevisions.targetId, id), eq(contentRevisions.targetType, 'content')));
+
+      const nextRevNumber = existingRevs.reduce((max, r) => Math.max(max, r.revisionNumber), 0) + 1;
 
       await tx.insert(contentRevisions).values({
         id: crypto.randomUUID(),
         targetId: id,
         targetType: 'content',
-        revisionNumber: existingRevs.length + 1,
+        revisionNumber: nextRevNumber,
         titleSnapshot: currentItem.title,
         bodySnapshot: currentItem.content,
         metadataSnapshot: currentItem.metadata || {},

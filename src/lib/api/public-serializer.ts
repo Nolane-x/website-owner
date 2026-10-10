@@ -69,6 +69,8 @@ export interface PublicBlockDTO {
   sortOrder: number;
   contentJson: Record<string, unknown>;
   settingsJson: Record<string, unknown>;
+  content: Record<string, unknown>;
+  settings: Record<string, unknown>;
 }
 
 export interface PublicPageDTO {
@@ -252,6 +254,8 @@ export function toPublicBlock(block: Record<string, unknown> | null | undefined)
     sortOrder: typeof block.sortOrder === 'number' ? block.sortOrder : 0,
     contentJson: sanitizedContent,
     settingsJson: settings,
+    content: sanitizedContent,
+    settings,
   };
 }
 

@@ -36,10 +36,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { username, password, isTrusted } = body;
 
-    if (!username || !password) {
+    if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
       return NextResponse.json(
         { error: 'Vui lòng nhập tên đăng nhập và mật khẩu.' },
         { status: 400 }
+      );
+    }
+
+    // F2-06: Giới hạn độ dài tránh cạn kiệt CPU và tương thích giới hạn 72 bytes của bcrypt
+    if (username.length > 64 || Buffer.byteLength(password, 'utf8') > 72) {
+      return NextResponse.json(
+        { error: 'Tên đăng nhập hoặc mật khẩu không chính xác.' },
+        { status: 401 }
       );
     }
 

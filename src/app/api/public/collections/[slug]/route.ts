@@ -62,6 +62,7 @@ export async function GET(
         contentItems,
         and(
           eq(collectionItems.contentItemId, contentItems.id),
+          eq(contentItems.profileId, colRaw.profileId),
           eq(contentItems.visibility, 'PUBLIC'),
           eq(contentItems.status, 'PUBLISHED'),
           isNull(contentItems.deletedAt)

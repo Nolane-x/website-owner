@@ -66,14 +66,58 @@ export default function AdminVaultPage() {
 
   const handleUnlockVault = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!masterPassword) {
+    if (!masterPassword.trim()) {
       setUnlockError('Vui lòng nhập Master Password để mở két.');
       return;
     }
 
     setUnlockError('');
-    setIsUnlocked(true);
-    fetchVaultItems();
+    try {
+      const res = await fetch('/api/admin/vault');
+      if (!res.ok) {
+        setUnlockError('Không thể kết nối đến máy chủ két bảo mật.');
+        return;
+      }
+      const data = await res.json();
+      const list: VaultItem[] = data.items || [];
+      setItems(list);
+
+      // F2-24 & F2-25: Kiểm tra xác thực Master Password nếu két đã có dữ liệu
+      if (list.length > 0) {
+        let anySuccess = false;
+        const decryptedMap: Record<string, string> = {};
+
+        for (const item of list) {
+          try {
+            const dec = await decryptVaultSecret(
+              {
+                ciphertext: item.ciphertext,
+                iv: item.iv,
+                salt: item.salt,
+              },
+              masterPassword
+            );
+            decryptedMap[item.id] = dec;
+            anySuccess = true;
+          } catch {
+            // Giữ lại lỗi từng mục thay vì khóa cứng toàn bộ két
+          }
+        }
+
+        if (!anySuccess) {
+          setUnlockError('Mật khẩu Master không chính xác.');
+          return;
+        }
+
+        setDecryptedPasswords(decryptedMap);
+        setIsUnlocked(true);
+      } else {
+        // Két trống, cho phép mở két để thiết lập mục đầu tiên
+        setIsUnlocked(true);
+      }
+    } catch {
+      setUnlockError('Lỗi trong quá trình xác thực mở két.');
+    }
   };
 
   // Giải mã mật khẩu của một mục cụ thể
@@ -187,12 +231,18 @@ export default function AdminVaultPage() {
     }
   };
 
-  // Khóa két mật mã
+  // Khóa két mật mã (F2-26: xóa sạch sensitive state và form inputs khi khóa)
   const handleLockVault = () => {
     setIsUnlocked(false);
     setMasterPassword('');
     setDecryptedPasswords({});
     setRevealedIds({});
+    setCreateModalOpen(false);
+    setServiceName('');
+    setUsername('');
+    setSecretPassword('');
+    setUrl('');
+    setCreateError('');
   };
 
   return (

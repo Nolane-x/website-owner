@@ -3,7 +3,10 @@ import { requireOwner } from '@/lib/auth/guard';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 
 function isPrivateIpOrHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  let lower = hostname.toLowerCase().trim().replace(/^\[|\]$/g, '');
+  // F2-02: Loại bỏ trailing dots (ví dụ localhost.)
+  lower = lower.replace(/\.+$/, '');
+
   if (
     lower === 'localhost' ||
     lower === '127.0.0.1' ||
@@ -36,18 +39,30 @@ function isPrivateIpOrHost(hostname: string): boolean {
     }
   }
 
-  // Pure integer hostname notation (e.g., 2130706433 for 127.0.0.1)
-  if (/^\d+$/.test(lower)) {
+  // Pure integer / hex hostname notation (e.g., 2130706433 hoặc 0x7f000001 for 127.0.0.1)
+  if (/^0x[0-9a-f]+$/i.test(lower) || /^\d+$/.test(lower)) {
     return true;
   }
 
-  // IPv4 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8, 0.0.0.0/8
-  const parts = lower.split('.').map(Number);
-  if (parts.length === 4 && parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
-    if (parts[0] === 0 || parts[0] === 127 || parts[0] === 10) return true;
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-    if (parts[0] === 192 && parts[1] === 168) return true;
-    if (parts[0] === 169 && parts[1] === 254) return true;
+  // F2-02: IPv4 private ranges với hỗ trợ octal (0177...), hex (0x7f...), và shorthand
+  const rawParts = lower.split('.');
+  if (rawParts.length >= 1 && rawParts.length <= 4) {
+    const isAllNumeric = rawParts.every((p) => /^(0x[0-9a-f]+|\d+)$/i.test(p));
+    if (isAllNumeric) {
+      const parts = rawParts.map((p) => {
+        if (/^0x/i.test(p)) return parseInt(p, 16);
+        if (p.length > 1 && p.startsWith('0')) return parseInt(p, 8);
+        return parseInt(p, 10);
+      });
+      if (parts.length === 4 && parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
+        if (parts[0] === 0 || parts[0] === 127 || parts[0] === 10) return true;
+        if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+        if (parts[0] === 192 && parts[1] === 168) return true;
+        if (parts[0] === 169 && parts[1] === 254) return true;
+      } else {
+        return true;
+      }
+    }
   }
 
   return false;
@@ -115,6 +130,7 @@ export async function POST(req: NextRequest) {
         method: safeMethod,
         headers: cleanHeaders,
         signal: controller.signal,
+        redirect: 'manual', // F2-01: Chống redirect bypass SSRF guard
       };
 
       if (['POST', 'PUT', 'PATCH'].includes(safeMethod) && body !== undefined) {

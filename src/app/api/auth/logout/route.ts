@@ -14,7 +14,14 @@ export async function POST(req: NextRequest) {
     const userAgent = req.headers.get('user-agent') || 'Unknown';
 
     if (sessionData) {
-      await revokeSession(sessionData.session.id, sessionData.profile.id);
+      const revoked = await revokeSession(sessionData.session.id, sessionData.profile.id);
+      if (!revoked) {
+        await clearSessionCookie();
+        return NextResponse.json(
+          { success: false, error: 'Không thể thu hồi phiên làm việc trên cơ sở dữ liệu.' },
+          { status: 500 }
+        );
+      }
       await logSecurityEvent(sessionData.profile.id, SECURITY_EVENT_TYPES.LOGOUT, null, ip, userAgent);
     }
 
@@ -24,6 +31,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Lỗi khi đăng xuất:', error);
     await clearSessionCookie();
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { success: false, error: 'Lỗi máy chủ khi đăng xuất.' },
+      { status: 500 }
+    );
   }
 }

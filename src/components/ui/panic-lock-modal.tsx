@@ -78,7 +78,7 @@ export function PanicLockOverlay({
             Không gian làm việc đã khóa
           </h2>
           <p className="text-xs text-[var(--text-secondary)]">
-            Chế độ Khóa Khẩn cấp (Panic Lock) đã ẩn toàn bộ nội dung nhạy cảm. Nhập mật khẩu để tiếp tục làm việc.
+            Lớp che bảo vệ riêng tư cục bộ (Privacy Curtain / Panic Lock) đã che tạm thời màn hình khi rời máy. Nhập mật khẩu tài khoản để mở lại không gian.
           </p>
         </div>
 

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import type { WorkflowNode, WorkflowEdge } from '@/lib/types';
 export type { WorkflowNode, WorkflowEdge };
@@ -44,7 +44,9 @@ export const settings = pgTable('settings', {
   key: text('key').notNull(), // 'theme_private', 'theme_public', 'dashboard_layout', 'public_layout', 'nav_config', 'public_access'
   valueJson: jsonb('value_json').notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex('idx_settings_profile_key').on(table.profileId, table.key),
+]);
 
 // 5. Nội dung tổng hợp (Content Items: Note, Project, Article, Link, Resource, Document...)
 export const contentItems = pgTable('content_items', {

@@ -65,7 +65,15 @@ export function CanvasPageClient({ slug }: { slug: string }) {
         const data = await res.json();
         if (res.ok) {
           setPage(data.page);
-          setBlocks(data.blocks || []);
+          const rawBlocks = (data.blocks || []) as Array<Record<string, unknown>>;
+          const normalizedBlocks: Block[] = rawBlocks.map((b) => ({
+            id: String(b.id),
+            blockType: String(b.blockType || 'text'),
+            sortOrder: typeof b.sortOrder === 'number' ? b.sortOrder : 0,
+            content: (b.content || b.contentJson || {}) as BlockContent,
+            settings: (b.settings || b.settingsJson || {}) as Record<string, unknown>,
+          }));
+          setBlocks(normalizedBlocks);
         } else {
           setError(data.error || 'Trang không tồn tại.');
         }

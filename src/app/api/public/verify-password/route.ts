@@ -24,8 +24,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { password } = body;
 
-    if (!password) {
+    if (!password || typeof password !== 'string') {
       return NextResponse.json({ error: 'Vui lòng nhập mật khẩu khách.' }, { status: 400 });
+    }
+
+    if (Buffer.byteLength(password, 'utf8') > 72) {
+      return NextResponse.json({ error: 'Mật mã khách không chính xác.' }, { status: 401 });
     }
 
     await initializeDatabase();

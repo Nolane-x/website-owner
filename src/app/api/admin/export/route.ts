@@ -20,6 +20,10 @@ import {
   contentPipelines,
   projectGoals,
   decisionRecords,
+  subscriptions,
+  researchSources,
+  claims,
+  automationWorkflows,
 } from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { logSecurityEvent } from '@/lib/security/audit';
@@ -50,6 +54,10 @@ export async function GET() {
       allCreator,
       allGoals,
       allDecisions,
+      allSubs,
+      allResearch,
+      allClaims,
+      allWorkflows,
     ] = await Promise.all([
       db.select().from(contentItems).where(eq(contentItems.profileId, auth.profile.id)),
       db.select().from(pages).where(eq(pages.profileId, auth.profile.id)),
@@ -67,6 +75,10 @@ export async function GET() {
       db.select().from(contentPipelines).where(eq(contentPipelines.profileId, auth.profile.id)),
       db.select().from(projectGoals).where(eq(projectGoals.profileId, auth.profile.id)),
       db.select().from(decisionRecords).where(eq(decisionRecords.profileId, auth.profile.id)),
+      db.select().from(subscriptions).where(eq(subscriptions.profileId, auth.profile.id)),
+      db.select().from(researchSources).where(eq(researchSources.profileId, auth.profile.id)),
+      db.select().from(claims).where(eq(claims.profileId, auth.profile.id)),
+      db.select().from(automationWorkflows).where(eq(automationWorkflows.profileId, auth.profile.id)),
     ]);
 
     const pageIds = allPages.map((p) => p.id);
@@ -104,6 +116,10 @@ export async function GET() {
         contentPipelines: allCreator,
         projectGoals: allGoals,
         decisionRecords: allDecisions,
+        subscriptions: allSubs,
+        researchSources: allResearch,
+        claims: allClaims,
+        automationWorkflows: allWorkflows,
         settings: allSettings.map((s) => {
           const val = (typeof s.valueJson === 'object' && s.valueJson !== null ? s.valueJson : {}) as Record<string, unknown>;
           return {
@@ -120,7 +136,7 @@ export async function GET() {
       blocksCount: allBlocks.length,
       collectionsCount: allCollections.length,
       tasksCount: allTasks.length,
-      modulesCount: 16,
+      modulesCount: 20,
     });
 
     return new NextResponse(JSON.stringify(exportPayload, null, 2), {

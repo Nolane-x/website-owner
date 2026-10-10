@@ -44,10 +44,18 @@ export function FilesApp() {
         { name: 'research_sources', label: 'Kho Nguồn Nghiên cứu', count: researchRes.sources?.length || 0, description: 'Nguồn tham chiếu và trích dẫn' },
       ]);
 
-      // Tạo SHA-256 Checksum giả lập trạng thái dữ liệu hiện tại
-      const sampleHash = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
-      setChecksum(`sha256-${sampleHash}`);
+      // F2-38 / SEC-20: Tính toán mã băm SHA-256 thực sự trên bản ghi tóm tắt thay vì sinh random bytes
+      const summaryPayload = JSON.stringify({
+        inboxCount: inboxRes.items?.length || 0,
+        tasksCount: tasksRes.tasks?.length || 0,
+        snippetsCount: snippetsRes.snippets?.length || 0,
+        wallpapersCount: wallpapersRes.wallpapers?.length || 0,
+        researchCount: researchRes.sources?.length || 0,
+      });
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(summaryPayload));
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const realDigest = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+      setChecksum(`sha256-${realDigest}`);
     } catch (e) {
       console.error(e);
     } finally {
@@ -141,7 +149,7 @@ export function FilesApp() {
               </div>
 
               <div className="p-4 rounded-2xl bg-stone-900 border border-stone-800">
-                <span className="text-xs text-stone-400">Checksum Hiện tại</span>
+                <span className="text-xs text-stone-400">Mã băm Tóm tắt Dữ liệu (SHA-256 Digest)</span>
                 <div className="text-xs font-mono text-stone-300 truncate mt-2 bg-stone-950 p-1.5 rounded border border-stone-800">
                   {checksum || 'Đang tính toán...'}
                 </div>

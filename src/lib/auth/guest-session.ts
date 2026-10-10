@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { getDb, initializeDatabase } from '../db';
 import { guestSessions } from '../db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, lt } from 'drizzle-orm';
 import { COOKIE_GUEST_SESSION_NAME } from '../security/constants';
 
 export function hashGuestToken(token: string): string {
@@ -76,13 +76,30 @@ export async function validateGuestToken(token: string): Promise<boolean> {
     return false;
   }
 
-  // Cập nhật lastActiveAt
-  await db
-    .update(guestSessions)
-    .set({ lastActiveAt: new Date() })
-    .where(eq(guestSessions.id, session.id));
+  // F2-20: Throttle ghi lastActiveAt để loại bỏ write amplification (tối đa 1 lần / 5 phút)
+  const lastActive = session.lastActiveAt ? new Date(session.lastActiveAt).getTime() : 0;
+  if (now.getTime() - lastActive > 5 * 60 * 1000) {
+    await db
+      .update(guestSessions)
+      .set({ lastActiveAt: now })
+      .where(eq(guestSessions.id, session.id));
+  }
 
   return true;
+}
+
+/**
+ * F2-20: Dọn dẹp các phiên khách đã hết hạn hoặc bị thu hồi
+ */
+export async function cleanupExpiredGuestSessions(): Promise<number> {
+  await initializeDatabase();
+  const db = getDb();
+  const now = new Date();
+  const deleted = await db
+    .delete(guestSessions)
+    .where(lt(guestSessions.expiresAt, now))
+    .returning();
+  return deleted.length;
 }
 
 /**

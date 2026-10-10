@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { collections, collectionItems, contentItems } from '@/lib/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -29,14 +29,20 @@ export async function GET(
       return NextResponse.json({ error: 'Bộ sưu tập không tồn tại.' }, { status: 404 });
     }
 
-    // Lấy danh sách item trong collection
+    // Lấy danh sách item trong collection (chỉ thuộc quyền sở hữu của auth.profile.id)
     const items = await db
       .select({
         collectionItem: collectionItems,
         item: contentItems,
       })
       .from(collectionItems)
-      .innerJoin(contentItems, eq(collectionItems.contentItemId, contentItems.id))
+      .innerJoin(
+        contentItems,
+        and(
+          eq(collectionItems.contentItemId, contentItems.id),
+          eq(contentItems.profileId, auth.profile.id)
+        )
+      )
       .where(eq(collectionItems.collectionId, id))
       .orderBy(asc(collectionItems.sortOrder));
 
@@ -75,7 +81,6 @@ export async function PUT(
       return NextResponse.json({ error: 'Bộ sưu tập không tồn tại.' }, { status: 404 });
     }
 
-    const current = existing[0];
     const body = await req.json();
     const { name, description, coverImage, icon, visibility, status, isFeatured, itemIds } = body;
 
@@ -91,8 +96,12 @@ export async function PUT(
 
     if (visibility !== undefined) {
       updates.visibility = visibility;
-      if (visibility === 'UNLISTED' && !current.shareToken) {
+      if (visibility === 'UNLISTED') {
+        // F2-11: Luôn sinh share token mới khi chuyển sang UNLISTED
         updates.shareToken = crypto.randomBytes(16).toString('hex');
+      } else {
+        // Thu hồi token cũ khi không còn UNLISTED
+        updates.shareToken = null;
       }
     }
 
@@ -104,8 +113,22 @@ export async function PUT(
         .set(updates)
         .where(and(eq(collections.id, id), eq(collections.profileId, auth.profile.id)));
 
-      // DB-04 / P1-13: Cập nhật nguyên tử danh sách items bên trong transaction
+      // DB-04 / P1-13 / F2-09: Cập nhật nguyên tử danh sách items bên trong transaction
       if (Array.isArray(itemIds)) {
+        if (itemIds.length > 0) {
+          // F2-09: Xác minh mọi item ID đều thuộc sở hữu của auth.profile.id
+          const userItems = await tx
+            .select({ id: contentItems.id })
+            .from(contentItems)
+            .where(and(inArray(contentItems.id, itemIds), eq(contentItems.profileId, auth.profile.id)));
+          const validItemIds = new Set(userItems.map((u) => u.id));
+          for (const itemId of itemIds) {
+            if (!validItemIds.has(itemId)) {
+              throw new Error('INVALID_ITEM_OWNERSHIP');
+            }
+          }
+        }
+
         await tx.delete(collectionItems).where(eq(collectionItems.collectionId, id));
         for (let i = 0; i < itemIds.length; i++) {
           await tx.insert(collectionItems).values({
@@ -127,6 +150,9 @@ export async function PUT(
 
     return NextResponse.json({ success: true, collection: updated[0] });
   } catch (error) {
+    if (error instanceof Error && error.message === 'INVALID_ITEM_OWNERSHIP') {
+      return NextResponse.json({ error: 'Một hoặc nhiều mục nội dung không thuộc quyền sở hữu của bạn.' }, { status: 400 });
+    }
     console.error('Lỗi cập nhật bộ sưu tập:', error);
     return NextResponse.json({ error: 'Không thể cập nhật bộ sưu tập.' }, { status: 500 });
   }
