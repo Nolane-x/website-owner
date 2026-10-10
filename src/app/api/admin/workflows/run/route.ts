@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
       }).where(and(
         eq(automationWorkflowRuns.id, runId as string),
         eq(automationWorkflowRuns.profileId, auth.profile.id),
+        eq(automationWorkflowRuns.status, 'running'),
       ));
     };
 
@@ -199,6 +200,7 @@ export async function POST(req: NextRequest) {
         }).where(and(
           eq(automationWorkflowRuns.id, runId),
           eq(automationWorkflowRuns.profileId, runProfileId),
+          eq(automationWorkflowRuns.status, 'running'),
         ));
       } catch (historyError) {
         console.error('Không thể ghi trạng thái thất bại của workflow run:', historyError);

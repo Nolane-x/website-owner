@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { automationWorkflowRuns } from '@/lib/db/schema';
+import { reconcileStaleWorkflowRuns } from '@/lib/workflows/run-history';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
   try {
     await initializeDatabase();
     const db = getDb();
+    await reconcileStaleWorkflowRuns(db, auth.profile.id);
     const conditions = [eq(automationWorkflowRuns.profileId, auth.profile.id)];
     if (workflowId) conditions.push(eq(automationWorkflowRuns.workflowId, workflowId));
     const runs = await db.select()

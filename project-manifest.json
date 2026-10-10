@@ -40,7 +40,7 @@
     },
     "functionalStatus": {
       "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
-      "workflows": "Persistent workflow definitions and durable manual run history (succeeded/failed/unsupported trigger), bounded owner-scoped history API; supports Inbox-to-task and read-only overdue-report executors. No background scheduler or generic workflow compiler yet",
+      "workflows": "Persistent workflow definitions and durable manual run history (succeeded/failed/unsupported/interrupted), bounded owner-scoped history API; run records stuck in running for over 30 minutes are reconciled to interrupted when history is queried. Supports Inbox-to-task and read-only overdue-report executors. No background scheduler or generic workflow compiler yet",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
@@ -233,8 +233,8 @@
       "fileName": "route.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "API owner-scoped truy vấn lịch sử workflow với filter workflowId, giới hạn 1–100 và sắp xếp thời gian mới nhất."
+      "status": "modified",
+      "shortDescription": "API owner-scoped truy vấn lịch sử workflow với filter/limit và đánh dấu interrupted cho run kẹt quá 30 phút."
     },
     {
       "relativePath": "src/app/api/admin/habits/route.ts",
@@ -357,6 +357,14 @@
       "shortDescription": "Mapper task giữ link về Inbox nguồn."
     },
     {
+      "relativePath": "src/lib/workflows/run-history.ts",
+      "fileName": "run-history.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Phục hồi trạng thái workflow runs quá hạn thành interrupted theo owner scope, với cập nhật có điều kiện và giới hạn 100 bản ghi/lượt."
+    },
+    {
       "relativePath": "src/lib/db/index.ts",
       "fileName": "index.ts",
       "mimeType": "text/typescript",
@@ -409,16 +417,16 @@
       "fileName": "workflow-runs-api.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Test truy vấn lịch sử owner-scoped, workflow filter và validation giới hạn truy vấn."
+      "status": "modified",
+      "shortDescription": "Test truy vấn lịch sử owner-scoped, workflow filter, giới hạn truy vấn và gọi cơ chế phục hồi stale run."
     },
     {
       "relativePath": "tests/workflow-run-persistence.test.ts",
       "fileName": "workflow-run-persistence.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Test persistence database cho trạng thái, input, result, timestamps và thời lượng workflow run."
+      "status": "modified",
+      "shortDescription": "Test persistence database cho trạng thái, input/result, thời lượng và phục hồi run kẹt nhưng giữ nguyên run mới."
     },
     {
       "relativePath": "tests/schema-super-suite.test.ts",
