@@ -39,6 +39,7 @@ import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { BACKUP_ARRAY_KEYS, getBackupRecordCounts, verifyBackupIntegrity } from '@/lib/backup/integrity';
+import { BoundedRequestBodyTooLargeError, InvalidBoundedRequestBodyError, readBoundedRequestText } from '@/lib/security/bounded-request-body';
 
 const MAX_IMPORT_BYTES = 4.5 * 1024 * 1024; // 4.5MB giới hạn an toàn Vercel Functions (F2-17)
 
@@ -50,20 +51,24 @@ export async function POST(req: NextRequest) {
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
-  // F2-17: Kiểm tra giới hạn kích thước payload
-  const contentLength = req.headers.get('content-length');
-  if (contentLength && parseInt(contentLength, 10) > MAX_IMPORT_BYTES) {
-    return NextResponse.json(
-      { error: 'Tệp sao lưu vượt quá dung lượng tối đa cho phép (4.5 MB).' },
-      { status: 413 }
-    );
+  // Enforce the limit while streaming; req.text() would buffer the entire upload before checking it.
+  let rawBody: string;
+  try {
+    rawBody = await readBoundedRequestText(req, MAX_IMPORT_BYTES);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyTooLargeError) {
+      return NextResponse.json(
+        { error: 'Tệp sao lưu vượt quá dung lượng tối đa cho phép (4.5 MB).' },
+        { status: 413 },
+      );
+    }
+    if (error instanceof InvalidBoundedRequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Không thể đọc body của tệp sao lưu.' }, { status: 400 });
   }
 
   try {
-    const rawBody = await req.text();
-    if (new TextEncoder().encode(rawBody).byteLength > MAX_IMPORT_BYTES) {
-      return NextResponse.json({ error: 'Tệp sao lưu vượt quá dung lượng tối đa cho phép (4.5 MB).' }, { status: 413 });
-    }
     let parsedBody: unknown;
     try {
       parsedBody = JSON.parse(rawBody) as unknown;

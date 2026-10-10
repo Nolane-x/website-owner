@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
+import { BoundedRequestBodyTooLargeError, readBoundedRequestText } from '@/lib/security/bounded-request-body';
 import {
   requestPublicHttp,
   OutboundInvalidHeaderError,
@@ -22,31 +23,15 @@ class RequestBodyTooLargeError extends Error {}
 class InvalidRequestJsonError extends Error {}
 
 async function readBoundedJson(req: NextRequest): Promise<unknown> {
-  const contentLength = req.headers.get('content-length');
-  if (contentLength && Number.isFinite(Number(contentLength)) && Number(contentLength) > MAX_REQUEST_BYTES) {
-    throw new RequestBodyTooLargeError();
-  }
-
-  const reader = req.body?.getReader();
-  if (!reader) throw new InvalidRequestJsonError();
-
-  const chunks: Buffer[] = [];
-  let totalBytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-
-    totalBytes += value.byteLength;
-    if (totalBytes > MAX_REQUEST_BYTES) {
-      await reader.cancel().catch(() => undefined);
-      throw new RequestBodyTooLargeError();
-    }
-    chunks.push(Buffer.from(value));
+  let raw: string;
+  try {
+    raw = await readBoundedRequestText(req, MAX_REQUEST_BYTES);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyTooLargeError) throw new RequestBodyTooLargeError();
+    throw new InvalidRequestJsonError();
   }
 
   try {
-    const raw = Buffer.concat(chunks, totalBytes).toString('utf8');
     return JSON.parse(raw) as unknown;
   } catch {
     throw new InvalidRequestJsonError();

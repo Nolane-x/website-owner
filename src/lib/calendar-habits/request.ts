@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import {
+  BoundedRequestBodyTooLargeError,
+  InvalidBoundedRequestBodyError,
+  readBoundedRequestText,
+} from '@/lib/security/bounded-request-body';
+import {
   CALENDAR_HABITS_REQUEST_MAX_BYTES,
   CalendarHabitsValidationError,
 } from '@/lib/calendar-habits/validation';
@@ -12,14 +17,17 @@ export class CalendarHabitsPayloadTooLargeError extends Error {
 }
 
 export async function readCalendarHabitsJsonBody(request: Request): Promise<unknown> {
-  const contentLength = request.headers.get('content-length');
-  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > CALENDAR_HABITS_REQUEST_MAX_BYTES) {
-    throw new CalendarHabitsPayloadTooLargeError();
-  }
-
-  const body = await request.text();
-  if (new TextEncoder().encode(body).byteLength > CALENDAR_HABITS_REQUEST_MAX_BYTES) {
-    throw new CalendarHabitsPayloadTooLargeError();
+  let body: string;
+  try {
+    body = await readBoundedRequestText(request, CALENDAR_HABITS_REQUEST_MAX_BYTES);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyTooLargeError) {
+      throw new CalendarHabitsPayloadTooLargeError();
+    }
+    if (error instanceof InvalidBoundedRequestBodyError) {
+      throw new CalendarHabitsValidationError(error.message);
+    }
+    throw error;
   }
 
   let parsed: unknown;

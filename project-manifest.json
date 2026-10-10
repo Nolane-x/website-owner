@@ -43,7 +43,7 @@
       "workflows": "Persistent workflow definitions and durable run history. Preflight compiler validates DAGs and true/false branches; allowlisted node executor supports Inbox/task reads, idempotent task create/reuse, Inbox conversion and read-only overdue reporting with per-node traces. Inbox conversion is transactional/row-locked and protected by a partial unique index. Daily Vercel Cron executes only recognized legacy overdue reports or DAGs composed entirely of allowlisted read-only overdue operations; custom graphs with write operations fail closed and record their failure. Candidates already claimed for the Vietnam day are filtered before the 50-workflow batch limit to prevent starvation. Arbitrary shell/code, AI and approval actions are not enabled. CRON_SECRET is required in production.",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Owner-scoped database-backed events and habits with strict ISO/date/timezone and size validation, bounded pagination, and 64 KiB request caps. Habit completion uses per-day desired-state updates inside a row-locked transaction, retries are idempotent, and generic habit patches reject whole-array history replacement to prevent concurrent lost updates. UI supports incremental loading, all-day events, event editing, habit pause/resume and explicit request failures; external calendar sync remains unimplemented.",
-      "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
+      "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Import body bytes are capped while streaming at 4.5 MiB instead of buffering an unchecked request; checksum authenticity signatures and replacement-style restore remain unsupported.",
       "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
       "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage",
       "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes."
@@ -199,7 +199,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Track task API validation and desktop Kanban reliability improvements."
+      "shortDescription": "Track shared streaming request-body limits and regression tests across backup import, HTTP proxy, and Calendar/Habits APIs."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -215,7 +215,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Import transaction có xác minh SHA-256, preview không ghi database, remap quan hệ nội bộ và remap workflow-run IDs về workflow đã import."
+      "shortDescription": "Read backup JSON through a streaming 4.5 MiB byte ceiling; reject malformed Content-Length, stop oversized streams early, and preserve existing schema/checksum validation and transactional restore."
     },
     {
       "relativePath": "src/app/api/admin/workflows/route.ts",
@@ -735,7 +735,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Bound JSON input, validate method and headers, and use the DNS-pinned outbound HTTP client with safe error mapping."
+      "shortDescription": "Use the shared byte-bounded request reader for 1 MiB proxy JSON bodies and map oversize/malformed input to controlled client errors before outbound requests."
     },
     {
       "relativePath": "src/lib/security/http-target.ts",
@@ -934,8 +934,8 @@
       "fileName": "request.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Parse only JSON object request bodies, enforce the 64 KiB actual/declarative payload ceiling, and map invalid input/oversized body to 400/413."
+      "status": "modified",
+      "shortDescription": "Use the shared streaming reader for 64 KiB object JSON bodies while preserving stable Calendar/Habits 400/413 response mapping."
     },
     {
       "relativePath": "src/lib/calendar-habits/completion.ts",
@@ -950,7 +950,7 @@
       "fileName": "calendar-habits-validation.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
+      "status": "modified",
       "shortDescription": "Regression tests for invalid/ambiguous dates, timezone-qualified timestamps, end-before-start, field limits, unknown patches, payload byte bounds and strict pagination."
     },
     {
@@ -960,6 +960,22 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Database concurrency regressions prove parallel per-day updates preserve each other, retries are idempotent, removing one date preserves others and another owner cannot read/update the habit."
+    },
+    {
+      "relativePath": "src/lib/security/bounded-request-body.ts",
+      "fileName": "bounded-request-body.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Shared streaming UTF-8 request reader with hard actual-byte limits, strict declared Content-Length validation, stream cancellation, and predictable invalid-body errors."
+    },
+    {
+      "relativePath": "tests/bounded-request-body.test.ts",
+      "fileName": "bounded-request-body.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Regression tests cover exact UTF-8 byte boundaries, early declared-length rejection, streaming cancellation, malformed length headers, invalid UTF-8, and invalid limits."
     }
   ]
 }
