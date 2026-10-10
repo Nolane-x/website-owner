@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import type { WorkflowNode, WorkflowEdge } from '@/lib/types';
 export type { WorkflowNode, WorkflowEdge };
@@ -366,6 +366,24 @@ export const automationWorkflows = pgTable('automation_workflows', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+export const automationWorkflowRuns = pgTable('automation_workflow_runs', {
+  id: text('id').primaryKey(),
+  profileId: text('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  workflowId: text('workflow_id').notNull().references(() => automationWorkflows.id, { onDelete: 'cascade' }),
+  triggerType: text('trigger_type').notNull(),
+  status: text('status').notNull().default('running'),
+  inputJson: jsonb('input_json').$type<Record<string, unknown>>().default({}).notNull(),
+  resultJson: jsonb('result_json').$type<Record<string, unknown>>(),
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  finishedAt: timestamp('finished_at'),
+  durationMs: integer('duration_ms'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_automation_workflow_runs_profile_created').on(table.profileId, table.createdAt),
+  index('idx_automation_workflow_runs_workflow_created').on(table.workflowId, table.createdAt),
+]);
 
 // 27. Chuỗi Sản xuất Nội dung (Creator Content Pipeline)
 export const contentPipelines = pgTable('content_pipelines', {

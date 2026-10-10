@@ -389,6 +389,25 @@ export async function initializeDatabase() {
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS automation_workflow_runs (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      workflow_id TEXT NOT NULL REFERENCES automation_workflows(id) ON DELETE CASCADE,
+      trigger_type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      input_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      result_json JSONB,
+      error_message TEXT,
+      started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      finished_at TIMESTAMP,
+      duration_ms INTEGER,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_automation_workflow_runs_profile_created
+      ON automation_workflow_runs(profile_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_automation_workflow_runs_workflow_created
+      ON automation_workflow_runs(workflow_id, created_at);
+
     CREATE TABLE IF NOT EXISTS content_pipelines (
       id TEXT PRIMARY KEY,
       profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,

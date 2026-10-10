@@ -23,11 +23,26 @@ describe('backup integrity', () => {
     expect(verifyBackupIntegrity(data, { algorithm: 'SHA-1', scope: 'data', digest: integrity.digest, recordCounts: integrity.recordCounts })).toBe(false);
   });
 
+  it('accepts a previous-release manifest only when the newly added collection is absent', () => {
+    const legacyData = { contentItems: [{ id: 'legacy' }], pages: [] };
+    const legacyIntegrity = createBackupIntegrity(legacyData);
+    const legacyCounts = { ...legacyIntegrity.recordCounts };
+    delete legacyCounts.workflowRuns;
+    expect(verifyBackupIntegrity(legacyData, { ...legacyIntegrity, recordCounts: legacyCounts })).toBe(true);
+
+    const currentData = { ...legacyData, workflowRuns: [] };
+    const currentIntegrity = createBackupIntegrity(currentData);
+    const missingDeclaredCount = { ...currentIntegrity.recordCounts };
+    delete missingDeclaredCount.workflowRuns;
+    expect(verifyBackupIntegrity(currentData, { ...currentIntegrity, recordCounts: missingDeclaredCount })).toBe(false);
+  });
+
   it('reports all known collections and treats malformed collections as empty', () => {
-    const counts = getBackupRecordCounts({ contentItems: [{ id: 1 }], pages: 'not-an-array', habits: [1, 2] });
+    const counts = getBackupRecordCounts({ contentItems: [{ id: 1 }], pages: 'not-an-array', habits: [1, 2], workflowRuns: [{ id: 'run-1' }] });
     expect(counts.contentItems).toBe(1);
     expect(counts.pages).toBe(0);
     expect(counts.habits).toBe(2);
+    expect(counts.workflowRuns).toBe(1);
     expect(Object.keys(counts).length).toBeGreaterThan(20);
   });
 });

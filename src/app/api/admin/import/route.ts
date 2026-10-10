@@ -26,6 +26,7 @@ import {
   researchSources,
   claims,
   automationWorkflows,
+  automationWorkflowRuns,
   habits,
   calendarEvents,
   type WorkflowNode,
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
         researchSources?: Array<Record<string, unknown>>;
         claims?: Array<Record<string, unknown>>;
         automationWorkflows?: Array<Record<string, unknown>>;
+        workflowRuns?: Array<Record<string, unknown>>;
         habits?: Array<Record<string, unknown>>;
         calendarEvents?: Array<Record<string, unknown>>;
       };
@@ -191,6 +193,7 @@ export async function POST(req: NextRequest) {
       researchSources: importedResearch,
       claims: importedClaims,
       automationWorkflows: importedWorkflows,
+      workflowRuns: importedWorkflowRuns,
       habits: importedHabits,
       calendarEvents: importedCalendarEvents,
     } = body.data;
@@ -719,12 +722,16 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 20. Nhập Quy trình Tự động hóa (Automation Workflows)
+      // 20. Nhập Quy trình Tự động hóa (Automation Workflows) và remap ID để phục hồi run history.
+      const workflowIdMap = new Map<string, string>();
       if (Array.isArray(importedWorkflows)) {
         for (const w of importedWorkflows) {
           if (!w.name) continue;
+          const oldWorkflowId = String(w.id || '');
+          const newWorkflowId = crypto.randomUUID();
+          if (oldWorkflowId) workflowIdMap.set(oldWorkflowId, newWorkflowId);
           await tx.insert(automationWorkflows).values({
-            id: crypto.randomUUID(),
+            id: newWorkflowId,
             profileId: auth.profile.id,
             name: sanitizePlain(String(w.name)),
             description: w.description ? sanitizePlain(String(w.description)) : null,
@@ -734,6 +741,52 @@ export async function POST(req: NextRequest) {
             isActive: Boolean(w.isActive),
             createdAt: new Date(),
             updatedAt: new Date(),
+          });
+          importedCount++;
+        }
+      }
+
+      // 21. Nhập lịch sử workflow chỉ khi workflow nguồn được map thành workflow thuộc tài khoản này.
+      if (Array.isArray(importedWorkflowRuns)) {
+        for (const run of importedWorkflowRuns) {
+          const mappedWorkflowId = workflowIdMap.get(String(run.workflowId || ''));
+          if (!mappedWorkflowId) continue;
+
+          const safeStatus = String(run.status || 'failed');
+          const status = safeStatus === 'running'
+            ? 'interrupted'
+            : ['succeeded', 'failed', 'unsupported_trigger', 'interrupted'].includes(safeStatus)
+              ? safeStatus
+              : 'failed';
+          const startedCandidate = run.startedAt ? new Date(String(run.startedAt)) : new Date();
+          const startedAt = Number.isFinite(startedCandidate.getTime()) ? startedCandidate : new Date();
+          const finishedCandidate = run.finishedAt ? new Date(String(run.finishedAt)) : null;
+          const finishedAt = finishedCandidate && Number.isFinite(finishedCandidate.getTime()) ? finishedCandidate : null;
+          const createdCandidate = run.createdAt ? new Date(String(run.createdAt)) : startedAt;
+          const createdAt = Number.isFinite(createdCandidate.getTime()) ? createdCandidate : startedAt;
+          const inputJson = typeof run.inputJson === 'object' && run.inputJson !== null && !Array.isArray(run.inputJson)
+            ? run.inputJson as Record<string, unknown>
+            : {};
+          const resultJson = typeof run.resultJson === 'object' && run.resultJson !== null && !Array.isArray(run.resultJson)
+            ? run.resultJson as Record<string, unknown>
+            : null;
+          const durationMs = typeof run.durationMs === 'number' && Number.isFinite(run.durationMs) && run.durationMs >= 0
+            ? Math.min(2_147_483_647, Math.floor(run.durationMs))
+            : null;
+
+          await tx.insert(automationWorkflowRuns).values({
+            id: crypto.randomUUID(),
+            profileId: auth.profile.id,
+            workflowId: mappedWorkflowId,
+            triggerType: sanitizePlain(String(run.triggerType || 'manual')).slice(0, 120),
+            status,
+            inputJson,
+            resultJson,
+            errorMessage: run.errorMessage ? sanitizePlain(String(run.errorMessage)).slice(0, 2000) : null,
+            startedAt,
+            finishedAt,
+            durationMs,
+            createdAt,
           });
           importedCount++;
         }

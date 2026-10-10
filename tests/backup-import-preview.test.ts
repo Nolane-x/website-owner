@@ -64,6 +64,26 @@ describe('backup import preview', () => {
     expect(getDb).not.toHaveBeenCalled();
   });
 
+  it('accepts intact previous-release exports with a 26-group manifest', async () => {
+    const data = { contentItems: [{ id: 'old-release-content' }], pages: [] };
+    const oldManifest = createBackupIntegrity(data);
+    const counts = { ...oldManifest.recordCounts };
+    delete counts.workflowRuns;
+
+    const response = await POST(createRequest({
+      version: '5.0.0',
+      mode: 'preview',
+      data,
+      integrity: { ...oldManifest, recordCounts: counts },
+    }));
+    const body = await response.json() as { integrity: string };
+
+    expect(response.status).toBe(200);
+    expect(body.integrity).toBe('verified');
+    expect(initializeDatabase).not.toHaveBeenCalled();
+    expect(getDb).not.toHaveBeenCalled();
+  });
+
   it('labels old backups as unverified instead of pretending they have a checksum', async () => {
     const response = await POST(createRequest({
       version: '5.0.0',

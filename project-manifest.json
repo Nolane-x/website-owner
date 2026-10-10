@@ -40,10 +40,10 @@
     },
     "functionalStatus": {
       "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
-      "workflows": "Persistent workflows; currently supports Inbox-to-task and read-only overdue-report executors; other trigger types are explicitly unsupported",
+      "workflows": "Persistent workflow definitions and durable manual run history (succeeded/failed/unsupported trigger), bounded owner-scoped history API; supports Inbox-to-task and read-only overdue-report executors. No background scheduler or generic workflow compiler yet",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
-      "backups": "JSON export with SHA-256 data integrity manifest and per-module counts; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. No authenticity signature or replacement-style restore." ,
+      "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
       "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
       "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage",
       "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes."
@@ -76,6 +76,7 @@
     "decision_records",
     "project_goals",
     "automation_workflows",
+    "automation_workflow_runs",
     "content_pipelines",
     "learning_cards",
     "crm_contacts",
@@ -123,6 +124,7 @@
       "/api/admin/decisions/[id]",
       "/api/admin/workflows",
       "/api/admin/workflows/run",
+      "/api/admin/workflows/runs",
       "/api/admin/creator",
       "/api/admin/learning",
       "/api/admin/crm",
@@ -208,7 +210,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Import transaction có xác minh SHA-256, preview không ghi database, thống kê module, cảnh báo legacy và remap ID cho quan hệ nội bộ."
+      "shortDescription": "Import transaction có xác minh SHA-256, preview không ghi database, remap quan hệ nội bộ và remap workflow-run IDs về workflow đã import."
     },
     {
       "relativePath": "src/app/api/admin/workflows/route.ts",
@@ -223,8 +225,16 @@
       "fileName": "route.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Ghi lịch sử chạy bền vững gồm input, trạng thái, kết quả/lỗi và thời lượng; executor giới hạn Inbox-to-task/quá hạn."
+    },
+    {
+      "relativePath": "src/app/api/admin/workflows/runs/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Executor có phạm vi giới hạn cho Inbox-to-task và báo cáo task quá hạn; từ chối trigger chưa hỗ trợ."
+      "shortDescription": "API owner-scoped truy vấn lịch sử workflow với filter workflowId, giới hạn 1–100 và sắp xếp thời gian mới nhất."
     },
     {
       "relativePath": "src/app/api/admin/habits/route.ts",
@@ -320,7 +330,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Thay workflow log giả bằng tạo/lưu/bật/tắt và thực thi API có kết quả thật."
+      "shortDescription": "Hiển thị lịch sử workflow đã lưu bền vững cùng trạng thái, kết quả/lỗi, ID và thời lượng."
     },
     {
       "relativePath": "src/components/layout/admin-shell.tsx",
@@ -352,7 +362,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Khởi tạo bảng/index lịch và thói quen cho PostgreSQL/PGlite."
+      "shortDescription": "Khởi tạo bảng/index lịch, habits và automation_workflow_runs cho PostgreSQL/PGlite."
     },
     {
       "relativePath": "src/lib/db/schema.ts",
@@ -360,7 +370,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Schema drizzle cho calendar events và habits."
+      "shortDescription": "Schema drizzle có chỉ mục truy vấn workflow run history theo owner/workflow và thời gian."
     },
     {
       "relativePath": "src/lib/types/index.ts",
@@ -393,6 +403,22 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Test mapping Inbox-to-task và liên kết nguồn."
+    },
+    {
+      "relativePath": "tests/workflow-runs-api.test.ts",
+      "fileName": "workflow-runs-api.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test truy vấn lịch sử owner-scoped, workflow filter và validation giới hạn truy vấn."
+    },
+    {
+      "relativePath": "tests/workflow-run-persistence.test.ts",
+      "fileName": "workflow-run-persistence.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test persistence database cho trạng thái, input, result, timestamps và thời lượng workflow run."
     },
     {
       "relativePath": "tests/schema-super-suite.test.ts",
@@ -535,24 +561,24 @@
       "fileName": "integrity.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Tạo và xác minh SHA-256 manifest theo payload data, timing-safe digest comparison và số lượng 26 nhóm dữ liệu."
+      "status": "modified",
+      "shortDescription": "Tạo và xác minh SHA-256 manifest theo payload data, timing-safe digest comparison và số lượng 27 nhóm dữ liệu gồm workflow run history."
     },
     {
       "relativePath": "tests/backup-integrity.test.ts",
       "fileName": "backup-integrity.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Kiểm thử canonical JSON, checksum, phát hiện payload bị sửa và manifest thống kê không hợp lệ."
+      "status": "modified",
+      "shortDescription": "Kiểm thử canonical JSON/checksum, phát hiện payload bị sửa và thống kê nhóm workflow run history."
     },
     {
       "relativePath": "tests/backup-import-preview.test.ts",
       "fileName": "backup-import-preview.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Kiểm thử API preview: không mở database, từ chối checksum sai và gắn nhãn rõ backup legacy chưa xác minh."
+      "status": "modified",
+      "shortDescription": "Kiểm thử preview không ghi database, từ chối checksum sai, hỗ trợ manifest 26 nhóm của bản production trước và đánh dấu backup legacy chưa xác minh."
     }
   ]
 }

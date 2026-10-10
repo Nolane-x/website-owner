@@ -30,8 +30,23 @@ interface TaskSummary {
   status: string;
 }
 
+interface WorkflowRun {
+  id: string;
+  workflowId: string;
+  triggerType: string;
+  status: string;
+  inputJson: Record<string, unknown>;
+  resultJson: Record<string, unknown> | null;
+  errorMessage: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
 interface RunResult {
   status: string;
+  runId?: string;
   result?: string;
   error?: string;
   totalTasks?: number;
@@ -80,6 +95,7 @@ export function WorkflowsApp() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
+  const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
   const [selectedInboxId, setSelectedInboxId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -94,29 +110,37 @@ export function WorkflowsApp() {
     [selectedWorkflowId, workflows],
   );
   const openInbox = useMemo(() => inboxItems.filter((item) => item.status === 'inbox'), [inboxItems]);
+  const selectedRuns = useMemo(
+    () => runs.filter((run) => run.workflowId === selectedWorkflowId).slice(0, 8),
+    [runs, selectedWorkflowId],
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [workflowResponse, inboxResponse, taskResponse] = await Promise.all([
+      const [workflowResponse, inboxResponse, taskResponse, runsResponse] = await Promise.all([
         fetch('/api/admin/workflows', { cache: 'no-store' }),
         fetch('/api/admin/inbox', { cache: 'no-store' }),
         fetch('/api/admin/tasks', { cache: 'no-store' }),
+        fetch('/api/admin/workflows/runs?limit=30', { cache: 'no-store' }),
       ]);
-      const [workflowPayload, inboxPayload, taskPayload] = await Promise.all([
+      const [workflowPayload, inboxPayload, taskPayload, runsPayload] = await Promise.all([
         workflowResponse.json(),
         inboxResponse.json(),
         taskResponse.json(),
+        runsResponse.json(),
       ]);
       if (!workflowResponse.ok) throw new Error(workflowPayload.error || 'Không tải được workflow.');
       if (!inboxResponse.ok) throw new Error(inboxPayload.error || 'Không tải được Inbox.');
       if (!taskResponse.ok) throw new Error(taskPayload.error || 'Không tải được danh sách task.');
+      if (!runsResponse.ok) throw new Error(runsPayload.error || 'Không tải được lịch sử chạy workflow.');
 
       const nextWorkflows = (workflowPayload.workflows || []) as Workflow[];
       setWorkflows(nextWorkflows);
       setInboxItems((inboxPayload.items || []) as InboxItem[]);
       setTasks((taskPayload.tasks || []) as TaskSummary[]);
+      setRuns((Array.isArray(runsPayload.runs) ? runsPayload.runs : []) as WorkflowRun[]);
       setSelectedWorkflowId((current) => nextWorkflows.some((workflow) => workflow.id === current) ? current : (nextWorkflows[0]?.id || ''));
       setSelectedInboxId((current) => {
         const nextInbox = (inboxPayload.items || []) as InboxItem[];
@@ -208,6 +232,8 @@ export function WorkflowsApp() {
       });
       const payload = await response.json() as RunResult;
       if (!response.ok || payload.status !== 'succeeded') {
+        // Non-success executions are persisted too (failed / unsupported trigger); refresh before surfacing the error.
+        await loadData();
         throw new Error(payload.error || 'Workflow không hoàn tất. Không được ghi nhận là thành công.');
       }
       setRunResult(payload);
@@ -318,6 +344,56 @@ export function WorkflowsApp() {
                   {runResult.sideEffects === false && <p className="text-[10px] text-stone-500 flex gap-1"><ShieldCheck className="w-3 h-3" />Chỉ đọc; không thay đổi dữ liệu.</p>}
                 </section>
               )}
+
+              <section className="rounded-2xl border border-stone-800 bg-stone-900/40 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-stone-300">Lịch sử chạy đã lưu</h3>
+                    <p className="text-[10px] text-stone-500 mt-1">Các lượt chạy được lưu trong database, kể cả lỗi và trigger chưa hỗ trợ.</p>
+                  </div>
+                  <span className="text-[10px] rounded-full px-2 py-1 bg-stone-800 text-stone-400">{selectedRuns.length} gần nhất</span>
+                </div>
+                {selectedRuns.length === 0 && <p className="rounded-xl border border-dashed border-stone-800 p-4 text-xs text-stone-500">Workflow này chưa có lượt chạy được ghi lại.</p>}
+                <div className="space-y-2">
+                  {selectedRuns.map((run) => {
+                    const statusLabel = run.status === 'succeeded'
+                      ? 'Thành công'
+                      : run.status === 'failed'
+                        ? 'Thất bại'
+                        : run.status === 'running'
+                          ? 'Đang chạy'
+                          : run.status === 'unsupported_trigger'
+                            ? 'Chưa hỗ trợ'
+                            : run.status === 'interrupted'
+                              ? 'Gián đoạn'
+                              : run.status;
+                    const statusClass = run.status === 'succeeded'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-800/70'
+                      : run.status === 'failed'
+                        ? 'bg-rose-500/10 text-rose-300 border-rose-800/70'
+                        : run.status === 'running'
+                          ? 'bg-sky-500/10 text-sky-300 border-sky-800/70'
+                          : 'bg-amber-500/10 text-amber-200 border-amber-800/70';
+                    const summary = typeof run.resultJson?.result === 'string'
+                      ? run.resultJson.result
+                      : run.errorMessage || 'Không có phần tóm tắt kết quả.';
+                    return (
+                      <article key={run.id} className="rounded-xl border border-stone-800 bg-stone-950/60 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${statusClass}`}>{statusLabel}</span>
+                          <span className="text-[10px] text-stone-500">{new Date(run.startedAt).toLocaleString('vi-VN')}</span>
+                        </div>
+                        <p className="mt-2 text-xs text-stone-200">{summary}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-stone-500">
+                          <span className="font-mono">#{run.id.slice(0, 8)}</span>
+                          {typeof run.durationMs === 'number' && <span>{run.durationMs} ms</span>}
+                          {run.finishedAt && <span>Hoàn tất: {new Date(run.finishedAt).toLocaleString('vi-VN')}</span>}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
             </>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-center py-10 text-stone-500">
@@ -325,7 +401,7 @@ export function WorkflowsApp() {
               <p className="text-sm">{loading ? 'Đang tải...' : 'Chọn workflow đã lưu hoặc tạo mẫu để bắt đầu.'}</p>
             </div>
           )}
-          <div className="text-[10px] text-stone-600 border-t border-stone-900 pt-3">Mỗi lần chạy đều gọi executor có phạm vi cụ thể. Lịch chạy nền và log lịch sử lâu dài chưa được bật; các trigger không hỗ trợ sẽ bị từ chối thay vì trả về thành công giả.</div>
+          <div className="text-[10px] text-stone-600 border-t border-stone-900 pt-3">Mỗi lần chạy gọi executor có phạm vi cụ thể và lịch sử thủ công được lưu trong database. Scheduler chạy nền chưa được bật; trigger không hỗ trợ sẽ được ghi là chưa hỗ trợ thay vì trả về thành công giả.</div>
         </main>
       </div>
     </div>

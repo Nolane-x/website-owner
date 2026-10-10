@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
-import { automationWorkflows, inboxItems, kanbanTasks } from '@/lib/db/schema';
+import { automationWorkflows, automationWorkflowRuns, inboxItems, kanbanTasks } from '@/lib/db/schema';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { buildInboxTaskPayload } from '@/lib/workflows/inbox-to-task';
 import crypto from 'crypto';
@@ -13,6 +13,11 @@ export async function POST(req: NextRequest) {
 
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
+
+  let database: ReturnType<typeof getDb> | null = null;
+  let runId: string | null = null;
+  let runStartedAt = 0;
+  let runProfileId: string | null = null;
 
   try {
     const body: unknown = await req.json();
@@ -26,6 +31,7 @@ export async function POST(req: NextRequest) {
 
     await initializeDatabase();
     const db = getDb();
+    database = db;
     const [workflow] = await db.select().from(automationWorkflows).where(and(
       eq(automationWorkflows.id, input.workflowId),
       eq(automationWorkflows.profileId, auth.profile.id),
@@ -37,18 +43,53 @@ export async function POST(req: NextRequest) {
     if (!workflow.isActive) {
       return NextResponse.json({ error: 'Workflow đang bị tắt. Hãy bật lại trước khi chạy.' }, { status: 409 });
     }
+    if (workflow.triggerType === 'inbox_to_task' &&
+        (typeof input.inboxItemId !== 'string' || !input.inboxItemId.trim())) {
+      return NextResponse.json({ error: 'Hãy chọn một mục Inbox trước khi chạy workflow.' }, { status: 400 });
+    }
+
+    runId = crypto.randomUUID();
+    runStartedAt = Date.now();
+    runProfileId = auth.profile.id;
+    await db.insert(automationWorkflowRuns).values({
+      id: runId,
+      profileId: auth.profile.id,
+      workflowId: workflow.id,
+      triggerType: workflow.triggerType,
+      status: 'running',
+      inputJson: { inboxItemId: typeof input.inboxItemId === 'string' ? input.inboxItemId : null },
+      startedAt: new Date(runStartedAt),
+      createdAt: new Date(runStartedAt),
+    });
+    const finishRun = async (
+      status: string,
+      resultJson: Record<string, unknown> | null = null,
+      errorMessage: string | null = null,
+    ) => {
+      const finishedAt = new Date();
+      await db.update(automationWorkflowRuns).set({
+        status,
+        resultJson,
+        errorMessage,
+        finishedAt,
+        durationMs: Math.max(0, finishedAt.getTime() - runStartedAt),
+      }).where(and(
+        eq(automationWorkflowRuns.id, runId as string),
+        eq(automationWorkflowRuns.profileId, auth.profile.id),
+      ));
+    };
 
     if (workflow.triggerType === 'inbox_to_task') {
-      if (typeof input.inboxItemId !== 'string' || !input.inboxItemId.trim()) {
-        return NextResponse.json({ error: 'Hãy chọn một mục Inbox trước khi chạy workflow.' }, { status: 400 });
-      }
+      const inboxItemId = input.inboxItemId as string;
       const [item] = await db.select().from(inboxItems).where(and(
-        eq(inboxItems.id, input.inboxItemId),
+        eq(inboxItems.id, inboxItemId),
         eq(inboxItems.profileId, auth.profile.id),
       )).limit(1);
 
       if (!item) {
-        return NextResponse.json({ error: 'Không tìm thấy mục Inbox thuộc tài khoản này.' }, { status: 404 });
+        const message = 'Không tìm thấy mục Inbox thuộc tài khoản này.';
+        await finishRun('failed', { reason: 'inbox_item_not_found' }, message);
+        return NextResponse.json({ error: message, runId }, { status: 404 });
       }
 
       // Idempotency at the application boundary: re-running the same item reuses its linked task.
@@ -73,7 +114,9 @@ export async function POST(req: NextRequest) {
           eq(kanbanTasks.profileId, auth.profile.id),
         )).limit(1);
         if (!task) {
-          return NextResponse.json({ error: 'Đã gửi yêu cầu tạo task nhưng không thể xác minh bản ghi. Hãy chạy lại để phục hồi an toàn.' }, { status: 500 });
+          const message = 'Đã gửi yêu cầu tạo task nhưng không thể xác minh bản ghi. Hãy chạy lại để phục hồi an toàn.';
+          await finishRun('failed', { reason: 'task_verification_failed' }, message);
+          return NextResponse.json({ error: message, runId }, { status: 500 });
         }
       }
 
@@ -84,10 +127,21 @@ export async function POST(req: NextRequest) {
         ));
       }
 
+      const resultMessage = alreadyCreated
+        ? 'Task đã tồn tại; đã tái sử dụng, không tạo trùng.'
+        : 'Task đã được tạo và liên kết với mục Inbox.';
+      await finishRun('succeeded', {
+        result: resultMessage,
+        taskId: task.id,
+        taskTitle: task.title,
+        inboxItemId: item.id,
+        idempotentReplay: alreadyCreated,
+      });
       return NextResponse.json({
         status: 'succeeded',
+        runId,
         workflowId: workflow.id,
-        result: alreadyCreated ? 'Task đã tồn tại; đã tái sử dụng, không tạo trùng.' : 'Task đã được tạo và liên kết với mục Inbox.',
+        result: resultMessage,
         task,
         inboxItemId: item.id,
         inboxStatus: 'converted',
@@ -104,23 +158,55 @@ export async function POST(req: NextRequest) {
         const due = new Date(dateOnly ? `${task.dueDate}T23:59:59` : task.dueDate);
         return Number.isFinite(due.getTime()) && due < now;
       });
-      return NextResponse.json({
-        status: 'succeeded',
-        workflowId: workflow.id,
-        result: `Đã kiểm tra ${tasks.length} task; ${overdue.length} task quá hạn chưa hoàn tất.`,
+      const overdueTasks = overdue.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, status: task.status }));
+      const resultMessage = `Đã kiểm tra ${tasks.length} task; ${overdue.length} task quá hạn chưa hoàn tất.`;
+      await finishRun('succeeded', {
+        result: resultMessage,
         totalTasks: tasks.length,
         overdueCount: overdue.length,
-        overdueTasks: overdue.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, status: task.status })),
+        overdueTasks,
+        sideEffects: false,
+      });
+      return NextResponse.json({
+        status: 'succeeded',
+        runId,
+        workflowId: workflow.id,
+        result: resultMessage,
+        totalTasks: tasks.length,
+        overdueCount: overdue.length,
+        overdueTasks,
         sideEffects: false,
       });
     }
 
+    const message = `Trigger "${workflow.triggerType}" hiện chưa có executor thật. Workflow chưa được chạy.`;
+    await finishRun('unsupported_trigger', { reason: 'unsupported_trigger' }, message);
     return NextResponse.json({
-      error: `Trigger "${workflow.triggerType}" hiện chưa có executor thật. Workflow chưa được chạy.`,
+      error: message,
       status: 'unsupported_trigger',
+      runId,
     }, { status: 422 });
   } catch (error) {
     console.error('Lỗi thực thi workflow:', error);
-    return NextResponse.json({ error: 'Workflow thất bại. Hệ thống không đánh dấu chạy thành công; hãy kiểm tra trạng thái dữ liệu trước khi thử lại.' }, { status: 500 });
+    if (database && runId && runProfileId) {
+      try {
+        const finishedAt = new Date();
+        await database.update(automationWorkflowRuns).set({
+          status: 'failed',
+          errorMessage: 'Workflow thất bại. Hãy kiểm tra dữ liệu trước khi thử lại.',
+          finishedAt,
+          durationMs: Math.max(0, finishedAt.getTime() - runStartedAt),
+        }).where(and(
+          eq(automationWorkflowRuns.id, runId),
+          eq(automationWorkflowRuns.profileId, runProfileId),
+        ));
+      } catch (historyError) {
+        console.error('Không thể ghi trạng thái thất bại của workflow run:', historyError);
+      }
+    }
+    return NextResponse.json({
+      error: 'Workflow thất bại. Hệ thống không đánh dấu chạy thành công; hãy kiểm tra trạng thái dữ liệu trước khi thử lại.',
+      runId: runId ?? undefined,
+    }, { status: 500 });
   }
 }

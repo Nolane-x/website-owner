@@ -26,6 +26,7 @@ import {
   researchSources,
   claims,
   automationWorkflows,
+  automationWorkflowRuns,
   habits,
   calendarEvents,
 } from '@/lib/db/schema';
@@ -63,6 +64,7 @@ export async function GET() {
       allResearch,
       allClaims,
       allWorkflows,
+      allWorkflowRuns,
       allHabits,
       allCalendarEvents,
     ] = await Promise.all([
@@ -86,6 +88,7 @@ export async function GET() {
       db.select().from(researchSources).where(eq(researchSources.profileId, auth.profile.id)),
       db.select().from(claims).where(eq(claims.profileId, auth.profile.id)),
       db.select().from(automationWorkflows).where(eq(automationWorkflows.profileId, auth.profile.id)),
+      db.select().from(automationWorkflowRuns).where(eq(automationWorkflowRuns.profileId, auth.profile.id)),
       db.select().from(habits).where(eq(habits.profileId, auth.profile.id)),
       db.select().from(calendarEvents).where(eq(calendarEvents.profileId, auth.profile.id)),
     ]);
@@ -139,6 +142,7 @@ export async function GET() {
         researchSources: allResearch,
         claims: allClaims,
         automationWorkflows: allWorkflows,
+        workflowRuns: allWorkflowRuns,
         habits: allHabits,
         calendarEvents: allCalendarEvents,
         settings: allSettings.map((s) => {
@@ -158,7 +162,7 @@ export async function GET() {
       blocksCount: allBlocks.length,
       collectionsCount: allCollections.length,
       tasksCount: allTasks.length,
-      modulesCount: 26,
+      modulesCount: 27,
     });
 
     return new NextResponse(JSON.stringify(responsePayload, null, 2), {

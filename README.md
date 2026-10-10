@@ -30,9 +30,9 @@
 - Quản lý tài nguyên số không làm nặng máy chủ cá nhân thông qua việc lưu trữ metadata và liên kết tới **Google Drive, GitHub, Mega, Notion, Figma...**
 
 ### 5. Sao Lưu & Khôi Phục JSON (JSON Backup & Restore)
-- Export dữ liệu ứng dụng thành JSON kèm manifest SHA-256 cho payload `data` và số lượng bản ghi của từng nhóm; trình duyệt kiểm tra checksum trước khi tải.
+- Export dữ liệu ứng dụng thành JSON kèm manifest SHA-256 cho payload `data` và số lượng bản ghi của từng nhóm; bao gồm workflow cùng lịch sử chạy đã lưu, trình duyệt kiểm tra checksum trước khi tải.
 - Import hỗ trợ bước preview không ghi database: xác minh checksum, hiển thị số lượng theo module và cảnh báo trước khi người dùng xác nhận restore.
-- Restore là thao tác thêm dữ liệu theo transaction, không thay thế hoặc đồng bộ database hiện có; chạy lại cùng backup có thể tạo bản sao trùng lặp. Backup legacy thiếu manifest được đánh dấu chưa xác minh. Checksum không phải chữ ký chống giả mạo và vẫn cần giữ bản sao ngoại tuyến an toàn.
+- Restore là thao tác thêm dữ liệu theo transaction, không thay thế hoặc đồng bộ database hiện có; chạy lại cùng backup có thể tạo bản sao trùng lặp. Workflow run history được phục hồi chỉ khi workflow nguồn được import và các ID quan hệ được ánh xạ lại. Backup legacy thiếu manifest được đánh dấu chưa xác minh. Checksum không phải chữ ký chống giả mạo và vẫn cần giữ bản sao ngoại tuyến an toàn.
 
 ---
 
@@ -143,7 +143,7 @@ Bảng dưới đây phân biệt tính năng đang có mã thực thi với cá
 | Desktop ảo / Window Manager | Có thao tác cửa sổ và lưu bố cục trong trình duyệt; đây không phải cửa sổ hệ điều hành thật. |
 | Inbox, Tasks, Notes, Projects, Research và các module dữ liệu | Nhiều luồng CRUD đã nối API và database; mức độ hoàn chỉnh khác nhau theo từng module. |
 | AI Copilot | Có lời gọi thật tới OpenAI-compatible API/Groq/Ollama và tìm kiếm từ khóa trong các API dữ liệu. Context riêng tư mặc định tắt. Chưa phải full RAG, multi-agent Mission Control hoặc agent tự chạy vô hạn. |
-| Workflow | Có executor cho Inbox → Task và báo cáo task quá hạn chỉ đọc. Trigger khác sẽ bị từ chối nếu chưa có executor; chưa có scheduler chạy nền hay timeline lịch sử bền vững. |
+| Workflow | Có executor cho Inbox → Task và báo cáo task quá hạn chỉ đọc; kết quả thành công/thất bại/trigger chưa hỗ trợ được lưu thành lịch sử bền vững có API lọc theo workflow. Chưa có scheduler chạy nền hoặc canvas compiler tổng quát. |
 | Creator Studio | Nội dung được lưu qua API; có thể gọi model thật để tạo dàn ý. Trạng thái “published” trong pipeline không tự đăng nội dung ra mạng xã hội. |
 | Calendar & Habits | Sự kiện lịch nội bộ và ngày hoàn thành thói quen được lưu trong database. Chưa có đồng bộ Google Calendar/Apple Calendar hoặc nhắc lịch khi ứng dụng đóng. |
 | Virtual Explorer / Backup | Hiển thị số bản ghi API; JSON export có manifest SHA-256 phạm vi `data` và per-module counts. Import có preview không ghi DB, xác minh checksum và yêu cầu xác nhận trước khi thêm dữ liệu trong transaction. Chưa phải trình duyệt file của ổ đĩa máy; checksum không chứng minh nguồn gốc tệp. |
