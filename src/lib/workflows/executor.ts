@@ -115,6 +115,29 @@ export async function executeWorkflowGraph(
     throw new WorkflowExecutionError('Workflow chưa có node có thể thực thi.', []);
   }
 
+  // Validate every operation before executing the first node. Otherwise an unsupported
+  // operation on a later branch could be discovered only after earlier nodes mutated data.
+  for (const node of compilation.order) {
+    try {
+      getOperation(node);
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : `Node “${node.title}” có operation không được phép.`;
+      const failedAt = new Date().toISOString();
+      throw new WorkflowExecutionError(message, [{
+        nodeId: node.id,
+        title: node.title,
+        type: node.type,
+        status: 'failed',
+        startedAt: failedAt,
+        finishedAt: failedAt,
+        durationMs: 0,
+        summary: message.slice(0, 500),
+      }]);
+    }
+  }
+
   const edges = Array.isArray(edgesValue) ? edgesValue as WorkflowEdge[] : [];
   const executionTrace: WorkflowExecutionTraceStep[] = [];
   const context: ExecutionContext = {

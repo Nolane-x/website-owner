@@ -154,16 +154,70 @@ describe('daily workflow scheduler', () => {
     const duplicate = await runDailyScheduledOverdueReports(db, new Date('2026-10-11T03:00:00.000Z'));
     expect(duplicate).toMatchObject({
       scheduleDate: '2026-10-11',
-      scanned: 1,
+      scanned: 0,
       succeeded: 0,
       failed: 0,
-      skippedAlreadyRun: 1,
+      skippedAlreadyRun: 0,
     });
     const runs = await db.select().from(automationWorkflowRuns).where(and(
       eq(automationWorkflowRuns.workflowId, workflowIds.scheduled),
       eq(automationWorkflowRuns.profileId, profileId),
     ));
     expect(runs).toHaveLength(2);
+  });
+
+  it('continues past the first 50 workflows without starving later schedules', async () => {
+    const db = getDb();
+    const batchIds = Array.from({ length: 51 }, (_, index) => (
+      `workflow-scheduler-batch-${crypto.randomUUID()}-${index}`
+    ));
+    const now = new Date('2026-10-10T22:00:00.000Z'); // 2026-10-11 in Vietnam.
+
+    await db.insert(automationWorkflows).values(batchIds.map((id, index) => ({
+      id,
+      profileId,
+      name: `Batch scheduled workflow ${index}`,
+      description: 'Scheduler fairness regression fixture',
+      triggerType: 'overdue_report' as const,
+      nodesJson: [],
+      edgesJson: [],
+      isActive: true,
+      scheduleEnabled: true,
+      createdAt: now,
+      updatedAt: now,
+    })));
+
+    const firstTick = await runDailyScheduledOverdueReports(db, now);
+    expect(firstTick).toMatchObject({
+      scheduleDate: '2026-10-11',
+      scanned: 50,
+      succeeded: 50,
+      failed: 0,
+    });
+
+    const secondTick = await runDailyScheduledOverdueReports(db, now);
+    expect(secondTick).toMatchObject({
+      scheduleDate: '2026-10-11',
+      scanned: 1,
+      succeeded: 1,
+      failed: 0,
+    });
+
+    const ownedWorkflows = await db.select().from(automationWorkflows).where(eq(
+      automationWorkflows.profileId,
+      profileId,
+    ));
+    const batchWorkflows = ownedWorkflows.filter((workflow) => batchIds.includes(workflow.id));
+    expect(batchWorkflows).toHaveLength(51);
+    expect(batchWorkflows.every((workflow) => workflow.lastScheduledFor === '2026-10-11')).toBe(true);
+
+    const ownedRuns = await db.select().from(automationWorkflowRuns).where(eq(
+      automationWorkflowRuns.profileId,
+      profileId,
+    ));
+    const batchRuns = ownedRuns.filter((run) => batchIds.includes(run.workflowId ?? ''));
+    expect(batchRuns).toHaveLength(51);
+    expect(batchRuns.every((run) => run.status === 'succeeded')).toBe(true);
   });
 
   afterAll(async () => {

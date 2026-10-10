@@ -3,9 +3,70 @@ import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { automationWorkflowRuns, automationWorkflows, kanbanTasks } from '@/lib/db/schema';
 import { buildOverdueReport, getVietnamDateKey } from '@/lib/workflows/overdue-report';
+import { compileWorkflowGraph } from '@/lib/workflows/compiler';
+import { executeWorkflowGraph, WorkflowExecutionError } from '@/lib/workflows/executor';
 
 const MAX_SCHEDULED_WORKFLOWS_PER_TICK = 50;
 const MAX_DURATION_MS = 2_147_483_647;
+const READ_ONLY_SCHEDULED_OPERATIONS = new Set([
+  'load_owner_tasks',
+  'overdue_tasks_exist',
+  'build_overdue_report',
+  'emit_no_overdue_report',
+]);
+
+type ScheduledWorkflow = typeof automationWorkflows.$inferSelect;
+type ScheduledPlan =
+  | { kind: 'legacy_read_only' }
+  | { kind: 'node_graph'; nodes: unknown[]; edges: unknown[] };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Only compile safe report graphs; never silently replace a user's custom DAG with a fixed report. */
+function compileScheduledPlan(workflow: ScheduledWorkflow): ScheduledPlan {
+  const nodes = Array.isArray(workflow.nodesJson) ? workflow.nodesJson as unknown[] : [];
+  const edges = Array.isArray(workflow.edgesJson) ? workflow.edgesJson as unknown[] : [];
+
+  // Empty historical definitions used the old, built-in read-only overdue-report executor.
+  if (nodes.length === 0 && edges.length === 0) return { kind: 'legacy_read_only' };
+
+  // Recognize only the exact unmodified legacy template; arbitrary/custom legacy graphs fail closed.
+  const legacyNodeIds = nodes.map((node) => isRecord(node) ? node.id : null);
+  if (workflow.name === 'Overdue Task Audit' &&
+      edges.length === 0 &&
+      legacyNodeIds.length === 3 &&
+      legacyNodeIds.every((id, index) => id === ['load', 'check', 'report'][index]) &&
+      nodes.every((node) => isRecord(node) && (
+        !Object.prototype.hasOwnProperty.call(node, 'config') ||
+        (isRecord(node.config) && !Object.prototype.hasOwnProperty.call(node.config, 'operation'))
+      ))) {
+    return { kind: 'legacy_read_only' };
+  }
+
+  if (!nodes.length || !nodes.every((node) => isRecord(node) &&
+      isRecord(node.config) && typeof node.config.operation === 'string' &&
+      READ_ONLY_SCHEDULED_OPERATIONS.has(node.config.operation))) {
+    throw new Error('Lịch tự động chỉ cho phép DAG gồm operation báo cáo quá hạn ở chế độ chỉ đọc.');
+  }
+
+  const compilation = compileWorkflowGraph(nodes, edges);
+  if (!compilation.valid || compilation.mode !== 'dag') {
+    throw new Error(`DAG báo cáo quá hạn không hợp lệ: ${compilation.errors.join(' ').slice(0, 350)}`);
+  }
+  const typesAreSafe = compilation.order.every((node) => {
+    const operation = node.config?.operation;
+    return (node.type === 'trigger' && operation === 'load_owner_tasks') ||
+      (node.type === 'condition' && operation === 'overdue_tasks_exist') ||
+      (node.type === 'action' && (operation === 'build_overdue_report' || operation === 'emit_no_overdue_report'));
+  });
+  if (!typesAreSafe) {
+    throw new Error('Operation báo cáo quá hạn không được gắn vào node type không tương thích.');
+  }
+
+  return { kind: 'node_graph', nodes, edges };
+}
 
 export interface ScheduledWorkflowTickResult {
   scheduleDate: string;
@@ -29,6 +90,10 @@ export async function runDailyScheduledOverdueReports(
     eq(automationWorkflows.isActive, true),
     eq(automationWorkflows.scheduleEnabled, true),
     eq(automationWorkflows.triggerType, 'overdue_report'),
+    or(
+      isNull(automationWorkflows.lastScheduledFor),
+      lt(automationWorkflows.lastScheduledFor, scheduleDate),
+    ),
   )).limit(MAX_SCHEDULED_WORKFLOWS_PER_TICK);
 
   const result: ScheduledWorkflowTickResult = {
@@ -80,7 +145,7 @@ export async function runDailyScheduledOverdueReports(
           startedAt: candidateStartedAt,
           createdAt: candidateStartedAt,
         });
-        return { profileId: claimed.profileId, runId: candidateRunId, startedAt: candidateStartedAt };
+        return { profileId: claimed.profileId, runId: candidateRunId, startedAt: candidateStartedAt, workflow: claimed };
       });
 
       if (!claim) {
@@ -91,18 +156,45 @@ export async function runDailyScheduledOverdueReports(
       runId = claim.runId;
       startedAt = claim.startedAt;
 
-      const tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, claim.profileId));
-      const report = buildOverdueReport(tasks, new Date());
-      const resultMessage = `Đã kiểm tra ${report.totalTasks} task; ${report.overdueCount} task quá hạn chưa hoàn tất.`;
-      const finishedAt = new Date();
-      await db.update(automationWorkflowRuns).set({
-        status: 'succeeded',
-        resultJson: {
-          result: resultMessage,
+      const plan = compileScheduledPlan(claim.workflow);
+      let reportResult: Record<string, unknown>;
+
+      if (plan.kind === 'node_graph') {
+        const executed = await executeWorkflowGraph(
+          db,
+          claim.profileId,
+          plan.nodes,
+          plan.edges,
+          {},
+          now,
+        );
+        if (executed.sideEffects !== false || executed.task || executed.inboxItemId) {
+          throw new Error('Scheduler từ chối kết quả có dấu hiệu ghi dữ liệu.');
+        }
+        reportResult = {
+          ...executed,
+          executorMode: 'node_graph',
+          compilerMode: 'dag',
+          compiledNodeIds: plan.nodes.map((node) => isRecord(node) ? node.id : null),
+        };
+      } else {
+        const tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, claim.profileId));
+        const report = buildOverdueReport(tasks, now);
+        reportResult = {
+          result: `Đã kiểm tra ${report.totalTasks} task; ${report.overdueCount} task quá hạn chưa hoàn tất.`,
           totalTasks: report.totalTasks,
           overdueCount: report.overdueCount,
           overdueTasks: report.overdueTasks,
           sideEffects: false,
+          executorMode: 'legacy_read_only',
+        };
+      }
+
+      const finishedAt = new Date();
+      await db.update(automationWorkflowRuns).set({
+        status: 'succeeded',
+        resultJson: {
+          ...reportResult,
           scheduleDate,
           timezone: 'Asia/Ho_Chi_Minh',
         },
@@ -123,7 +215,12 @@ export async function runDailyScheduledOverdueReports(
           const finishedAt = new Date();
           await db.update(automationWorkflowRuns).set({
             status: 'failed',
-            errorMessage: 'Lịch chạy tự động thất bại. Có thể chạy báo cáo thủ công sau khi kiểm tra hệ thống.',
+            resultJson: error instanceof WorkflowExecutionError
+              ? { executionTrace: error.executionTrace, source: 'vercel_cron', scheduleDate }
+              : null,
+            errorMessage: error instanceof Error
+              ? error.message.slice(0, 500)
+              : 'Lịch chạy tự động thất bại; hãy kiểm tra cấu hình workflow.',
             finishedAt,
             durationMs: Math.min(MAX_DURATION_MS, Math.max(0, finishedAt.getTime() - startedAt.getTime())),
           }).where(and(

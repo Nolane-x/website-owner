@@ -113,6 +113,64 @@ describe('safe workflow node executor', () => {
     expect(linkedTasks).toHaveLength(1);
   });
 
+  it('validates every operation before an earlier write node can mutate data', async () => {
+    const db = getDb();
+    const preflightInboxItemId = `workflow-preflight-inbox-${crypto.randomUUID()}`;
+    await db.insert(inboxItems).values({
+      id: preflightInboxItemId,
+      profileId,
+      title: 'Must remain untouched on unsafe workflow preflight',
+      kind: 'text',
+      textPreview: 'Synthetic regression fixture.',
+      sourceUri: 'https://example.test/preflight',
+      status: 'inbox',
+      tagsJson: ['preflight'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const nodes = [
+      opNode('load', 'trigger', 'Load Inbox', 'load_inbox_item'),
+      opNode('has-task', 'condition', 'Task already linked?', 'task_already_linked'),
+      opNode('reuse', 'action', 'Reuse linked task', 'reuse_linked_task'),
+      opNode('create', 'action', 'Create missing task', 'create_task_if_missing'),
+      opNode('mark', 'action', 'Mark Inbox converted', 'mark_inbox_converted'),
+      opNode('unsafe', 'action', 'Unsupported shell action', 'execute_shell'),
+    ];
+    const edges = [
+      edge('e1', 'load', 'has-task'),
+      edge('e2', 'has-task', 'reuse', 'true'),
+      edge('e3', 'has-task', 'create', 'false'),
+      edge('e4', 'reuse', 'mark'),
+      edge('e5', 'create', 'mark'),
+      edge('e6', 'mark', 'unsafe'),
+    ];
+
+    let captured: unknown;
+    try {
+      await executeWorkflowGraph(db, profileId, nodes, edges, { inboxItemId: preflightInboxItemId });
+    } catch (error) {
+      captured = error;
+    }
+
+    expect(captured).toBeInstanceOf(WorkflowExecutionError);
+    expect((captured as WorkflowExecutionError).executionTrace).toMatchObject([
+      { nodeId: 'unsafe', status: 'failed' },
+    ]);
+
+    const linkedTasks = await db.select().from(kanbanTasks).where(and(
+      eq(kanbanTasks.profileId, profileId),
+      eq(kanbanTasks.relatedItemId, preflightInboxItemId),
+    ));
+    expect(linkedTasks).toHaveLength(0);
+
+    const [item] = await db.select().from(inboxItems).where(and(
+      eq(inboxItems.id, preflightInboxItemId),
+      eq(inboxItems.profileId, profileId),
+    ));
+    expect(item.status).toBe('inbox');
+  });
+
   it('routes an overdue report down the true or false branch based on real database data', async () => {
     const db = getDb();
     const taskId = `workflow-executor-task-${crypto.randomUUID()}`;

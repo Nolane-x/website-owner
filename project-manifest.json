@@ -40,7 +40,7 @@
     },
     "functionalStatus": {
       "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
-      "workflows": "Persistent workflow definitions and durable run history. Preflight compiler validates DAGs and true/false branch labels; allowlisted node executor supports owner-scoped Inbox/task reads, idempotent task create/reuse, Inbox conversion and read-only overdue reporting. Node execution traces persist in run history; arbitrary shell/code, AI and approval actions fail closed until dedicated safe executors exist. Inbox conversion is transactional/row-locked and protected by a partial unique index; Vercel Cron schedules only the read-only overdue report with atomic per-Vietnam-day claims. CRON_SECRET is required in production.",
+      "workflows": "Persistent workflow definitions and durable run history. Preflight compiler validates DAGs and true/false branches; allowlisted node executor supports Inbox/task reads, idempotent task create/reuse, Inbox conversion and read-only overdue reporting with per-node traces. Inbox conversion is transactional/row-locked and protected by a partial unique index. Daily Vercel Cron executes only recognized legacy overdue reports or DAGs composed entirely of allowlisted read-only overdue operations; custom graphs with write operations fail closed and record their failure. Candidates already claimed for the Vietnam day are filtered before the 50-workflow batch limit to prevent starvation. Arbitrary shell/code, AI and approval actions are not enabled. CRON_SECRET is required in production.",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
@@ -606,7 +606,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Scheduler báo cáo quá hạn hằng ngày, claim nguyên tử theo owner/workflow/ngày Việt Nam, lưu lượt chạy bền vững và không hỗ trợ hành động tùy ý."
+      "shortDescription": "Vercel scheduler chỉ chạy workflow overdue legacy đã nhận diện hoặc DAG có allowlist operation chỉ đọc; graph tùy chỉnh không an toàn thất bại và ghi lý do vào history. Workflow đã claim trong ngày được lọc trước giới hạn 50 lượt để tránh bỏ đói lịch chạy sau; claim theo ngày Việt Nam vẫn nguyên tử."
     },
     {
       "relativePath": "src/app/api/cron/workflows/route.ts",
@@ -638,7 +638,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Kiểm thử database thật cho lịch chạy, phạm vi executor chỉ đọc, lịch sử và chống chạy trùng theo ngày."
+      "shortDescription": "Kiểm thử database cho lịch chạy, lịch sử, chống trùng theo ngày và đảm bảo scheduler tiếp tục xử lý workflow sau lô 50 đầu tiên."
     },
     {
       "relativePath": "tests/cron-workflows-api.test.ts",
@@ -702,7 +702,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Allowlisted graph executor with conditional branch routing, owner-scoped database operations, idempotent task creation, read-only reports, and per-node execution traces; arbitrary operations fail closed."
+      "shortDescription": "Allowlisted graph executor with conditional branch routing, owner-scoped database operations, idempotent task creation, read-only reports, and per-node execution traces; all node operations are preflight-validated before any graph side effect."
     },
     {
       "relativePath": "tests/workflow-executor.test.ts",
@@ -710,7 +710,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Integration tests for create/reuse branches, no-overdue/overdue reports, side-effect reporting, and fail-closed unknown operations."
+      "shortDescription": "Integration tests for create/reuse branches, no-overdue/overdue reports, side-effect reporting, fail-closed unknown operations, and prevention of writes when a later graph node is unsupported."
     },
     {
       "relativePath": "tests/workflow-run-api.test.ts",
@@ -719,6 +719,14 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "End-to-end workflow API tests verify a stored DAG executes through the allowlisted node executor, per-node trace persists to run history, and cyclic graphs are rejected before run creation."
+    },
+    {
+      "relativePath": "tests/workflow-scheduler-safety.test.ts",
+      "fileName": "workflow-scheduler-safety.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm thử database đảm bảo scheduler chạy được DAG báo cáo chỉ đọc theo nhánh thật, nhưng từ chối đồ thị tùy chỉnh có operation Inbox hoặc ghi dữ liệu."
     }
   ]
 }
