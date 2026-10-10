@@ -23,6 +23,10 @@ export function InboxApp() {
   const [filterStatus, setFilterStatus] = useState<InboxItemStatus | 'all'>('inbox');
   const [searchTerm, setSearchTerm] = useState('');
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // New item form
   const [title, setTitle] = useState('');
@@ -33,19 +37,50 @@ export function InboxApp() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchItems = useCallback(async () => {
+    setLoading(true);
     try {
-      const url = filterStatus === 'all' ? '/api/admin/inbox' : `/api/admin/inbox?status=${filterStatus}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items || []);
-      }
-    } catch (e) {
-      console.error('Lỗi tải Inbox:', e);
+      const params = new URLSearchParams({ limit: '100', offset: '0' });
+      if (filterStatus !== 'all') params.set('status', filterStatus);
+      const res = await fetch(`/api/admin/inbox?${params.toString()}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Không thể tải danh sách Inbox.');
+      const rows = Array.isArray(data.items) ? data.items as InboxItem[] : [];
+      setItems(rows);
+      setNextOffset(rows.length);
+      setHasMore(Boolean(data.pagination?.hasMore));
+      setErrorMessage(null);
+    } catch (error) {
+      console.error('Lỗi tải Inbox:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể tải danh sách Inbox.');
     } finally {
       setLoading(false);
     }
   }, [filterStatus]);
+
+  const loadMore = async () => {
+    if (!hasMore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const params = new URLSearchParams({ limit: '100', offset: String(nextOffset) });
+      if (filterStatus !== 'all') params.set('status', filterStatus);
+      const res = await fetch(`/api/admin/inbox?${params.toString()}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Không thể tải thêm mục Inbox.');
+      const rows = Array.isArray(data.items) ? data.items as InboxItem[] : [];
+      setItems((previous) => {
+        const knownIds = new Set(previous.map((item) => item.id));
+        return [...previous, ...rows.filter((item) => !knownIds.has(item.id))];
+      });
+      setNextOffset((previous) => previous + rows.length);
+      setHasMore(Boolean(data.pagination?.hasMore));
+      setErrorMessage(null);
+    } catch (error) {
+      console.error('Lỗi tải thêm Inbox:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể tải thêm mục Inbox.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     void Promise.resolve().then(() => {
@@ -76,15 +111,17 @@ export function InboxApp() {
         }),
       });
 
-      if (res.ok) {
-        setTitle('');
-        setTextPreview('');
-        setSourceUri('');
-        setTagInput('');
-        fetchItems();
-      }
-    } catch (e) {
-      console.error('Lỗi tạo mục Inbox:', e);
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Không thể tạo mục Inbox.');
+      setTitle('');
+      setTextPreview('');
+      setSourceUri('');
+      setTagInput('');
+      setErrorMessage(null);
+      void fetchItems();
+    } catch (error) {
+      console.error('Lỗi tạo mục Inbox:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể tạo mục Inbox.');
     } finally {
       setIsSubmitting(false);
     }
@@ -94,32 +131,14 @@ export function InboxApp() {
     if (convertingId) return;
     try {
       setConvertingId(item.id);
-      // 1. Create task in kanban
-      const taskRes = await fetch('/api/admin/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: item.title,
-          description: item.textPreview || (item.sourceUri ? `Nguồn: ${item.sourceUri}` : null),
-          status: 'todo',
-          priority: 'medium',
-          tags: item.tagsJson || [],
-        }),
-      });
-
-      if (taskRes.ok) {
-        // 2. Mark inbox item converted
-        const putRes = await fetch(`/api/admin/inbox/${item.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'converted' }),
-        });
-        if (putRes.ok) {
-          fetchItems();
-        }
-      }
-    } catch (e) {
-      console.error('Lỗi chuyển thành công việc:', e);
+      const res = await fetch(`/api/admin/inbox/${encodeURIComponent(item.id)}/convert`, { method: 'POST' });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Không thể chuyển thành công việc.');
+      setErrorMessage(null);
+      await fetchItems();
+    } catch (error) {
+      console.error('Lỗi chuyển thành công việc:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể chuyển thành công việc.');
     } finally {
       setConvertingId(null);
     }
@@ -127,24 +146,32 @@ export function InboxApp() {
 
   const handleUpdateStatus = async (id: string, newStatus: InboxItemStatus) => {
     try {
-      await fetch(`/api/admin/inbox/${id}`, {
+      const res = await fetch(`/api/admin/inbox/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      fetchItems();
-    } catch (e) {
-      console.error('Lỗi cập nhật trạng thái:', e);
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Không thể cập nhật trạng thái.');
+      setErrorMessage(null);
+      await fetchItems();
+    } catch (error) {
+      console.error('Lỗi cập nhật trạng thái:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể cập nhật trạng thái.');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa mục này khỏi Inbox?')) return;
     try {
-      await fetch(`/api/admin/inbox/${id}`, { method: 'DELETE' });
-      setItems((prev) => prev.filter((i) => i.id !== id));
-    } catch (e) {
-      console.error('Lỗi xóa mục Inbox:', e);
+      const res = await fetch(`/api/admin/inbox/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Không thể xóa mục Inbox.');
+      setErrorMessage(null);
+      await fetchItems();
+    } catch (error) {
+      console.error('Lỗi xóa mục Inbox:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể xóa mục Inbox.');
     }
   };
 
@@ -284,6 +311,11 @@ export function InboxApp() {
 
       {/* List items */}
       <div className="flex-1 overflow-auto p-3 space-y-2">
+        {errorMessage && (
+          <div role="alert" className="rounded-lg border border-rose-900/70 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-300">
+            {errorMessage}
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-12 text-stone-500">
             <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -401,6 +433,19 @@ export function InboxApp() {
               </div>
             </div>
           ))
+        )}
+        {!loading && hasMore && (
+          <div className="flex justify-center py-3">
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-700 bg-stone-900 px-4 py-2 text-[11px] text-stone-300 transition hover:border-stone-600 hover:text-white disabled:opacity-50"
+            >
+              {isLoadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {isLoadingMore ? 'Đang tải thêm...' : 'Tải thêm mục'}
+            </button>
+          </div>
         )}
       </div>
     </div>

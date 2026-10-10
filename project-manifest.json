@@ -791,6 +791,78 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "25 regression tests for task defaults, allowed status/priority, deadlines, field lengths, tag/subtask limits, sort order and sparse patches."
+    },
+    {
+      "relativePath": "README.md",
+      "fileName": "README.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Document Inbox API payload validation, safe URL restrictions, bounded pagination, visible error handling, and idempotent atomic Inbox-to-Task conversion."
+    },
+    {
+      "relativePath": "src/app/api/admin/inbox/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Validate Inbox list queries and capture payloads; enforce request-size limits, owner scoping, deterministic bounded pagination and typed client errors."
+    },
+    {
+      "relativePath": "src/app/api/admin/inbox/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Validate Inbox partial updates before database writes and retain owner-scoped read, update and delete behavior with explicit missing-item responses."
+    },
+    {
+      "relativePath": "src/app/api/admin/inbox/[id]/convert/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Expose the tested transaction-based, idempotent Inbox-to-Task conversion as an owner-authenticated endpoint."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/inbox-app.tsx",
+      "fileName": "inbox-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Add 100-item incremental Inbox loading, show API failures, check every mutation response, refresh lists safely and use atomic conversion instead of two independent writes."
+    },
+    {
+      "relativePath": "src/lib/inbox/validation.ts",
+      "fileName": "validation.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Shared Inbox create/patch/query validators with enum allowlists, text and tag limits, URL protocol/credential checks, sparse patch rules and page bounds."
+    },
+    {
+      "relativePath": "src/lib/inbox/request.ts",
+      "fileName": "request.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Read bounded Inbox JSON bodies and consistently map invalid JSON/schema to HTTP 400 and oversized requests to HTTP 413."
+    },
+    {
+      "relativePath": "tests/inbox-validation.test.ts",
+      "fileName": "inbox-validation.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "27 regression tests for Inbox payload normalization, field limits, enum values, malformed/unsafe URLs, tag arrays, patches and pagination bounds."
+    },
+    {
+      "relativePath": "tests/inbox-convert-api.test.ts",
+      "fileName": "inbox-convert-api.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test conversion endpoint success, idempotent replay, owner-scoped not-found responses and rejection of oversized IDs before database access."
     }
   ]
 }
