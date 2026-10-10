@@ -25,6 +25,16 @@ interface Workflow {
   updatedAt?: string;
 }
 
+interface WorkflowCompilation {
+  valid: boolean;
+  mode: 'empty' | 'legacy-linear' | 'dag';
+  nodeCount: number;
+  edgeCount: number;
+  order: Array<{ id: string; type: WorkflowNode['type']; title: string; description?: string }>;
+  errors: string[];
+  warnings: string[];
+}
+
 interface TaskSummary {
   id: string;
   title: string;
@@ -108,6 +118,8 @@ export function WorkflowsApp() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [compiling, setCompiling] = useState(false);
+  const [compiledGraph, setCompiledGraph] = useState<WorkflowCompilation | null>(null);
 
   const selectedWorkflow = useMemo(
     () => workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? null,
@@ -256,6 +268,35 @@ export function WorkflowsApp() {
     }
   };
 
+  const compileSelectedWorkflow = async () => {
+    if (!selectedWorkflow) return;
+    setCompiling(true);
+    setCompiledGraph(null);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch('/api/admin/workflows/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workflowId: selectedWorkflow.id }),
+      });
+      const payload = await response.json() as {
+        compilation?: WorkflowCompilation;
+        error?: string;
+        note?: string;
+      };
+      if (payload.compilation) setCompiledGraph(payload.compilation);
+      if (!response.ok || !payload.compilation?.valid) {
+        throw new Error(payload.error || payload.compilation?.errors?.join(' ') || 'Biên dịch workflow không thành công.');
+      }
+      setNotice(`Đã biên dịch ${payload.compilation.nodeCount} node theo chế độ ${payload.compilation.mode === 'dag' ? 'DAG' : payload.compilation.mode === 'legacy-linear' ? 'tuyến tính tương thích' : 'rỗng'}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không thể biên dịch workflow.');
+    } finally {
+      setCompiling(false);
+    }
+  };
+
   const runWorkflow = async () => {
     if (!selectedWorkflow) return;
     if (selectedWorkflow.triggerType === 'inbox_to_task' && !selectedInboxId) {
@@ -310,7 +351,7 @@ export function WorkflowsApp() {
           {loading && <div className="p-3 text-stone-500 text-xs">Đang tải...</div>}
           {!loading && workflows.length === 0 && <div className="p-3 rounded-lg border border-dashed border-stone-700 text-xs text-stone-400">Chưa có workflow nào được lưu. Nhấn “Thêm workflow mẫu” để tạo quy trình có executor thực tế.</div>}
           {workflows.map((workflow) => (
-            <button key={workflow.id} onClick={() => { setSelectedWorkflowId(workflow.id); setRunResult(null); setNotice(null); }} className={`w-full text-left p-3 rounded-xl border transition ${selectedWorkflowId === workflow.id ? 'bg-indigo-500/10 border-indigo-500/40' : 'bg-stone-900/70 border-stone-800 hover:border-stone-700'}`}>
+            <button key={workflow.id} onClick={() => { setSelectedWorkflowId(workflow.id); setRunResult(null); setCompiledGraph(null); setNotice(null); setError(null); }} className={`w-full text-left p-3 rounded-xl border transition ${selectedWorkflowId === workflow.id ? 'bg-indigo-500/10 border-indigo-500/40' : 'bg-stone-900/70 border-stone-800 hover:border-stone-700'}`}>
               <div className="flex items-start justify-between gap-2">
                 <span className="text-xs font-semibold text-stone-100">{workflow.name}</span>
                 <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${workflow.isActive ? 'bg-emerald-400' : 'bg-stone-600'}`} />
@@ -348,6 +389,7 @@ export function WorkflowsApp() {
                   </label>
                 )}
                 <div className="flex flex-wrap gap-2">
+                  <button onClick={() => void compileSelectedWorkflow()} disabled={compiling || loading || running} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-sky-800/70 bg-sky-950/30 hover:bg-sky-900/40 text-sky-200 text-xs font-semibold disabled:opacity-40"><GitBranch className={`w-4 h-4 ${compiling ? 'animate-pulse' : ''}`} />{compiling ? 'Đang biên dịch...' : 'Kiểm tra & biên dịch DAG'}</button>
                   <button onClick={() => void runWorkflow()} disabled={running || loading || !selectedWorkflow.isActive || (selectedWorkflow.triggerType === 'inbox_to_task' && !selectedInboxId) || !['inbox_to_task','overdue_report'].includes(selectedWorkflow.triggerType)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40"><Play className={`w-4 h-4 ${running ? 'animate-pulse' : ''}`} />{running ? 'Đang thực thi...' : 'Chạy workflow thật'}</button>
                   <button onClick={() => void toggleWorkflow()} disabled={loading || running} className="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs">{selectedWorkflow.isActive ? 'Tắt workflow' : 'Bật workflow'}</button>
                 </div>
@@ -376,6 +418,34 @@ export function WorkflowsApp() {
                   </div>
                 )}
               </section>
+
+              {compiledGraph && (
+                <section className={`rounded-2xl border p-4 space-y-3 ${compiledGraph.valid ? 'border-sky-800/60 bg-sky-950/15' : 'border-rose-800/60 bg-rose-950/15'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-stone-200">Kế hoạch biên dịch</h3>
+                      <p className="text-[10px] text-stone-500 mt-1">{compiledGraph.nodeCount} node · {compiledGraph.edgeCount} cạnh · chế độ {compiledGraph.mode}</p>
+                    </div>
+                    <span className={`text-[10px] rounded-full border px-2 py-1 ${compiledGraph.valid ? 'border-sky-800 text-sky-200' : 'border-rose-800 text-rose-200'}`}>{compiledGraph.valid ? 'Cấu trúc hợp lệ' : 'Có lỗi'}</span>
+                  </div>
+                  {compiledGraph.errors.map((message, index) => <p key={`error-${index}`} className="text-xs text-rose-200">• {message}</p>)}
+                  {compiledGraph.warnings.map((message, index) => <p key={`warning-${index}`} className="text-xs text-amber-200">Lưu ý: {message}</p>)}
+                  {compiledGraph.valid && compiledGraph.order.length > 0 && (
+                    <ol className="space-y-1.5">
+                      {compiledGraph.order.map((node, index) => (
+                        <li key={node.id} className="flex items-start gap-2 rounded-lg bg-stone-950/60 px-3 py-2">
+                          <span className="w-5 h-5 shrink-0 rounded-md bg-sky-500/10 text-sky-200 flex items-center justify-center text-[10px] font-bold">{index + 1}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs text-stone-100">{node.title}</span>
+                            <span className="block text-[10px] text-stone-500">{node.type} · ID: {node.id}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  <p className="text-[10px] text-stone-500">Biên dịch xác minh cấu trúc và thứ tự node; không có nghĩa mọi node AI/action/approval đều đã có executor. Hiện runtime chỉ thực thi các trigger được hỗ trợ rõ ràng.</p>
+                </section>
+              )}
 
               <section className="space-y-3">
                 <div className="flex items-center justify-between">

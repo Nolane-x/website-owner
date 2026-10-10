@@ -6,6 +6,7 @@ import { automationWorkflows, automationWorkflowRuns, inboxItems, kanbanTasks } 
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { buildInboxTaskPayload } from '@/lib/workflows/inbox-to-task';
 import { buildOverdueReport } from '@/lib/workflows/overdue-report';
+import { compileWorkflowGraph } from '@/lib/workflows/compiler';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -49,6 +50,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Hãy chọn một mục Inbox trước khi chạy workflow.' }, { status: 400 });
     }
 
+    const compilation = compileWorkflowGraph(workflow.nodesJson, workflow.edgesJson);
+    if (!compilation.valid) {
+      return NextResponse.json({
+        error: 'Workflow có đồ thị không hợp lệ và chưa được thực thi.',
+        details: compilation.errors,
+        compilation,
+      }, { status: 422 });
+    }
+
     runId = crypto.randomUUID();
     runStartedAt = Date.now();
     runProfileId = auth.profile.id;
@@ -58,7 +68,12 @@ export async function POST(req: NextRequest) {
       workflowId: workflow.id,
       triggerType: workflow.triggerType,
       status: 'running',
-      inputJson: { inboxItemId: typeof input.inboxItemId === 'string' ? input.inboxItemId : null },
+      inputJson: {
+        inboxItemId: typeof input.inboxItemId === 'string' ? input.inboxItemId : null,
+        compilerMode: compilation.mode,
+        compiledNodeIds: compilation.order.map((node) => node.id),
+        compilationWarnings: compilation.warnings,
+      },
       startedAt: new Date(runStartedAt),
       createdAt: new Date(runStartedAt),
     });

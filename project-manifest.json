@@ -40,7 +40,7 @@
     },
     "functionalStatus": {
       "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
-      "workflows": "Persistent workflow definitions and durable run history (succeeded/failed/unsupported/interrupted), bounded owner-scoped history API and stale-run reconciliation. Inbox-to-task remains manual; active overdue reports can be scheduled daily by a CRON_SECRET-protected Vercel Cron with atomic once-per-Vietnam-day claims. No generic workflow compiler or arbitrary-action scheduler.",
+      "workflows": "Persistent workflow definitions and durable run history (succeeded/failed/unsupported/interrupted), bounded owner-scoped history API and stale-run reconciliation. A deterministic preflight compiler validates legacy-linear plans and DAG graphs (cycles, dangling edges, duplicate IDs, unreachable nodes, stable topological order) before save/run. Inbox-to-task remains manual; active overdue reports can be scheduled daily by a CRON_SECRET-protected Vercel Cron with atomic once-per-Vietnam-day claims. Generic node/action/AI/approval execution and arbitrary-action scheduling are still not implemented.",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
@@ -123,6 +123,7 @@
       "/api/admin/decisions",
       "/api/admin/decisions/[id]",
       "/api/admin/workflows",
+      "/api/admin/workflows/compile",
       "/api/admin/workflows/run",
       "/api/admin/workflows/runs",
       "/api/admin/creator",
@@ -197,7 +198,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Cập nhật mô hình dữ liệu, backup manifest/preview/checksum, endpoint, giới hạn bảo mật và trạng thái chức năng thực tế."
+      "shortDescription": "Cập nhật mô hình dữ liệu, backup checksum/preview, cron workflow, API biên dịch DAG, bảo mật và trạng thái chức năng thực tế."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -221,7 +222,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Xác minh ownership và kết quả thực lưu khi tạo/cập nhật workflow."
+      "shortDescription": "Từ chối đồ thị workflow sai cấu trúc trước khi lưu và vẫn giữ lịch tự động nếu trường scheduleEnabled bị bỏ qua lúc cập nhật."
     },
     {
       "relativePath": "src/app/api/admin/workflows/run/route.ts",
@@ -229,7 +230,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Ghi lịch sử chạy bền vững gồm input, trạng thái, kết quả/lỗi và thời lượng; executor giới hạn Inbox-to-task/quá hạn."
+      "shortDescription": "Biên dịch/kiểm tra workflow trước khi chạy, từ chối DAG hỏng và lưu chế độ/thứ tự biên dịch vào input history."
     },
     {
       "relativePath": "src/app/api/admin/workflows/runs/route.ts",
@@ -333,7 +334,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Hiển thị lịch sử workflow đã lưu bền vững cùng trạng thái, kết quả/lỗi, ID và thời lượng."
+      "shortDescription": "Thêm thao tác kiểm tra & biên dịch DAG, hiển thị thứ tự node, cảnh báo và lỗi; không đánh đồng cấu trúc hợp lệ với executor đã hoàn thiện."
     },
     {
       "relativePath": "src/components/layout/admin-shell.tsx",
@@ -445,7 +446,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Bổ sung trạng thái triển khai thật của Web OS 5.0 và cách dùng Copilot không giả lập."
+      "shortDescription": "Cập nhật giới hạn Workflow Runtime sau khi thêm preflight compiler và xác thực DAG."
     },
     {
       "relativePath": "DEPLOYMENT.md",
@@ -646,6 +647,38 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Kiểm thử cron endpoint không cho truy cập database trước khi bearer secret được xác thực và báo 503 khi thiếu cấu hình."
+    },
+    {
+      "relativePath": "src/lib/workflows/compiler.ts",
+      "fileName": "compiler.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Biên dịch định nghĩa workflow dạng DAG/tuyến tính tương thích với kiểm tra ID, type, config, giới hạn node/cạnh, chu trình, cạnh sai, node mồ côi và thứ tự topo ổn định."
+    },
+    {
+      "relativePath": "src/app/api/admin/workflows/compile/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "API owner-scoped để kiểm tra và biên dịch workflow đã lưu; nêu rõ capability executor riêng biệt, không coi compile là bằng chứng các action đã thực thi."
+    },
+    {
+      "relativePath": "tests/workflow-compiler.test.ts",
+      "fileName": "workflow-compiler.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm thử topo order, legacy linear, chu trình, cạnh trỏ sai, node mồ côi, ID trùng, type/config/position sai và giới hạn kích thước."
+    },
+    {
+      "relativePath": "tests/workflow-compile-api.test.ts",
+      "fileName": "workflow-compile-api.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm thử owner scope, xác thực đầu vào, lỗi DAG và capability của API biên dịch workflow."
     }
   ]
 }

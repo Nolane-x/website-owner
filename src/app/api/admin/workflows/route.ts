@@ -6,6 +6,8 @@ import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
+import { compileWorkflowGraph } from '@/lib/workflows/compiler';
+import type { WorkflowEdge, WorkflowNode } from '@/lib/types';
 
 export async function GET() {
   const auth = await requireOwner();
@@ -47,6 +49,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Chỉ workflow báo cáo quá hạn (chỉ đọc) được bật lịch tự động.' }, { status: 400 });
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, 'nodes') && !Array.isArray(body.nodes)) {
+      return NextResponse.json({ error: 'nodes phải là một mảng.' }, { status: 400 });
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'edges') && !Array.isArray(body.edges)) {
+      return NextResponse.json({ error: 'edges phải là một mảng.' }, { status: 400 });
+    }
+    const nodes = Array.isArray(body.nodes) ? body.nodes : [];
+    const edges = Array.isArray(body.edges) ? body.edges : [];
+    const compilation = compileWorkflowGraph(nodes, edges);
+    if (!compilation.valid) {
+      return NextResponse.json({
+        error: 'Đồ thị workflow không hợp lệ nên chưa được lưu.',
+        details: compilation.errors,
+      }, { status: 400 });
+    }
+
     const name = sanitizePlain(body.name || '');
     if (!name) {
       return NextResponse.json({ error: 'Tên quy trình là bắt buộc.' }, { status: 400 });
@@ -59,8 +77,8 @@ export async function POST(req: NextRequest) {
       name,
       description: body.description ? sanitizePlain(body.description) : null,
       triggerType: body.triggerType || 'manual',
-      nodesJson: Array.isArray(body.nodes) ? body.nodes : [],
-      edgesJson: Array.isArray(body.edges) ? body.edges : [],
+      nodesJson: nodes as unknown as WorkflowNode[],
+      edgesJson: edges as unknown as WorkflowEdge[],
       isActive: body.isActive !== false,
       scheduleEnabled: body.scheduleEnabled === true,
       updatedAt: new Date(),
