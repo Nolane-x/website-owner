@@ -5,19 +5,38 @@ import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { habits } from '@/lib/db/schema';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
-import { sanitizePlain } from '@/lib/security/sanitize';
+import { parseHabitCreateInput, parseListQuery } from '@/lib/calendar-habits/validation';
+import { calendarHabitsErrorResponse, readCalendarHabitsJsonBody } from '@/lib/calendar-habits/request';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
+
   try {
+    const { searchParams } = new URL(req.url);
+    const query = parseListQuery({
+      limit: searchParams.get('limit'),
+      offset: searchParams.get('offset'),
+    });
     await initializeDatabase();
     const db = getDb();
-    const records = await db.select().from(habits)
+    const rows = await db.select().from(habits)
       .where(eq(habits.profileId, auth.profile.id))
-      .orderBy(asc(habits.createdAt));
-    return NextResponse.json({ habits: records });
+      .orderBy(asc(habits.createdAt), asc(habits.id))
+      .limit(query.limit + 1)
+      .offset(query.offset);
+
+    return NextResponse.json({
+      habits: rows.slice(0, query.limit),
+      pagination: {
+        limit: query.limit,
+        offset: query.offset,
+        hasMore: rows.length > query.limit,
+      },
+    });
   } catch (error) {
+    const response = calendarHabitsErrorResponse(error);
+    if (response) return response;
     console.error('Không thể tải habits:', error);
     return NextResponse.json({ error: 'Không thể tải danh sách thói quen.' }, { status: 500 });
   }
@@ -30,33 +49,28 @@ export async function POST(req: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
-    const body = await req.json() as { name?: unknown; target?: unknown };
-    const name = typeof body.name === 'string' ? sanitizePlain(body.name).trim() : '';
-    const target = typeof body.target === 'string' ? sanitizePlain(body.target).trim() : 'Hàng ngày';
-    if (!name || name.length > 160) {
-      return NextResponse.json({ error: 'Tên thói quen phải có từ 1 đến 160 ký tự.' }, { status: 400 });
-    }
-    if (target.length > 100) {
-      return NextResponse.json({ error: 'Mục tiêu thói quen không được quá 100 ký tự.' }, { status: 400 });
-    }
-
+    const input = parseHabitCreateInput(await readCalendarHabitsJsonBody(req));
     await initializeDatabase();
     const db = getDb();
-    const id = `habit-${crypto.randomUUID()}`;
+    const id = 'habit-' + crypto.randomUUID();
     await db.insert(habits).values({
       id,
       profileId: auth.profile.id,
-      name,
-      target: target || 'Hàng ngày',
+      ...input,
       completedDatesJson: [],
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const [created] = await db.select().from(habits).where(and(eq(habits.id, id), eq(habits.profileId, auth.profile.id))).limit(1);
-    if (!created) return NextResponse.json({ error: 'Không thể xác minh bản ghi sau khi tạo.' }, { status: 500 });
+    const [created] = await db.select().from(habits).where(and(
+      eq(habits.id, id),
+      eq(habits.profileId, auth.profile.id),
+    )).limit(1);
+    if (!created) return NextResponse.json({ error: 'Không thể xác minh thói quen sau khi tạo.' }, { status: 500 });
     return NextResponse.json({ habit: created }, { status: 201 });
   } catch (error) {
+    const response = calendarHabitsErrorResponse(error);
+    if (response) return response;
     console.error('Không thể tạo habit:', error);
     return NextResponse.json({ error: 'Không thể tạo thói quen.' }, { status: 500 });
   }

@@ -42,7 +42,7 @@
       "copilot": "Shared multi-provider AI catalog with OpenAI-compatible presets (OpenAI, Gemini, Groq, DeepSeek, OpenRouter, Mistral, Together, Fireworks, xAI, Cerebras, Perplexity, Cohere, NVIDIA NIM, SambaNova, SiliconFlow, Hugging Face, DeepInfra, Hyperbolic, Novita, Nebius), native Anthropic Messages, Ollama, LM Studio/vLLM/llama.cpp/LiteLLM and custom compatible endpoints; supports model-list discovery where available, manual model IDs, URL validation, per-request timeout and direct-browser key handling without persistence. Personal-data retrieval remains keyword-based, not full RAG or agent runtime.",
       "workflows": "Persistent workflow definitions and durable run history. Preflight compiler validates DAGs and true/false branches; allowlisted node executor supports Inbox/task reads, idempotent task create/reuse, Inbox conversion and read-only overdue reporting with per-node traces. Inbox conversion is transactional/row-locked and protected by a partial unique index. Daily Vercel Cron executes only recognized legacy overdue reports or DAGs composed entirely of allowlisted read-only overdue operations; custom graphs with write operations fail closed and record their failure. Candidates already claimed for the Vietnam day are filtered before the 50-workflow batch limit to prevent starvation. Arbitrary shell/code, AI and approval actions are not enabled. CRON_SECRET is required in production.",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
-      "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
+      "calendarHabits": "Owner-scoped database-backed events and habits with strict ISO/date/timezone and size validation, bounded pagination, and 64 KiB request caps. Habit completion uses per-day desired-state updates inside a row-locked transaction, retries are idempotent, and generic habit patches reject whole-array history replacement to prevent concurrent lost updates. UI supports incremental loading, all-day events, event editing, habit pause/resume and explicit request failures; external calendar sync remains unimplemented.",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
       "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
       "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage",
@@ -134,6 +134,7 @@
       "/api/admin/projects/cockpit",
       "/api/admin/habits",
       "/api/admin/habits/[id]",
+      "/api/admin/habits/[id]/completion",
       "/api/admin/calendar-events",
       "/api/admin/calendar-events/[id]"
     ],
@@ -863,6 +864,102 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Test conversion endpoint success, idempotent replay, owner-scoped not-found responses and rejection of oversized IDs before database access."
+    },
+    {
+      "relativePath": "README.md",
+      "fileName": "README.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Document strict Calendar/Habits API validation, bounded requests and pagination, row-locked idempotent per-day completion, all-day/event editing UI and inactive-habit controls."
+    },
+    {
+      "relativePath": "src/app/api/admin/calendar-events/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply strict ISO/date/timezone validation, a 64 KiB JSON body bound, strict owner-scoped filtering and stable bounded pagination to Calendar APIs."
+    },
+    {
+      "relativePath": "src/app/api/admin/calendar-events/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Validate merged event patches before writing, reject invalid ranges and oversized IDs, preserve owner-scoped mutation and return predictable 400/404 errors."
+    },
+    {
+      "relativePath": "src/app/api/admin/habits/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Validate habit create data and cap request size; return owner-scoped stable pagination with strict limits rather than an unbounded list."
+    },
+    {
+      "relativePath": "src/app/api/admin/habits/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Restrict partial updates to name/target/isActive; reject whole-array completion-history replacement to close the stale-write/lost-update path."
+    },
+    {
+      "relativePath": "src/app/api/admin/habits/[id]/completion/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Add owner-authenticated per-day completion endpoint with bounded JSON parsing, explicit boolean state, strict date keys and transaction-backed idempotent updates."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/calendar-habits-app.tsx",
+      "fileName": "calendar-habits-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Add incremental event/habit loading, safe day-level completion calls, all-day events, edit/cancel event UI, pause/reactivate habit controls and explicit API error handling."
+    },
+    {
+      "relativePath": "src/lib/calendar-habits/validation.ts",
+      "fileName": "validation.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Shared validators enforce valid dates and strict timezone-qualified timestamps, IANA timezone and field bounds, supported patch keys and numeric pagination limits."
+    },
+    {
+      "relativePath": "src/lib/calendar-habits/request.ts",
+      "fileName": "request.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Parse only JSON object request bodies, enforce the 64 KiB actual/declarative payload ceiling, and map invalid input/oversized body to 400/413."
+    },
+    {
+      "relativePath": "src/lib/calendar-habits/completion.ts",
+      "fileName": "completion.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Perform owner-scoped per-date habit completion under a row lock inside a transaction; idempotently add/remove one date, verify the committed invariant and prevent lost updates."
+    },
+    {
+      "relativePath": "tests/calendar-habits-validation.test.ts",
+      "fileName": "calendar-habits-validation.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Regression tests for invalid/ambiguous dates, timezone-qualified timestamps, end-before-start, field limits, unknown patches, payload byte bounds and strict pagination."
+    },
+    {
+      "relativePath": "tests/habit-completion-concurrency.test.ts",
+      "fileName": "habit-completion-concurrency.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Database concurrency regressions prove parallel per-day updates preserve each other, retries are idempotent, removing one date preserves others and another owner cannot read/update the habit."
     }
   ]
 }
