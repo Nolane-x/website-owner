@@ -32,6 +32,7 @@ import {
 import { eq, inArray } from 'drizzle-orm';
 import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
+import { createBackupIntegrity } from '@/lib/backup/integrity';
 
 export async function GET() {
   const auth = await requireOwner();
@@ -149,6 +150,7 @@ export async function GET() {
         }),
       },
     };
+    const responsePayload = { ...exportPayload, integrity: createBackupIntegrity(exportPayload.data) };
 
     await logSecurityEvent(auth.profile.id, SECURITY_EVENT_TYPES.EXPORT_DOWNLOADED, {
       itemsCount: items.length,
@@ -159,7 +161,7 @@ export async function GET() {
       modulesCount: 26,
     });
 
-    return new NextResponse(JSON.stringify(exportPayload, null, 2), {
+    return new NextResponse(JSON.stringify(responsePayload, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

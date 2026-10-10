@@ -37,6 +37,7 @@ import { logSecurityEvent } from '@/lib/security/audit';
 import { SECURITY_EVENT_TYPES } from '@/lib/security/constants';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { sanitizePlain } from '@/lib/security/sanitize';
+import { BACKUP_ARRAY_KEYS, getBackupRecordCounts, verifyBackupIntegrity } from '@/lib/backup/integrity';
 
 const MAX_IMPORT_BYTES = 4.5 * 1024 * 1024; // 4.5MB giới hạn an toàn Vercel Functions (F2-17)
 
@@ -58,10 +59,20 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await initializeDatabase();
-    const db = getDb();
-    const body = (await req.json()) as {
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_IMPORT_BYTES) {
+      return NextResponse.json({ error: 'Tệp sao lưu vượt quá dung lượng tối đa cho phép (4.5 MB).' }, { status: 413 });
+    }
+    let parsedBody: unknown;
+    try {
+      parsedBody = JSON.parse(rawBody) as unknown;
+    } catch {
+      return NextResponse.json({ error: 'Nội dung backup không phải JSON hợp lệ.' }, { status: 400 });
+    }
+    const body = parsedBody as {
       version?: string;
+      mode?: string;
+      integrity?: unknown;
       data?: {
         contentItems?: Array<Record<string, unknown>>;
         pages?: Array<Record<string, unknown>>;
@@ -94,19 +105,65 @@ export async function POST(req: NextRequest) {
     };
 
     // F2-15: Xác minh cấu trúc schema tệp backup
-    if (!body || typeof body !== 'object' || !body.data || typeof body.data !== 'object') {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || !body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
       return NextResponse.json(
         { error: 'Tệp sao lưu không đúng cấu trúc schema hợp lệ.' },
         { status: 400 }
       );
     }
 
-    if (body.version && !body.version.startsWith('5.')) {
+    if (body.version !== undefined && (typeof body.version !== 'string' || !body.version.startsWith('5.'))) {
       return NextResponse.json(
-        { error: `Phiên bản sao lưu (${body.version}) không tương thích với Web OS 5.0.` },
+        { error: `Phiên bản sao lưu (${String(body.version)}) không tương thích với Web OS 5.0.` },
         { status: 400 }
       );
     }
+
+    if (body.mode !== undefined && body.mode !== 'preview' && body.mode !== 'restore') {
+      return NextResponse.json({ error: 'Chế độ import không hợp lệ. Hãy dùng preview hoặc restore.' }, { status: 400 });
+    }
+
+    const dataRecord = body.data as Record<string, unknown>;
+    const validatedArrayKeys = [...BACKUP_ARRAY_KEYS, 'creatorItems'];
+    for (const key of validatedArrayKeys) {
+      const value = dataRecord[key];
+      if (value !== undefined && !Array.isArray(value)) {
+        return NextResponse.json({ error: `Trường dữ liệu "${key}" phải là một mảng.` }, { status: 400 });
+      }
+      if (Array.isArray(value) && value.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) {
+        return NextResponse.json({ error: `Trường dữ liệu "${key}" chứa hàng không hợp lệ.` }, { status: 400 });
+      }
+    }
+
+    // A present checksum must always validate. Older backups without a manifest remain importable with an explicit warning.
+    if (body.integrity !== undefined && !verifyBackupIntegrity(body.data, body.integrity)) {
+      return NextResponse.json({ error: 'Checksum SHA-256 của backup không khớp. Tệp có thể đã hỏng hoặc bị chỉnh sửa; đã từ chối import.' }, { status: 400 });
+    }
+
+    const recordCounts = getBackupRecordCounts(body.data);
+    if (body.mode === 'preview') {
+      const totalRecords = Object.values(recordCounts).reduce((sum, count) => sum + count, 0);
+      const warnings = [
+        'Import sẽ thêm các bản ghi mới; không tự xóa hoặc ghi đè dữ liệu đang có.',
+        'Các hàng thiếu trường bắt buộc hoặc liên kết tham chiếu không hợp lệ có thể bị bỏ qua khi restore.',
+      ];
+      if (body.integrity === undefined) warnings.unshift('Backup cũ không có manifest SHA-256; không thể xác minh tính toàn vẹn hồi tố.');
+      return NextResponse.json({
+        success: true,
+        mode: 'preview',
+        version: body.version || 'legacy',
+        integrity: body.integrity === undefined ? 'legacy-unverified' : 'verified',
+        digest: body.integrity && typeof body.integrity === 'object' && 'digest' in body.integrity
+          ? String((body.integrity as { digest: unknown }).digest)
+          : null,
+        totalRecords,
+        recordCounts,
+        warnings,
+      });
+    }
+
+    await initializeDatabase();
+    const db = getDb();
 
     const {
       contentItems: items,

@@ -2,7 +2,20 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Folder, Database, Download, ShieldCheck, HardDrive, FileCode, RefreshCw, AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Folder, Database, Download, ShieldCheck, HardDrive, FileCode, RefreshCw, AlertTriangle, CheckCircle2, ExternalLink, Upload, FileCheck2 } from 'lucide-react';
+import { canonicalJson } from '@/lib/backup/json';
+
+const MAX_IMPORT_BYTES = 4.5 * 1024 * 1024;
+
+interface BackupPreview {
+  version: string;
+  integrity: 'verified' | 'legacy-unverified';
+  digest: string | null;
+  totalRecords: number;
+  recordCounts: Record<string, number>;
+  warnings: string[];
+}
+type BackupPayload = Record<string, unknown>;
 
 interface TableStat {
   name: string;
@@ -31,6 +44,12 @@ export function FilesApp() {
   const [inspectionError, setInspectionError] = useState<string | null>(null);
   const [backupState, setBackupState] = useState<'idle' | 'working' | 'done' | 'error'>('idle');
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
+  const [importState, setImportState] = useState<'idle' | 'previewing' | 'ready' | 'importing' | 'done' | 'error'>('idle');
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [importPayload, setImportPayload] = useState<BackupPayload | null>(null);
+  const [importPreview, setImportPreview] = useState<BackupPreview | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [confirmImport, setConfirmImport] = useState(false);
 
   const inspectDatabase = useCallback(async () => {
     setLoading(true);
@@ -97,9 +116,20 @@ export function FilesApp() {
       const text = await response.text();
       let payload: unknown;
       try { payload = JSON.parse(text); } catch { throw new Error('Server không trả về JSON backup hợp lệ.'); }
-      if (!payload || typeof payload !== 'object' || !('version' in payload) || !('data' in payload)) {
-        throw new Error('Tệp export thiếu version hoặc data; không bắt đầu download.');
+      if (!payload || typeof payload !== 'object' || !('version' in payload) || !('data' in payload) || !('integrity' in payload)) {
+        throw new Error('Tệp export thiếu version, data hoặc manifest integrity; không bắt đầu download.');
       }
+      const backup = payload as { version: unknown; data: unknown; integrity: unknown };
+      if (!backup.integrity || typeof backup.integrity !== 'object' || !('digest' in backup.integrity) || typeof (backup.integrity as { digest?: unknown }).digest !== 'string') {
+        throw new Error('Manifest SHA-256 trong backup không hợp lệ.');
+      }
+      const integrity = backup.integrity as { algorithm?: unknown; scope?: unknown; digest: string };
+      if (integrity.algorithm !== 'SHA-256' || integrity.scope !== 'data' || !/^[a-f0-9]{64}$/i.test(integrity.digest)) {
+        throw new Error('Thuật toán hoặc định dạng checksum của backup không được hỗ trợ.');
+      }
+      const digestBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalJson(backup.data)));
+      const calculatedDigest = Array.from(new Uint8Array(digestBuffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      if (calculatedDigest !== integrity.digest.toLowerCase()) throw new Error('Checksum SHA-256 không khớp với dữ liệu backup. Đã hủy download.');
       const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
       if (blob.size === 0) throw new Error('Tệp backup trống.');
       const objectUrl = URL.createObjectURL(blob);
@@ -115,10 +145,110 @@ export function FilesApp() {
       const importLimitNote = blob.size > 4.5 * 1024 * 1024
         ? ' CẢNH BÁO: tệp vượt giới hạn import 4.5 MB của API hiện tại, nên chưa thể khôi phục qua màn import tích hợp.'
         : '';
-      setBackupMessage(`Đã tạo và tải JSON backup ${sizeKb} KB, version ${String((payload as { version: unknown }).version)}. Bản export hiện chưa có manifest/checksum độc lập; hãy giữ nhiều bản sao ở nơi an toàn.${importLimitNote}`);
+      setBackupMessage(`Đã xác minh SHA-256 và tải backup ${sizeKb} KB, version ${String(backup.version)}. Digest: ${integrity.digest}.${importLimitNote} Hãy giữ một bản sao ở nơi khác; checksum giúp phát hiện thay đổi nhưng không phải chữ ký chống giả mạo.`);
     } catch (caught) {
       setBackupState('error');
       setBackupMessage(caught instanceof Error ? caught.message : 'Không thể tạo backup.');
+    }
+  };
+
+  const handlePreviewImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    setImportState('previewing');
+    setImportFileName(file.name);
+    setImportPayload(null);
+    setImportPreview(null);
+    setImportMessage(null);
+    setConfirmImport(false);
+
+    try {
+      if (file.size > MAX_IMPORT_BYTES) {
+        throw new Error('Tệp vượt giới hạn 4.5 MB hiện tại. Hãy chia nhỏ dữ liệu hoặc dùng bản backup gọn hơn.');
+      }
+      const parsed: unknown = JSON.parse(await file.text());
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('JSON backup phải là một object ở cấp cao nhất.');
+      }
+      const candidate = parsed as BackupPayload;
+      if ('version' in candidate && typeof candidate.version === 'string' && !candidate.version.startsWith('5.')) {
+        throw new Error(`Phiên bản backup (${candidate.version}) không tương thích với Web OS 5.0.`);
+      }
+      if (!candidate.data || typeof candidate.data !== 'object' || Array.isArray(candidate.data)) {
+        throw new Error('Backup không có trường data hợp lệ.');
+      }
+
+      const requestBody = JSON.stringify({ ...candidate, mode: 'preview' });
+      if (new TextEncoder().encode(requestBody).byteLength > MAX_IMPORT_BYTES) {
+        throw new Error('Payload sau khi kiểm tra vượt giới hạn 4.5 MB của API import.');
+      }
+      const response = await fetch('/api/admin/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: requestBody,
+      });
+      const result: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = result && typeof result === 'object' && 'error' in result && typeof (result as { error?: unknown }).error === 'string'
+          ? (result as { error: string }).error
+          : `Không thể xác thực backup (HTTP ${response.status}).`;
+        throw new Error(message);
+      }
+      if (!result || typeof result !== 'object' || !('success' in result) || (result as { success?: unknown }).success !== true) {
+        throw new Error('Server không trả về báo cáo preview hợp lệ.');
+      }
+      const preview = result as BackupPreview & { success: boolean };
+      if (typeof preview.totalRecords !== 'number' || !preview.recordCounts || typeof preview.recordCounts !== 'object' ||
+          !Array.isArray(preview.warnings) || !['verified', 'legacy-unverified'].includes(preview.integrity)) {
+        throw new Error('Báo cáo preview thiếu trường kiểm tra bắt buộc.');
+      }
+      setImportPayload(candidate);
+      setImportPreview(preview);
+      setImportState('ready');
+      setImportMessage(preview.integrity === 'verified'
+        ? 'Checksum được xác minh: chưa phát hiện thay đổi trong dữ liệu kể từ lúc tạo manifest.'
+        : 'Backup cũ không có checksum: không thể xác minh tính toàn vẹn hồi tố. Chỉ tiếp tục nếu bạn tin nguồn tệp.');
+    } catch (caught) {
+      setImportState('error');
+      setImportMessage(caught instanceof Error ? caught.message : 'Không thể đọc hoặc xác minh backup.');
+    }
+  };
+
+  const handleRestoreImport = async () => {
+    if (!importPayload || !importPreview || !confirmImport || importState !== 'ready') return;
+    setImportState('importing');
+    setImportMessage(null);
+    try {
+      const response = await fetch('/api/admin/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ ...importPayload, mode: 'restore' }),
+      });
+      const result: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = result && typeof result === 'object' && 'error' in result && typeof (result as { error?: unknown }).error === 'string'
+          ? (result as { error: string }).error
+          : `Khôi phục thất bại (HTTP ${response.status}).`;
+        throw new Error(message);
+      }
+      const message = result && typeof result === 'object' && 'message' in result && typeof (result as { message?: unknown }).message === 'string'
+        ? (result as { message: string }).message
+        : 'Đã hoàn tất yêu cầu khôi phục.';
+      setImportState('done');
+      setImportMessage(message);
+      setImportPayload(null);
+      setImportPreview(null);
+      setImportFileName(null);
+      setConfirmImport(false);
+      await inspectDatabase();
+    } catch (caught) {
+      setImportState('error');
+      setImportMessage(caught instanceof Error ? caught.message : 'Không thể khôi phục backup.');
     }
   };
 
@@ -175,11 +305,49 @@ export function FilesApp() {
         )}
 
         {activeTab === 'backup' && (
-          <div className="max-w-2xl mx-auto space-y-5 p-6 rounded-3xl bg-stone-900 border border-stone-800">
-            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/15 text-emerald-300 flex items-center justify-center"><ShieldCheck className="w-7 h-7" /></div>
-            <div className="text-center"><h3 className="text-lg font-bold text-white">JSON Backup / Export</h3><p className="text-xs text-stone-400 mt-2 max-w-xl mx-auto">Tạo tệp từ endpoint export, kiểm tra JSON và version trước khi tải. Tệp export hiện chưa có checksum độc lập hoặc báo cáo import preview; đây không thay thế backup ngoài ứng dụng.</p></div>
-            <div className="flex justify-center"><button onClick={() => void handleExportBackup()} disabled={backupState === 'working'} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"><Download className="w-4 h-4" />{backupState === 'working' ? 'Đang xác minh & tải...' : 'Xuất bản sao lưu JSON'}</button></div>
-            {backupMessage && <div role={backupState === 'error' ? 'alert' : 'status'} className={`p-3 rounded-xl border text-xs ${backupState === 'error' ? 'border-rose-800 bg-rose-950/20 text-rose-200' : 'border-emerald-800 bg-emerald-950/20 text-emerald-200'}`}>{backupState === 'done' && <CheckCircle2 className="w-4 h-4 inline mr-1.5" />}{backupMessage}</div>}
+          <div className="max-w-3xl mx-auto space-y-5">
+            <section className="space-y-5 p-6 rounded-3xl bg-stone-900 border border-stone-800">
+              <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/15 text-emerald-300 flex items-center justify-center"><ShieldCheck className="w-7 h-7" /></div>
+              <div className="text-center"><h3 className="text-lg font-bold text-white">JSON Backup / Export</h3><p className="text-xs text-stone-400 mt-2 max-w-xl mx-auto">Xuất dữ liệu được lưu bởi ứng dụng thành tệp JSON có manifest thống kê và checksum SHA-256. Checksum giúp phát hiện dữ liệu bị đổi hoặc hỏng; nó không phải chữ ký mật mã chống giả mạo.</p></div>
+              <div className="flex justify-center"><button onClick={() => void handleExportBackup()} disabled={backupState === 'working'} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"><Download className="w-4 h-4" />{backupState === 'working' ? 'Đang xác minh & tải...' : 'Xuất bản sao lưu JSON'}</button></div>
+              {backupMessage && <div role={backupState === 'error' ? 'alert' : 'status'} className={`p-3 rounded-xl border text-xs ${backupState === 'error' ? 'border-rose-800 bg-rose-950/20 text-rose-200' : 'border-emerald-800 bg-emerald-950/20 text-emerald-200'}`}>{backupState === 'done' && <CheckCircle2 className="w-4 h-4 inline mr-1.5" />}{backupMessage}</div>}
+            </section>
+
+            <section className="space-y-4 p-6 rounded-3xl bg-stone-900 border border-stone-800">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-sky-500/15 text-sky-300"><Upload className="w-5 h-5" /></div>
+                <div><h3 className="text-base font-bold text-white">Khôi phục từ bản sao lưu</h3><p className="text-xs text-stone-400 mt-1">Chọn JSON để chạy kiểm tra preview. Bước preview chỉ đọc tệp và xác minh cấu trúc/checksum, không ghi bản ghi vào database.</p></div>
+              </div>
+              <label htmlFor="webos-backup-file" className="block text-xs font-medium text-stone-300">Tệp backup (.json)</label>
+              <input id="webos-backup-file" type="file" accept=".json,application/json" onChange={(event) => void handlePreviewImport(event)} disabled={importState === 'previewing' || importState === 'importing'} className="block w-full text-xs text-stone-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-sky-500 disabled:opacity-50" />
+              {importFileName && <p className="text-[11px] text-stone-400">Tệp đã chọn: <span className="font-mono text-stone-300">{importFileName}</span></p>}
+              {importState === 'previewing' && <div role="status" className="text-xs text-sky-200">Đang đọc và xác minh backup trên server…</div>}
+              {importMessage && <div role={importState === 'error' ? 'alert' : 'status'} className={`p-3 rounded-xl border text-xs ${importState === 'error' ? 'border-rose-800 bg-rose-950/20 text-rose-200' : importState === 'done' ? 'border-emerald-800 bg-emerald-950/20 text-emerald-200' : 'border-amber-800 bg-amber-950/20 text-amber-100'}`}>{importState === 'done' && <CheckCircle2 className="w-4 h-4 inline mr-1.5" />}{importMessage}</div>}
+
+              {importPreview && (importState === 'ready' || importState === 'importing') && (
+                <div className="space-y-4 rounded-2xl border border-stone-700 bg-stone-950/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><div className="text-sm font-bold text-white">Preview dữ liệu</div><div className="text-xs text-stone-400 mt-1">Phiên bản {importPreview.version} · {importPreview.totalRecords.toLocaleString('vi-VN')} bản ghi dự kiến</div></div>
+                    <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${importPreview.integrity === 'verified' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-700/50' : 'bg-amber-500/10 text-amber-200 border border-amber-700/50'}`}><FileCheck2 className="w-3.5 h-3.5" />{importPreview.integrity === 'verified' ? 'SHA-256 đã xác minh' : 'Không có checksum'}</div>
+                  </div>
+                  {importPreview.digest && <div><div className="text-[10px] uppercase tracking-wider text-stone-500">SHA-256 · phạm vi data</div><div className="break-all rounded-lg border border-stone-800 bg-black/40 p-2 font-mono text-[10px] text-stone-300">{importPreview.digest}</div></div>}
+                  <details className="group">
+                    <summary className="cursor-pointer select-none text-xs font-semibold text-sky-300">Chi tiết số lượng theo module</summary>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {Object.entries(importPreview.recordCounts).filter(([, count]) => count > 0).map(([name, count]) => <div key={name} className="flex items-center justify-between gap-3 rounded-lg bg-stone-900 px-3 py-2"><span className="break-all text-[11px] text-stone-300">{name}</span><span className="shrink-0 font-mono text-xs text-sky-300">{count}</span></div>)}
+                      {importPreview.totalRecords === 0 && <p className="text-xs text-stone-500">Không tìm thấy bản ghi trong các module được hỗ trợ.</p>}
+                    </div>
+                  </details>
+                  {importPreview.warnings.length > 0 && <div className="space-y-2">{importPreview.warnings.map((warning, index) => <div key={index} className="flex gap-2 text-[11px] leading-relaxed text-amber-100"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{warning}</div>)}</div>}
+                  <div className="rounded-xl border border-rose-900/70 bg-rose-950/20 p-3 text-xs leading-relaxed text-rose-100">Lưu ý quan trọng: restore là thao tác <strong>thêm</strong> dữ liệu, không thay thế hoặc đồng bộ database hiện tại. Chạy lại cùng một backup có thể tạo bản sao trùng lặp.</div>
+                  <label className="flex items-start gap-2 text-xs leading-relaxed text-stone-300">
+                    <input type="checkbox" checked={confirmImport} disabled={importState === 'importing'} onChange={(event) => setConfirmImport(event.target.checked)} className="mt-0.5 accent-rose-500" />
+                    Tôi đã xem preview và hiểu restore sẽ thêm bản ghi mới; tôi đã giữ bản sao lưu riêng trước khi tiếp tục.
+                  </label>
+                  <button onClick={() => void handleRestoreImport()} disabled={!confirmImport || importState !== 'ready'} className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-3 text-xs font-bold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-40"><Upload className="h-4 w-4" />{importState === 'importing' ? 'Đang khôi phục…' : 'Xác nhận và khôi phục dữ liệu'}</button>
+                </div>
+              )}
+            </section>
           </div>
         )}
       </div>

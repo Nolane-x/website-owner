@@ -30,7 +30,9 @@
 - Quản lý tài nguyên số không làm nặng máy chủ cá nhân thông qua việc lưu trữ metadata và liên kết tới **Google Drive, GitHub, Mega, Notion, Figma...**
 
 ### 5. Sao Lưu & Khôi Phục JSON (JSON Backup & Restore)
-- Xuất toàn bộ dữ liệu hệ thống ra một tập tin JSON duy nhất để lưu trữ ngoại tuyến và khôi phục lại bất cứ khi nào cần.
+- Export dữ liệu ứng dụng thành JSON kèm manifest SHA-256 cho payload `data` và số lượng bản ghi của từng nhóm; trình duyệt kiểm tra checksum trước khi tải.
+- Import hỗ trợ bước preview không ghi database: xác minh checksum, hiển thị số lượng theo module và cảnh báo trước khi người dùng xác nhận restore.
+- Restore là thao tác thêm dữ liệu theo transaction, không thay thế hoặc đồng bộ database hiện có; chạy lại cùng backup có thể tạo bản sao trùng lặp. Backup legacy thiếu manifest được đánh dấu chưa xác minh. Checksum không phải chữ ký chống giả mạo và vẫn cần giữ bản sao ngoại tuyến an toàn.
 
 ---
 
@@ -144,7 +146,7 @@ Bảng dưới đây phân biệt tính năng đang có mã thực thi với cá
 | Workflow | Có executor cho Inbox → Task và báo cáo task quá hạn chỉ đọc. Trigger khác sẽ bị từ chối nếu chưa có executor; chưa có scheduler chạy nền hay timeline lịch sử bền vững. |
 | Creator Studio | Nội dung được lưu qua API; có thể gọi model thật để tạo dàn ý. Trạng thái “published” trong pipeline không tự đăng nội dung ra mạng xã hội. |
 | Calendar & Habits | Sự kiện lịch nội bộ và ngày hoàn thành thói quen được lưu trong database. Chưa có đồng bộ Google Calendar/Apple Calendar hoặc nhắc lịch khi ứng dụng đóng. |
-| Virtual Explorer / Backup | Hiển thị số bản ghi từ API và tải JSON export thật. Đây chưa phải trình duyệt file của ổ đĩa máy; export hiện chưa có manifest/checksum độc lập để xác minh toàn bộ bundle. |
+| Virtual Explorer / Backup | Hiển thị số bản ghi API; JSON export có manifest SHA-256 phạm vi `data` và per-module counts. Import có preview không ghi DB, xác minh checksum và yêu cầu xác nhận trước khi thêm dữ liệu trong transaction. Chưa phải trình duyệt file của ổ đĩa máy; checksum không chứng minh nguồn gốc tệp. |
 | Local-first, offline, sync, plugin sandbox, native companion | Là các mục tiêu trong đặc tả. Chưa được phép coi là hoàn chỉnh chỉ vì có tên module hoặc giao diện. Production hiện dùng PostgreSQL qua `DATABASE_URL`; dữ liệu không được mặc định chỉ nằm trên thiết bị. |
 | Privacy / Panic Lock | Có audit viewer và overlay khóa giao diện; không xóa sạch RAM trình duyệt và không thay thế khóa màn hình hệ điều hành. |
 

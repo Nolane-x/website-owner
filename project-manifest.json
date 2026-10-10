@@ -43,7 +43,7 @@
       "workflows": "Persistent workflows; currently supports Inbox-to-task and read-only overdue-report executors; other trigger types are explicitly unsupported",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
-      "backups": "Versioned JSON export and transactional import; wiki links, revisions, habits and calendar events are included, but standalone export checksum/manifest verification is not yet implemented",
+      "backups": "JSON export with SHA-256 data integrity manifest and per-module counts; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. No authenticity signature or replacement-style restore." ,
       "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
       "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage",
       "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes."
@@ -192,7 +192,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Cập nhật mô hình dữ liệu, endpoint, giới hạn bảo mật và trạng thái chức năng thực tế."
+      "shortDescription": "Cập nhật mô hình dữ liệu, backup manifest/preview/checksum, endpoint, giới hạn bảo mật và trạng thái chức năng thực tế."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -200,7 +200,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Bổ sung export wiki-links, content/page revisions, habits và calendar events; nhật ký thống kê payload có 26 module dữ liệu."
+      "shortDescription": "Bổ sung export wiki-links/revisions/habits/calendar, manifest SHA-256 phạm vi data và số lượng theo module."
     },
     {
       "relativePath": "src/app/api/admin/import/route.ts",
@@ -208,7 +208,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Import transaction và remap ID cho wiki-links, revisions, project goals/decisions, Inbox/task relationships, research claims, habits và calendar events."
+      "shortDescription": "Import transaction có xác minh SHA-256, preview không ghi database, thống kê module, cảnh báo legacy và remap ID cho quan hệ nội bộ."
     },
     {
       "relativePath": "src/app/api/admin/workflows/route.ts",
@@ -296,7 +296,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Thay số liệu/folder giả bằng API counts và JSON export có xác minh; cảnh báo nếu backup vượt giới hạn import 4.5 MB."
+      "shortDescription": "Backup Center xác minh checksum export phía client, xem trước nội dung import theo module, hiển thị digest/cảnh báo và yêu cầu xác nhận rõ ràng trước restore."
     },
     {
       "relativePath": "src/components/desktop/apps/notes-app.tsx",
@@ -521,6 +521,38 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Regression test HTML sanitization và plain-text cleaning."
+    },
+    {
+      "relativePath": "src/lib/backup/json.ts",
+      "fileName": "json.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Canonical JSON serialization dùng chung ở browser/server, chuẩn hóa Date và thứ tự key để checksum ổn định."
+    },
+    {
+      "relativePath": "src/lib/backup/integrity.ts",
+      "fileName": "integrity.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Tạo và xác minh SHA-256 manifest theo payload data, timing-safe digest comparison và số lượng 26 nhóm dữ liệu."
+    },
+    {
+      "relativePath": "tests/backup-integrity.test.ts",
+      "fileName": "backup-integrity.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm thử canonical JSON, checksum, phát hiện payload bị sửa và manifest thống kê không hợp lệ."
+    },
+    {
+      "relativePath": "tests/backup-import-preview.test.ts",
+      "fileName": "backup-import-preview.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Kiểm thử API preview: không mở database, từ chối checksum sai và gắn nhãn rõ backup legacy chưa xác minh."
     }
   ]
 }
