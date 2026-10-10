@@ -6,7 +6,7 @@ Hệ thống **Personal Web OS** được thiết kế để triển khai thực
 
 ## 1. Yêu Cầu Hệ Thống
 
-- **Node.js**: Phiên bản **20.9+** (khuyên dùng Node.js 22 LTS, cùng major với CI). Next.js 16 không còn hỗ trợ Node.js 18.
+- **Node.js**: **24.x** (được ghim trong `package.json` và CI để đồng nhất với dependency sanitizer hiện tại). Next.js 16 yêu cầu tối thiểu 20.9, nhưng `isomorphic-dompurify@4.5.0` cần Node.js 22.22.2+ hoặc 24.15+; production dùng 24.x để tránh lệch môi trường.
 - **Cơ sở dữ liệu**:
   - **Tùy chọn A (Mặc định Zero-Config)**: Tự động sử dụng cơ sở dữ liệu nhúng **PGlite WASM** (lưu trữ cục bộ tại thư mục `./data/webos_pglite`). Không cần cài đặt PostgreSQL máy chủ ngoài.
   - **Tùy chọn B (Production quy mô lớn)**: PostgreSQL 14+ hoặc dịch vụ cơ sở dữ liệu đám mây như **Supabase**, **Neon**, **Aiven**, **Railway**.

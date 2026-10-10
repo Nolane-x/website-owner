@@ -2,6 +2,9 @@
   "name": "website-owner",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -52,5 +55,10 @@
     "typescript": "^5",
     "vite": "^8.3.4",
     "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "isomorphic-dompurify": {
+      "jsdom": "25.0.1"
+    }
   }
 }

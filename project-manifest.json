@@ -10,6 +10,7 @@
     "styling": "Tailwind CSS v4 + Nolane UI (NUI) Editorial Bàn Giấy Design Tokens",
     "orm": "Drizzle ORM",
     "database": "Production: PostgreSQL configured via DATABASE_URL; development/test: embedded PGlite WASM. Production data is server-backed; local-first remains a target rather than a completed guarantee.",
+    "nodeRuntime": "Node.js 24.x in local/CI/Vercel. isomorphic-dompurify 4.5.0 uses a jsdom 25.0.1 override and Next serverExternalPackages to avoid serverless ESM bundling failures.",
     "security": {
       "passwordHashing": "Bcrypt (12 rounds salt)",
       "sessionTokens": "256-bit cryptographically secure, SHA-256 hashed in DB",
@@ -44,7 +45,8 @@
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
       "backups": "Versioned JSON export and transactional import; wiki links, revisions, habits and calendar events are included, but standalone export checksum/manifest verification is not yet implemented",
       "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
-      "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage"
+      "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage",
+      "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes."
     }
   },
   "tables": [
@@ -414,7 +416,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Sửa yêu cầu Node.js theo Next.js 16: tối thiểu 20.9 và khuyên dùng Node 22 LTS."
+      "shortDescription": "Chốt Node.js 24.x đồng nhất giữa package.json, CI và Vercel; ghi yêu cầu của isomorphic-dompurify."
     },
     {
       "relativePath": "SECURITY.md",
@@ -479,6 +481,46 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Kiểm tra độ an toàn của mixer đa lớp khi Web Audio API không khả dụng."
+    },
+    {
+      "relativePath": "package.json",
+      "fileName": "package.json",
+      "mimeType": "application/json",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Pin Node.js 24.x và jsdom 25.0.1 cho nhánh dependency của isomorphic-dompurify để tránh lỗi runtime serverless."
+    },
+    {
+      "relativePath": "package-lock.json",
+      "fileName": "package-lock.json",
+      "mimeType": "application/json",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Lock jsdom 25.0.1 bên trong isomorphic-dompurify; giữ jsdom 30.1.2 độc lập cho Vitest."
+    },
+    {
+      "relativePath": "next.config.ts",
+      "fileName": "next.config.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Externalize isomorphic-dompurify và jsdom khỏi server bundle của Next.js."
+    },
+    {
+      "relativePath": ".github/workflows/ci.yml",
+      "fileName": "ci.yml",
+      "mimeType": "text/yaml",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Chạy CI bằng Node.js 24.x đồng bộ với runtime production."
+    },
+    {
+      "relativePath": "tests/sanitize-runtime.test.ts",
+      "fileName": "sanitize-runtime.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Regression test HTML sanitization và plain-text cleaning."
     }
   ]
 }
