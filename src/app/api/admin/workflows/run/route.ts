@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
-import { automationWorkflows, automationWorkflowRuns, inboxItems, kanbanTasks } from '@/lib/db/schema';
+import { automationWorkflows, automationWorkflowRuns, kanbanTasks } from '@/lib/db/schema';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
-import { buildInboxTaskPayload } from '@/lib/workflows/inbox-to-task';
+import { convertInboxItemToTask } from '@/lib/workflows/convert-inbox';
 import { buildOverdueReport } from '@/lib/workflows/overdue-report';
 import { compileWorkflowGraph } from '@/lib/workflows/compiler';
+import { executeWorkflowGraph, WorkflowExecutionError } from '@/lib/workflows/executor';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -59,6 +60,25 @@ export async function POST(req: NextRequest) {
       }, { status: 422 });
     }
 
+    const configuredOperationCount = compilation.order.filter(
+      (node) => typeof node.config?.operation === 'string' && node.config.operation.trim(),
+    ).length;
+    const useNodeExecutor = compilation.order.length > 0 &&
+      configuredOperationCount === compilation.order.length;
+    const hasPartialOperations = configuredOperationCount > 0 && !useNodeExecutor;
+    if (hasPartialOperations || (compilation.mode === 'dag' && !useNodeExecutor)) {
+      return NextResponse.json({
+        error: 'Workflow dạng DAG cần khai báo operation đã đăng ký cho tất cả node trước khi chạy.',
+        details: ['Không tự động bỏ qua cấu trúc node/edge để chạy executor trigger cũ.'],
+      }, { status: 422 });
+    }
+
+    const requiresInboxItem = workflow.triggerType === 'inbox_to_task' ||
+      (useNodeExecutor && compilation.order.some((node) => node.config?.operation === 'load_inbox_item'));
+    if (requiresInboxItem && (typeof input.inboxItemId !== 'string' || !input.inboxItemId.trim())) {
+      return NextResponse.json({ error: 'Hãy chọn một mục Inbox trước khi chạy workflow.' }, { status: 400 });
+    }
+
     runId = crypto.randomUUID();
     runStartedAt = Date.now();
     runProfileId = auth.profile.id;
@@ -96,73 +116,61 @@ export async function POST(req: NextRequest) {
       ));
     };
 
+    if (useNodeExecutor) {
+      const result = await executeWorkflowGraph(
+        db,
+        auth.profile.id,
+        workflow.nodesJson,
+        workflow.edgesJson,
+        { inboxItemId: typeof input.inboxItemId === 'string' ? input.inboxItemId : undefined },
+      );
+      const executionResult = {
+        ...result,
+        executorMode: 'node_graph',
+        compilerMode: compilation.mode,
+        compiledNodeIds: compilation.order.map((node) => node.id),
+      };
+      await finishRun('succeeded', executionResult);
+      return NextResponse.json({
+        ...executionResult,
+        status: 'succeeded',
+        runId,
+        workflowId: workflow.id,
+      });
+    }
+
     if (workflow.triggerType === 'inbox_to_task') {
       const inboxItemId = input.inboxItemId as string;
-      const [item] = await db.select().from(inboxItems).where(and(
-        eq(inboxItems.id, inboxItemId),
-        eq(inboxItems.profileId, auth.profile.id),
-      )).limit(1);
+      const conversion = await convertInboxItemToTask(db, auth.profile.id, inboxItemId);
 
-      if (!item) {
+      if (conversion.status === 'not_found') {
         const message = 'Không tìm thấy mục Inbox thuộc tài khoản này.';
         await finishRun('failed', { reason: 'inbox_item_not_found' }, message);
         return NextResponse.json({ error: message, runId }, { status: 404 });
       }
 
-      // Idempotency at the application boundary: re-running the same item reuses its linked task.
-      let [task] = await db.select().from(kanbanTasks).where(and(
-        eq(kanbanTasks.profileId, auth.profile.id),
-        eq(kanbanTasks.relatedItemId, item.id),
-      )).limit(1);
-      const alreadyCreated = Boolean(task);
-
-      if (!task) {
-        const payload = buildInboxTaskPayload(item);
-        const id = `task-${crypto.randomUUID()}`;
-        await db.insert(kanbanTasks).values({
-          id,
-          profileId: auth.profile.id,
-          ...payload,
-          subtasksJson: [],
-          sortOrder: 0,
-        });
-        [task] = await db.select().from(kanbanTasks).where(and(
-          eq(kanbanTasks.id, id),
-          eq(kanbanTasks.profileId, auth.profile.id),
-        )).limit(1);
-        if (!task) {
-          const message = 'Đã gửi yêu cầu tạo task nhưng không thể xác minh bản ghi. Hãy chạy lại để phục hồi an toàn.';
-          await finishRun('failed', { reason: 'task_verification_failed' }, message);
-          return NextResponse.json({ error: message, runId }, { status: 500 });
-        }
-      }
-
-      if (item.status !== 'converted') {
-        await db.update(inboxItems).set({ status: 'converted', updatedAt: new Date() }).where(and(
-          eq(inboxItems.id, item.id),
-          eq(inboxItems.profileId, auth.profile.id),
-        ));
-      }
-
+      const alreadyCreated = conversion.status === 'reused';
       const resultMessage = alreadyCreated
         ? 'Task đã tồn tại; đã tái sử dụng, không tạo trùng.'
         : 'Task đã được tạo và liên kết với mục Inbox.';
       await finishRun('succeeded', {
         result: resultMessage,
-        taskId: task.id,
-        taskTitle: task.title,
-        inboxItemId: item.id,
+        taskId: conversion.task.id,
+        taskTitle: conversion.task.title,
+        inboxItemId: conversion.inboxItemId,
         idempotentReplay: alreadyCreated,
+        atomicConversion: true,
       });
       return NextResponse.json({
         status: 'succeeded',
         runId,
         workflowId: workflow.id,
         result: resultMessage,
-        task,
-        inboxItemId: item.id,
+        task: conversion.task,
+        inboxItemId: conversion.inboxItemId,
         inboxStatus: 'converted',
         idempotentReplay: alreadyCreated,
+        atomicConversion: true,
       });
     }
 
@@ -198,12 +206,16 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   } catch (error) {
     console.error('Lỗi thực thi workflow:', error);
+    const executionFailure = error instanceof WorkflowExecutionError ? error : null;
+    const safeErrorMessage = executionFailure?.message ??
+      'Workflow thất bại. Hệ thống không đánh dấu chạy thành công; hãy kiểm tra trạng thái dữ liệu trước khi thử lại.';
     if (database && runId && runProfileId) {
       try {
         const finishedAt = new Date();
         await database.update(automationWorkflowRuns).set({
           status: 'failed',
-          errorMessage: 'Workflow thất bại. Hãy kiểm tra dữ liệu trước khi thử lại.',
+          resultJson: executionFailure ? { executionTrace: executionFailure.executionTrace } : null,
+          errorMessage: safeErrorMessage.slice(0, 500),
           finishedAt,
           durationMs: Math.max(0, finishedAt.getTime() - runStartedAt),
         }).where(and(
@@ -216,7 +228,8 @@ export async function POST(req: NextRequest) {
       }
     }
     return NextResponse.json({
-      error: 'Workflow thất bại. Hệ thống không đánh dấu chạy thành công; hãy kiểm tra trạng thái dữ liệu trước khi thử lại.',
+      error: safeErrorMessage,
+      executionTrace: executionFailure?.executionTrace,
       runId: runId ?? undefined,
     }, { status: 500 });
   }

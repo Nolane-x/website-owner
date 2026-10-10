@@ -9,6 +9,8 @@ interface WorkflowNode {
   type: 'trigger' | 'condition' | 'action' | 'ai' | 'approval';
   title: string;
   description: string;
+  config?: Record<string, unknown>;
+  position?: { x: number; y: number };
 }
 
 interface Workflow {
@@ -56,10 +58,22 @@ interface WorkflowRun {
   createdAt: string;
 }
 
+interface WorkflowExecutionTraceStep {
+  nodeId: string;
+  title: string;
+  type: string;
+  status: 'succeeded' | 'skipped' | 'failed';
+  durationMs: number;
+  summary: string;
+}
+
 interface RunResult {
   status: string;
   runId?: string;
+  executorMode?: string;
+  compilerMode?: string;
   result?: string;
+  executionTrace?: WorkflowExecutionTraceStep[];
   error?: string;
   totalTasks?: number;
   overdueCount?: number;
@@ -76,12 +90,19 @@ const TEMPLATES: Array<Omit<Workflow, 'id' | 'createdAt' | 'updatedAt'>> = [
     triggerType: 'inbox_to_task',
     isActive: true,
     scheduleEnabled: false,
-    edgesJson: [],
+    edgesJson: [
+      { id: 'capture-dedupe', source: 'capture', target: 'dedupe' },
+      { id: 'dedupe-reuse', source: 'dedupe', target: 'reuse', label: 'true' },
+      { id: 'dedupe-create', source: 'dedupe', target: 'create', label: 'false' },
+      { id: 'reuse-convert', source: 'reuse', target: 'convert' },
+      { id: 'create-convert', source: 'create', target: 'convert' },
+    ],
     nodesJson: [
-      { id: 'capture', type: 'trigger', title: 'Chọn mục Inbox', description: 'Đọc mục do chủ sở hữu chọn trong Inbox.' },
-      { id: 'dedupe', type: 'condition', title: 'Kiểm tra task liên kết', description: 'Tái sử dụng task đã có nếu cùng nguồn đã được chuyển trước đó.' },
-      { id: 'create', type: 'action', title: 'Tạo hoặc tái sử dụng task', description: 'Lưu task vào database với relatedItemId trỏ về Inbox.' },
-      { id: 'convert', type: 'action', title: 'Cập nhật trạng thái Inbox', description: 'Đánh dấu converted sau khi đã xác minh task.' },
+      { id: 'capture', type: 'trigger', title: 'Chọn mục Inbox', description: 'Đọc mục do chủ sở hữu chọn trong Inbox.', config: { operation: 'load_inbox_item' } },
+      { id: 'dedupe', type: 'condition', title: 'Kiểm tra task liên kết', description: 'Chọn nhánh tái sử dụng hoặc tạo mới dựa trên dữ liệu thật.', config: { operation: 'task_already_linked' } },
+      { id: 'reuse', type: 'action', title: 'Tái sử dụng task', description: 'Dùng task hiện có nếu Inbox đã được chuyển.', config: { operation: 'reuse_linked_task' } },
+      { id: 'create', type: 'action', title: 'Tạo task nếu chưa có', description: 'Tạo task có liên kết nguồn và được bảo vệ bởi unique index.', config: { operation: 'create_task_if_missing' } },
+      { id: 'convert', type: 'action', title: 'Cập nhật trạng thái Inbox', description: 'Đánh dấu converted sau khi task đã được xác minh.', config: { operation: 'mark_inbox_converted' } },
     ],
   },
   {
@@ -90,11 +111,16 @@ const TEMPLATES: Array<Omit<Workflow, 'id' | 'createdAt' | 'updatedAt'>> = [
     triggerType: 'overdue_report',
     isActive: true,
     scheduleEnabled: false,
-    edgesJson: [],
+    edgesJson: [
+      { id: 'load-check', source: 'load', target: 'check' },
+      { id: 'check-report', source: 'check', target: 'report', label: 'true' },
+      { id: 'check-clear', source: 'check', target: 'clear', label: 'false' },
+    ],
     nodesJson: [
-      { id: 'load', type: 'trigger', title: 'Đọc danh sách task', description: 'Truy vấn task thuộc chủ sở hữu hiện tại.' },
-      { id: 'check', type: 'condition', title: 'Kiểm tra deadline', description: 'Bỏ qua task đã hoàn thành hoặc chưa có deadline.' },
-      { id: 'report', type: 'action', title: 'Tạo báo cáo kiểm tra', description: 'Hiển thị số task quá hạn và danh sách chi tiết.' },
+      { id: 'load', type: 'trigger', title: 'Đọc danh sách task', description: 'Truy vấn task thuộc chủ sở hữu hiện tại.', config: { operation: 'load_owner_tasks' } },
+      { id: 'check', type: 'condition', title: 'Có task quá hạn?', description: 'Tính deadline theo múi giờ Việt Nam.', config: { operation: 'overdue_tasks_exist' } },
+      { id: 'report', type: 'action', title: 'Tạo báo cáo quá hạn', description: 'Hiển thị số lượng và danh sách task quá hạn.', config: { operation: 'build_overdue_report' } },
+      { id: 'clear', type: 'action', title: 'Báo cáo không có quá hạn', description: 'Kết thúc nhánh chỉ đọc khi không có task quá hạn.', config: { operation: 'emit_no_overdue_report' } },
     ],
   },
 ];
@@ -130,6 +156,17 @@ export function WorkflowsApp() {
     () => runs.filter((run) => run.workflowId === selectedWorkflowId).slice(0, 8),
     [runs, selectedWorkflowId],
   );
+  const selectedNeedsInbox = useMemo(() => Boolean(selectedWorkflow && (
+    selectedWorkflow.triggerType === 'inbox_to_task' ||
+    selectedWorkflow.nodesJson?.some((node) => node.config?.operation === 'load_inbox_item')
+  )), [selectedWorkflow]);
+  const selectedHasNodeOperations = useMemo(() => Boolean(
+    selectedWorkflow?.nodesJson?.length &&
+    selectedWorkflow.nodesJson.every((node) => typeof node.config?.operation === 'string' && node.config.operation.trim()),
+  ), [selectedWorkflow]);
+  const selectedCanRun = Boolean(selectedWorkflow && (
+    ['inbox_to_task', 'overdue_report'].includes(selectedWorkflow.triggerType) || selectedHasNodeOperations
+  ));
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -178,26 +215,41 @@ export function WorkflowsApp() {
     setError(null);
     setNotice(null);
     try {
+      let createdCount = 0;
+      let migratedCount = 0;
       for (const template of TEMPLATES) {
-        if (workflows.some((workflow) => workflow.triggerType === template.triggerType)) continue;
+        const existing = workflows.find((workflow) => workflow.triggerType === template.triggerType);
+        const previousIds = template.triggerType === 'inbox_to_task'
+          ? ['capture', 'dedupe', 'create', 'convert']
+          : ['load', 'check', 'report'];
+        const isUnmodifiedLegacyTemplate = Boolean(existing &&
+          existing.name === template.name &&
+          (existing.edgesJson?.length ?? 0) === 0 &&
+          existing.nodesJson?.length === previousIds.length &&
+          existing.nodesJson.every((node) => previousIds.includes(node.id) && !node.config?.operation));
+        if (existing && !isUnmodifiedLegacyTemplate) continue;
+
         const response = await fetch('/api/admin/workflows', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            ...(existing ? { id: existing.id } : {}),
             name: template.name,
             description: template.description,
             triggerType: template.triggerType,
             nodes: template.nodesJson,
             edges: template.edgesJson,
-            isActive: true,
-            scheduleEnabled: template.scheduleEnabled,
+            isActive: existing?.isActive ?? true,
+            scheduleEnabled: existing?.scheduleEnabled ?? template.scheduleEnabled,
           }),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || `Không thể lưu workflow “${template.name}”.`);
+        if (existing) migratedCount += 1;
+        else createdCount += 1;
       }
       await loadData();
-      setNotice('Đã lưu mẫu workflow vào database. Hai workflow này thực hiện các thao tác đọc/ghi thật ở các bước được hỗ trợ.');
+      setNotice(`Đã hoàn tất mẫu workflow: tạo mới ${createdCount}, nâng cấp mẫu cũ ${migratedCount}. Mẫu đã tùy chỉnh được giữ nguyên.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Không thể tạo workflow mẫu.');
     } finally {
@@ -299,7 +351,7 @@ export function WorkflowsApp() {
 
   const runWorkflow = async () => {
     if (!selectedWorkflow) return;
-    if (selectedWorkflow.triggerType === 'inbox_to_task' && !selectedInboxId) {
+    if (selectedNeedsInbox && !selectedInboxId) {
       setError('Hãy chọn một mục Inbox đang chờ xử lý.');
       return;
     }
@@ -311,7 +363,7 @@ export function WorkflowsApp() {
       const response = await fetch('/api/admin/workflows/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workflowId: selectedWorkflow.id, inboxItemId: selectedWorkflow.triggerType === 'inbox_to_task' ? selectedInboxId : undefined }),
+        body: JSON.stringify({ workflowId: selectedWorkflow.id, inboxItemId: selectedNeedsInbox ? selectedInboxId : undefined }),
       });
       const payload = await response.json() as RunResult;
       if (!response.ok || payload.status !== 'succeeded') {
@@ -336,7 +388,7 @@ export function WorkflowsApp() {
           <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl"><GitBranch className="w-5 h-5" /></div>
           <div className="min-w-0">
             <h1 className="text-base font-bold text-white">Workflow Runtime</h1>
-            <p className="text-xs text-stone-400">Workflow được lưu thật; chỉ các trigger có executor mới chạy được.</p>
+            <p className="text-xs text-stone-400">Workflow lưu bền vững, DAG được kiểm tra và node chạy theo allowlist có execution trace.</p>
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -378,7 +430,7 @@ export function WorkflowsApp() {
                   </div>
                   <span className={`text-[10px] rounded-full px-2 py-1 ${selectedWorkflow.isActive ? 'bg-emerald-500/10 text-emerald-300' : 'bg-stone-800 text-stone-400'}`}>{selectedWorkflow.isActive ? 'Đang bật' : 'Đã tắt'}</span>
                 </div>
-                {selectedWorkflow.triggerType === 'inbox_to_task' && (
+                {selectedNeedsInbox && (
                   <label className="block space-y-1.5">
                     <span className="text-[11px] text-stone-400">Mục Inbox cần chuyển</span>
                     <select value={selectedInboxId} onChange={(event) => setSelectedInboxId(event.target.value)} className="w-full max-w-2xl bg-stone-950 border border-stone-700 rounded-lg px-3 py-2 text-xs text-stone-200">
@@ -390,10 +442,10 @@ export function WorkflowsApp() {
                 )}
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => void compileSelectedWorkflow()} disabled={compiling || loading || running} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-sky-800/70 bg-sky-950/30 hover:bg-sky-900/40 text-sky-200 text-xs font-semibold disabled:opacity-40"><GitBranch className={`w-4 h-4 ${compiling ? 'animate-pulse' : ''}`} />{compiling ? 'Đang biên dịch...' : 'Kiểm tra & biên dịch DAG'}</button>
-                  <button onClick={() => void runWorkflow()} disabled={running || loading || !selectedWorkflow.isActive || (selectedWorkflow.triggerType === 'inbox_to_task' && !selectedInboxId) || !['inbox_to_task','overdue_report'].includes(selectedWorkflow.triggerType)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40"><Play className={`w-4 h-4 ${running ? 'animate-pulse' : ''}`} />{running ? 'Đang thực thi...' : 'Chạy workflow thật'}</button>
+                  <button onClick={() => void runWorkflow()} disabled={running || loading || !selectedWorkflow.isActive || (selectedNeedsInbox && !selectedInboxId) || !selectedCanRun} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40"><Play className={`w-4 h-4 ${running ? 'animate-pulse' : ''}`} />{running ? 'Đang thực thi...' : 'Chạy workflow thật'}</button>
                   <button onClick={() => void toggleWorkflow()} disabled={loading || running} className="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs">{selectedWorkflow.isActive ? 'Tắt workflow' : 'Bật workflow'}</button>
                 </div>
-                {!['inbox_to_task','overdue_report'].includes(selectedWorkflow.triggerType) && <p className="text-[11px] text-amber-200">Executor cho trigger này chưa được triển khai. Nút chạy bị khóa; hệ thống không giả vờ thực thi.</p>}
+                {!selectedCanRun && <p className="text-[11px] text-amber-200">Workflow này chưa có executor trigger hoặc bộ operation allowlist đầy đủ. Nút chạy bị khóa; hệ thống không giả vờ thực thi.</p>}
                 {selectedWorkflow.triggerType === 'overdue_report' && (
                   <div className="rounded-xl border border-stone-800 bg-stone-950/60 p-3 space-y-2">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -443,7 +495,7 @@ export function WorkflowsApp() {
                       ))}
                     </ol>
                   )}
-                  <p className="text-[10px] text-stone-500">Biên dịch xác minh cấu trúc và thứ tự node; không có nghĩa mọi node AI/action/approval đều đã có executor. Hiện runtime chỉ thực thi các trigger được hỗ trợ rõ ràng.</p>
+                  <p className="text-[10px] text-stone-500">Biên dịch xác minh cấu trúc/thứ tự; runtime chỉ chấp nhận operation nằm trong allowlist. Node AI/approval hoặc thao tác tùy ý vẫn bị từ chối.</p>
                 </section>
               )}
 
@@ -476,7 +528,22 @@ export function WorkflowsApp() {
                   {typeof runResult.totalTasks === 'number' && <div className="grid grid-cols-2 gap-2"><div className="rounded-lg bg-stone-950/70 p-3"><div className="text-[10px] text-stone-500">Tổng task đã đọc</div><div className="text-xl font-bold">{runResult.totalTasks}</div></div><div className="rounded-lg bg-stone-950/70 p-3"><div className="text-[10px] text-stone-500">Task quá hạn</div><div className="text-xl font-bold text-amber-300">{runResult.overdueCount}</div></div></div>}
                   {runResult.overdueTasks?.map((task) => <div key={task.id} className="flex justify-between gap-3 text-xs border-t border-stone-800 pt-2"><span>{task.title}</span><span className="text-amber-300 shrink-0">{task.dueDate}</span></div>)}
                   {runResult.idempotentReplay && <p className="text-[10px] text-sky-300">Lần chạy này tái sử dụng dữ liệu đã có, không tạo trùng.</p>}
+                  {runResult.executorMode === 'node_graph' && <p className="text-[10px] text-sky-300">Đã chạy qua node executor allowlist · compiler: {runResult.compilerMode}</p>}
                   {runResult.sideEffects === false && <p className="text-[10px] text-stone-500 flex gap-1"><ShieldCheck className="w-3 h-3" />Chỉ đọc; không thay đổi dữ liệu.</p>}
+                  {!!runResult.executionTrace?.length && (
+                    <div className="border-t border-stone-800 pt-3 space-y-2">
+                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Execution trace theo node</h4>
+                      {runResult.executionTrace.map((step, index) => (
+                        <div key={`${step.nodeId}-${index}`} className="flex items-start gap-2 rounded-lg bg-stone-950/60 px-3 py-2">
+                          <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${step.status === 'succeeded' ? 'bg-emerald-400' : step.status === 'failed' ? 'bg-rose-400' : 'bg-stone-500'}`} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs text-stone-200">{step.title}</span>
+                            <span className="block text-[10px] text-stone-500">{step.status === 'succeeded' ? 'Thành công' : step.status === 'failed' ? 'Thất bại' : 'Đã bỏ qua'} · {step.durationMs} ms · {step.summary}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -512,6 +579,9 @@ export function WorkflowsApp() {
                     const summary = typeof run.resultJson?.result === 'string'
                       ? run.resultJson.result
                       : run.errorMessage || 'Không có phần tóm tắt kết quả.';
+                    const executionTrace = Array.isArray(run.resultJson?.executionTrace)
+                      ? run.resultJson.executionTrace as WorkflowExecutionTraceStep[]
+                      : [];
                     return (
                       <article key={run.id} className="rounded-xl border border-stone-800 bg-stone-950/60 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -519,6 +589,23 @@ export function WorkflowsApp() {
                           <span className="text-[10px] text-stone-500">{new Date(run.startedAt).toLocaleString('vi-VN')}</span>
                         </div>
                         <p className="mt-2 text-xs text-stone-200">{summary}</p>
+                        {executionTrace.length > 0 && (
+                          <details className="mt-2 rounded-lg border border-stone-800 bg-stone-900/50 p-2">
+                            <summary className="cursor-pointer text-[10px] text-sky-300">Execution trace ({executionTrace.length} node)</summary>
+                            <div className="mt-2 space-y-1.5">
+                              {executionTrace.map((step, index) => (
+                                <div key={`${step.nodeId}-${index}`} className="flex items-start gap-2 text-[10px]">
+                                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${step.status === 'succeeded' ? 'bg-emerald-400' : step.status === 'failed' ? 'bg-rose-400' : 'bg-stone-500'}`} />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="text-stone-200">{step.title}</span>
+                                    <span className="text-stone-500"> · {step.status} · {step.durationMs} ms</span>
+                                    <span className="block text-stone-500">{step.summary}</span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-stone-500">
                           <span className="font-mono">#{run.id.slice(0, 8)}</span>
                           {typeof run.durationMs === 'number' && <span>{run.durationMs} ms</span>}
@@ -536,7 +623,7 @@ export function WorkflowsApp() {
               <p className="text-sm">{loading ? 'Đang tải...' : 'Chọn workflow đã lưu hoặc tạo mẫu để bắt đầu.'}</p>
             </div>
           )}
-          <div className="text-[10px] text-stone-600 border-t border-stone-900 pt-3">Lịch sử chạy được lưu trong database. Lịch nền hằng ngày hiện chỉ hỗ trợ báo cáo task quá hạn dạng chỉ đọc; trigger khác vẫn cần executor riêng và không được giả vờ thành công.</div>
+          <div className="text-[10px] text-stone-600 border-t border-stone-900 pt-3">Lịch sử chạy lưu trong database, gồm trace từng node. DAG chỉ chạy operation đã đăng ký; AI/approval, shell/code tùy ý và trigger chưa hỗ trợ vẫn bị từ chối. Lịch nền hằng ngày vẫn chỉ chạy báo cáo task quá hạn ở chế độ chỉ đọc.</div>
         </main>
       </div>
     </div>

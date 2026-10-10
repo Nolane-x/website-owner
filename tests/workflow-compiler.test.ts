@@ -36,6 +36,21 @@ describe('workflow graph compiler', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('requires explicit true/false labels for a branching condition node', () => {
+    const result = compileWorkflowGraph([
+      node('start', 'trigger'),
+      node('condition', 'condition'),
+      node('yes'),
+      node('no'),
+    ], [
+      { source: 'start', target: 'condition' },
+      { source: 'condition', target: 'yes', label: 'true' },
+      { source: 'condition', target: 'no' },
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toContain('nhánh được gắn nhãn true và false');
+  });
+
   it('rejects cycles', () => {
     const result = compileWorkflowGraph([
       node('start', 'trigger'),

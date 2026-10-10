@@ -507,5 +507,45 @@ export async function initializeDatabase() {
     await postgresClient.unsafe(ddl);
   }
 
+  // One-time migration: preserve legacy duplicate tasks, but remove their duplicate
+  // source links before installing a partial unique index for race-safe Inbox conversion.
+  const sourceLinkIndexName = 'idx_kanban_tasks_profile_related_item_unique';
+  let sourceLinkIndexExists = false;
+  const indexCheckSql = `SELECT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = current_schema() AND indexname = $1
+  ) AS exists`;
+
+  if (pgliteClient) {
+    const indexResult = await pgliteClient.query<{ exists: boolean }>(indexCheckSql, [sourceLinkIndexName]);
+    sourceLinkIndexExists = indexResult.rows[0]?.exists === true;
+  } else if (postgresClient) {
+    const indexResult = await postgresClient.unsafe<{ exists: boolean }[]>(indexCheckSql, [sourceLinkIndexName]);
+    sourceLinkIndexExists = indexResult[0]?.exists === true;
+  }
+
+  if (!sourceLinkIndexExists) {
+    const sourceLinkMigration = `
+      WITH ranked AS (
+        SELECT id,
+          ROW_NUMBER() OVER (
+            PARTITION BY profile_id, related_item_id
+            ORDER BY created_at ASC, id ASC
+          ) AS row_number
+        FROM kanban_tasks
+        WHERE related_item_id IS NOT NULL
+      )
+      UPDATE kanban_tasks
+      SET related_item_id = NULL
+      WHERE id IN (SELECT id FROM ranked WHERE row_number > 1);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_kanban_tasks_profile_related_item_unique
+        ON kanban_tasks(profile_id, related_item_id)
+        WHERE related_item_id IS NOT NULL;
+    `;
+    if (pgliteClient) await pgliteClient.exec(sourceLinkMigration);
+    else if (postgresClient) await postgresClient.unsafe(sourceLinkMigration);
+  }
+
   return db;
 }

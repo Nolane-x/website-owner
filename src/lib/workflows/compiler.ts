@@ -156,10 +156,12 @@ export function compileWorkflowGraph(nodesValue: unknown, edgesValue: unknown): 
 
   const adjacency = new Map<string, string[]>();
   const indegree = new Map<string, number>();
+  const outgoingEdgeMeta = new Map<string, Array<{ label?: string; target: string }>>();
   const edgePairs = new Set<string>();
   for (const node of nodes) {
     adjacency.set(node.id, []);
     indegree.set(node.id, 0);
+    outgoingEdgeMeta.set(node.id, []);
   }
 
   for (let index = 0; index < edgesInput.length; index++) {
@@ -192,7 +194,23 @@ export function compileWorkflowGraph(nodesValue: unknown, edgesValue: unknown): 
     }
     edgePairs.add(pair);
     adjacency.get(raw.source)!.push(raw.target);
+    outgoingEdgeMeta.get(raw.source)!.push({
+      target: raw.target,
+      ...(typeof raw.label === 'string' ? { label: raw.label.trim().toLowerCase() } : {}),
+    });
     indegree.set(raw.target, (indegree.get(raw.target) ?? 0) + 1);
+  }
+
+  for (const node of nodes) {
+    if (node.type !== 'condition') continue;
+    const outgoing = outgoingEdgeMeta.get(node.id) ?? [];
+    if (outgoing.length <= 1) continue;
+    const labels = outgoing.map((edge) => edge.label);
+    if (outgoing.length !== 2 ||
+        labels.filter((label) => label === 'true').length !== 1 ||
+        labels.filter((label) => label === 'false').length !== 1) {
+      errors.push(`Node điều kiện “${node.title}” phải có đúng hai nhánh được gắn nhãn true và false.`);
+    }
   }
 
   if ((indegree.get(trigger.id) ?? 0) !== 0) {

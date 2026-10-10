@@ -40,7 +40,7 @@
     },
     "functionalStatus": {
       "copilot": "Real OpenAI-compatible/Groq/Ollama requests and real API-backed keyword retrieval; not a full RAG or agent runtime",
-      "workflows": "Persistent workflow definitions and durable run history (succeeded/failed/unsupported/interrupted), bounded owner-scoped history API and stale-run reconciliation. A deterministic preflight compiler validates legacy-linear plans and DAG graphs (cycles, dangling edges, duplicate IDs, unreachable nodes, stable topological order) before save/run. Inbox-to-task remains manual; active overdue reports can be scheduled daily by a CRON_SECRET-protected Vercel Cron with atomic once-per-Vietnam-day claims. Generic node/action/AI/approval execution and arbitrary-action scheduling are still not implemented.",
+      "workflows": "Persistent workflow definitions and durable run history. Preflight compiler validates DAGs and true/false branch labels; allowlisted node executor supports owner-scoped Inbox/task reads, idempotent task create/reuse, Inbox conversion and read-only overdue reporting. Node execution traces persist in run history; arbitrary shell/code, AI and approval actions fail closed until dedicated safe executors exist. Inbox conversion is transactional/row-locked and protected by a partial unique index; Vercel Cron schedules only the read-only overdue report with atomic per-Vietnam-day claims. CRON_SECRET is required in production.",
       "creatorStudio": "Database-backed content pipeline and optional direct AI outline generation; external publishing is not implemented by this module",
       "calendarHabits": "Database-backed internal events and habit completion tracking; no external calendar sync",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Workflow run links are remapped on restore. No authenticity signature or replacement-style restore.",
@@ -230,7 +230,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Biên dịch/kiểm tra workflow trước khi chạy, từ chối DAG hỏng và lưu chế độ/thứ tự biên dịch vào input history."
+      "shortDescription": "Runs either the allowlisted node graph executor or backward-compatible bounded trigger executor, records execution traces/results, and persists failed traces without false success."
     },
     {
       "relativePath": "src/app/api/admin/workflows/runs/route.ts",
@@ -334,7 +334,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Thêm thao tác kiểm tra & biên dịch DAG, hiển thị thứ tự node, cảnh báo và lỗi; không đánh đồng cấu trúc hợp lệ với executor đã hoàn thiện."
+      "shortDescription": "Templates use explicit operation-configured DAGs and migrate only exact legacy defaults; the UI exposes compiler diagnostics, node trace on runs and history, and preserves custom workflows."
     },
     {
       "relativePath": "src/components/layout/admin-shell.tsx",
@@ -374,7 +374,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Khởi tạo bảng/index lịch, habits và automation_workflow_runs cho PostgreSQL/PGlite."
+      "shortDescription": "Idempotent schema initialization includes a partial unique index for (profile_id, related_item_id); legacy duplicate tasks are preserved while duplicate source links are cleared before enforcing uniqueness."
     },
     {
       "relativePath": "src/lib/db/schema.ts",
@@ -653,8 +653,8 @@
       "fileName": "compiler.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Biên dịch định nghĩa workflow dạng DAG/tuyến tính tương thích với kiểm tra ID, type, config, giới hạn node/cạnh, chu trình, cạnh sai, node mồ côi và thứ tự topo ổn định."
+      "status": "modified",
+      "shortDescription": "Deterministic DAG compiler validates topology, reachability, duplicate/dangling edges, stable node ordering and explicit true/false condition branches."
     },
     {
       "relativePath": "src/app/api/admin/workflows/compile/route.ts",
@@ -669,8 +669,8 @@
       "fileName": "workflow-compiler.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Kiểm thử topo order, legacy linear, chu trình, cạnh trỏ sai, node mồ côi, ID trùng, type/config/position sai và giới hạn kích thước."
+      "status": "modified",
+      "shortDescription": "Compiler tests cover stable topological order, legacy linear plans, true/false conditional branch labels, cycles, dangling/duplicate edges, unreachable nodes, invalid config/type/position and graph-size limits."
     },
     {
       "relativePath": "tests/workflow-compile-api.test.ts",
@@ -679,6 +679,46 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Kiểm thử owner scope, xác thực đầu vào, lỗi DAG và capability của API biên dịch workflow."
+    },
+    {
+      "relativePath": "src/lib/workflows/convert-inbox.ts",
+      "fileName": "convert-inbox.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Chuyển Inbox thành task trong transaction; khóa hàng Inbox bằng SELECT FOR UPDATE để tuần tự hóa request cạnh tranh và giữ task cùng trạng thái nguồn nguyên tử."
+    },
+    {
+      "relativePath": "tests/inbox-to-task-concurrency.test.ts",
+      "fileName": "inbox-to-task-concurrency.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Database concurrency, retry and source-link uniqueness tests ensure only one task can link to a given owner Inbox item."
+    },
+    {
+      "relativePath": "src/lib/workflows/executor.ts",
+      "fileName": "executor.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Allowlisted graph executor with conditional branch routing, owner-scoped database operations, idempotent task creation, read-only reports, and per-node execution traces; arbitrary operations fail closed."
+    },
+    {
+      "relativePath": "tests/workflow-executor.test.ts",
+      "fileName": "workflow-executor.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Integration tests for create/reuse branches, no-overdue/overdue reports, side-effect reporting, and fail-closed unknown operations."
+    },
+    {
+      "relativePath": "tests/workflow-run-api.test.ts",
+      "fileName": "workflow-run-api.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "End-to-end workflow API tests verify a stored DAG executes through the allowlisted node executor, per-node trace persists to run history, and cyclic graphs are rejected before run creation."
     }
   ]
 }
