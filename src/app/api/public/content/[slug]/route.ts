@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicContent } from '@/lib/api/public-serializer';
 
 export async function GET(
@@ -10,6 +11,8 @@ export async function GET(
   segmentData: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'content-detail', 60);
+    if (rateLimitResponse) return rateLimitResponse;
     const access = await checkPublicAccessProtection();
     if (access.requirePassword && !access.hasValidGuestSession) {
       return NextResponse.json({ error: 'Yêu cầu mật mã truy cập.' }, { status: 403 });

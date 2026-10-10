@@ -30,6 +30,10 @@ export function PublicHeader({
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  // Keep the public tool area discoverable even when the owner customizes navigation.
+  const visibleNavItems = navItems.some((item) => item.href === '/tools')
+    ? navItems
+    : [...navItems, { label: 'Công cụ', href: '/tools' }];
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => {
@@ -57,7 +61,7 @@ export function PublicHeader({
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             return (
               <Link
@@ -125,7 +129,7 @@ export function PublicHeader({
       {mobileMenuOpen && (
         <div className="md:hidden border-b border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
           <nav className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link

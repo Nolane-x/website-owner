@@ -3,9 +3,12 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { collections } from '@/lib/db/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'collections', 40);
+    if (rateLimitResponse) return rateLimitResponse;
     const access = await checkPublicAccessProtection();
     if (access.requirePassword && !access.hasValidGuestSession) {
       return NextResponse.json({ error: 'Yêu cầu mật mã truy cập.' }, { status: 403 });
@@ -33,7 +36,8 @@ export async function GET() {
           isNull(collections.deletedAt)
         )
       )
-      .orderBy(desc(collections.isFeatured), desc(collections.createdAt));
+      .orderBy(desc(collections.isFeatured), desc(collections.createdAt))
+      .limit(100);
 
     return NextResponse.json({ collections: publicCollections });
   } catch (error) {

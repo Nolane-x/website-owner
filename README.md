@@ -17,7 +17,7 @@
 - **Xác thực tối giản cho người dùng nhưng tối tân ở Backend:** Đăng nhập chỉ bằng **Tên đăng nhập + Mật khẩu** trên bất kỳ thiết bị nào (không ép OTP/MFA/điện thoại).
 - **Mật khẩu an toàn:** Băm bằng thuật toán `Bcrypt` (salt rounds 12).
 - **Phiên làm việc bảo mật:** Token ngẫu nhiên 256-bit được băm SHA-256 trong database và truyền qua Cookie **HttpOnly, Secure, SameSite=Lax**.
-- **Sliding-Window Rate Limiter:** Chống brute-force tự động tại API đăng nhập và các endpoint quan trọng.
+- **Sliding-Window Rate Limiter:** API đăng nhập và mở khóa khách áp dụng giới hạn thử cùng body JSON streaming tối đa 8 KiB, trước khi khởi tạo/truy vấn database. Các public read API có giới hạn theo IP/toàn cục từng process, kết quả truy vấn được chặn số lượng, và bộ nhớ limiter có trần; khi đầy sẽ từ chối IP mới thay vì xóa ngân sách đang hoạt động. Đây là lớp giảm tải best-effort, không phải bộ đếm phân tán hoặc cam kết chống DDoS; cần thêm WAF/rate rules ở Cloudflare/Vercel nếu muốn giới hạn đồng nhất trên mọi instance.
 - **Khóa khẩn cấp (Panic Lock):** Phím tắt `Ctrl + Shift + L` che phủ tức thì màn hình tài liệu giả định.
 - **Két Sắt Bí Mật Zero-Knowledge (Vault):** Mã hóa phía trình duyệt bằng **AES-256-GCM + PBKDF2-HMAC-SHA-256 (600.000 vòng cho dữ liệu mới; vẫn hỗ trợ giải mã dữ liệu legacy 100.000 vòng)**. Máy chủ không bao giờ biết mật mã két hay dữ liệu gốc.
 
@@ -33,6 +33,15 @@
 - Export dữ liệu ứng dụng thành JSON kèm manifest SHA-256 cho payload `data` và số lượng bản ghi của từng nhóm; bao gồm workflow cùng lịch sử chạy đã lưu, trình duyệt kiểm tra checksum trước khi tải.
 - Import hỗ trợ bước preview không ghi database: xác minh checksum, hiển thị số lượng theo module và cảnh báo trước khi người dùng xác nhận restore.
 - Restore là thao tác thêm dữ liệu theo transaction, không thay thế hoặc đồng bộ database hiện có; chạy lại cùng backup có thể tạo bản sao trùng lặp. Workflow run history được phục hồi chỉ khi workflow nguồn được import và các ID quan hệ được ánh xạ lại. Backup legacy thiếu manifest được đánh dấu chưa xác minh. Checksum không phải chữ ký chống giả mạo và vẫn cần giữ bản sao ngoại tuyến an toàn.
+
+### 6. Public Tools & AI Lab
+- Trang `/tools` dành cho khách, truy cập từ trang chủ, header desktop/mobile và footer; không yêu cầu tài khoản.
+- **Máy tính khoa học** chạy hoàn toàn trong trình duyệt, dùng parser biểu thức riêng (không dùng `eval`), hỗ trợ lượng giác DEG/RAD, căn, lũy thừa, log, giai thừa, phần trăm và lịch sử trong phiên.
+- **Bộ chuyển đổi đơn vị offline** hỗ trợ độ dài, khối lượng, nhiệt độ, thời gian và dữ liệu; phân biệt MB thập phân với MiB nhị phân và từ chối nhiệt độ thấp hơn 0 K.
+- **AI Model Radar** chỉ gọi Hugging Face Hub API trực tiếp từ trình duyệt sau thao tác bấm nút; tối đa 12 model, timeout 12 giây, cooldown phía trình duyệt 20 giây, cache cục bộ 15 phút. Không proxy qua máy chủ website, không có API key và không chạy polling nền.
+- **Open-source Radar** gọi GitHub Search API trực tiếp từ trình duyệt khi khách bấm nút; tối đa 10 repository, timeout 12 giây, cooldown cục bộ 60 giây và cache 60 phút. Không dùng token, không proxy qua máy chủ, không tự retry; rate limit của GitHub tính theo IP khách và endpoint tìm kiếm có hạn mức riêng.
+- **Benchmark Hub** liên kết tới Artificial Analysis, LMArena, Stanford HELM và Hugging Face; không giả lập điểm số hoặc gắn nhãn lượt tải là benchmark.
+- **Hạn chế chi phí:** những công cụ tính toán không gọi backend; Radar gọi nguồn bên thứ ba trực tiếp. Rate limit trên public API của Next.js là theo process và chỉ best-effort; cần cấu hình rate rules/WAF ở hạ tầng nếu cần hạn mức phân tán toàn cầu.
 
 ---
 
@@ -96,6 +105,7 @@ Truy cập:
 │   │   │   ├── p/[slug]/          # Trình kết xuất trang Canvas Blocks
 │   │   │   ├── projects/          # Danh sách & Chi tiết dự án
 │   │   │   ├── resources/         # Thư viện tài nguyên Link-First
+│   │   │   ├── tools/             # Máy tính khoa học, chuyển đổi đơn vị, AI Model Radar và benchmark links
 │   │   │   ├── share/[token]/     # Xem nội dung chia sẻ Unlisted bí mật
 │   │   │   ├── layout.tsx         # Layout công khai (Header, Footer, Khóa khách)
 │   │   │   └── page.tsx           # Trang chủ công khai (Hero, Dự án, Tài nguyên)

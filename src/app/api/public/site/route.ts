@@ -4,10 +4,13 @@ import { profiles, settings } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { ensureSeedData } from '@/lib/db/seed';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicSiteSettings } from '@/lib/api/public-serializer';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'site', 30);
+    if (rateLimitResponse) return rateLimitResponse;
     await initializeDatabase();
     if (process.env.NODE_ENV !== 'production') {
       await ensureSeedData();

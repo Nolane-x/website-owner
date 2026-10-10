@@ -8,24 +8,44 @@ export interface Env {
   ENABLE_RATE_LIMIT?: string;
 }
 
-// In-memory rate limiting per Cloudflare Worker edge isolate
+// Best-effort per-isolate rate limiting. The map is explicitly bounded so a
+// high-cardinality IP flood cannot grow isolate memory without limit.
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const MAX_TRACKED_RATE_LIMIT_KEYS = 10_000;
+let edgeRequestCount = 0;
+
+function pruneExpiredRateLimitEntries(now: number): void {
+  for (const [key, entry] of rateLimitMap.entries()) {
+    if (entry.resetAt <= now) rateLimitMap.delete(key);
+  }
+}
+
+function reserveRateLimitSlot(now: number): void {
+  pruneExpiredRateLimitEntries(now);
+  while (rateLimitMap.size >= MAX_TRACKED_RATE_LIMIT_KEYS) {
+    const oldestKey = rateLimitMap.keys().next().value as string | undefined;
+    if (oldestKey === undefined) break;
+    rateLimitMap.delete(oldestKey);
+  }
+}
 
 function checkEdgeRateLimit(ip: string, isAuthEndpoint: boolean): boolean {
   const now = Date.now();
-  const windowMs = isAuthEndpoint ? 60 * 1000 : 30 * 1000; // 1 min for auth, 30s for general
-  const maxRequests = isAuthEndpoint ? 5 : 60; // Max 5 login tries/min, 60 general/30s
+  edgeRequestCount += 1;
+  if (edgeRequestCount % 256 === 0) {
+    pruneExpiredRateLimitEntries(now);
+  }
 
+  const windowMs = isAuthEndpoint ? 60 * 1000 : 30 * 1000;
+  const maxRequests = isAuthEndpoint ? 5 : 60;
   const record = rateLimitMap.get(ip);
   if (!record || record.resetAt <= now) {
+    if (rateLimitMap.size >= MAX_TRACKED_RATE_LIMIT_KEYS) reserveRateLimitSlot(now);
     rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
     return true;
   }
 
-  if (record.count >= maxRequests) {
-    return false;
-  }
-
+  if (record.count >= maxRequests) return false;
   record.count += 1;
   return true;
 }

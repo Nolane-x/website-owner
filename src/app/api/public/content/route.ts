@@ -3,10 +3,13 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
 import { eq, and, desc, isNull, type SQL } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicContent } from '@/lib/api/public-serializer';
 
 export async function GET(req: NextRequest) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'content-list', 40);
+    if (rateLimitResponse) return rateLimitResponse;
     const access = await checkPublicAccessProtection();
     if (access.requirePassword && !access.hasValidGuestSession) {
       return NextResponse.json(

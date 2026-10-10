@@ -194,6 +194,12 @@ export default function PublicHomePage() {
               <span>Kho Tài Nguyên Mở</span>
             </Button>
           </Link>
+          <Link href="/tools">
+            <Button variant="outline" className="flex items-center gap-2">
+              <Code2 size={16} />
+              <span>Công cụ &amp; AI Lab</span>
+            </Button>
+          </Link>
         </div>
       </section>
 

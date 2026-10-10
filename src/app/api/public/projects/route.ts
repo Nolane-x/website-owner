@@ -3,10 +3,13 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicProject } from '@/lib/api/public-serializer';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'projects', 40);
+    if (rateLimitResponse) return rateLimitResponse;
     const access = await checkPublicAccessProtection();
     if (access.requirePassword && !access.hasValidGuestSession) {
       return NextResponse.json({ error: 'Yêu cầu mật mã truy cập.' }, { status: 403 });
@@ -26,7 +29,8 @@ export async function GET() {
           isNull(contentItems.deletedAt)
         )
       )
-      .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt));
+      .orderBy(desc(contentItems.isPinned), desc(contentItems.publishedAt))
+      .limit(100);
 
     const projects = rawProjects.map(toPublicProject).filter(Boolean);
 

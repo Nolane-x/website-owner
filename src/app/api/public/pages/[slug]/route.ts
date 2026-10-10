@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { pages, contentBlocks } from '@/lib/db/schema';
 import { eq, and, asc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicPage, toPublicBlock } from '@/lib/api/public-serializer';
 
 export async function GET(
@@ -10,6 +11,8 @@ export async function GET(
   segmentData: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'page-detail', 60);
+    if (rateLimitResponse) return rateLimitResponse;
     const access = await checkPublicAccessProtection();
     if (access.requirePassword && !access.hasValidGuestSession) {
       return NextResponse.json({ error: 'Yêu cầu mật mã truy cập.' }, { status: 403 });
@@ -43,7 +46,8 @@ export async function GET(
       .select()
       .from(contentBlocks)
       .where(eq(contentBlocks.pageId, pageRaw.id))
-      .orderBy(asc(contentBlocks.sortOrder));
+      .orderBy(asc(contentBlocks.sortOrder))
+      .limit(200);
 
     const publicBlocks = rawBlocks.map((b) => toPublicBlock(b as unknown as Record<string, unknown>)).filter(Boolean);
     const publicPage = toPublicPage(pageRaw as unknown as Record<string, unknown>, rawBlocks as unknown as Array<Record<string, unknown>>);

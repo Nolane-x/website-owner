@@ -15,7 +15,7 @@
       "passwordHashing": "Bcrypt (12 rounds salt)",
       "sessionTokens": "256-bit cryptographically secure, SHA-256 hashed in DB",
       "cookiePolicy": "HttpOnly, Secure in production, SameSite=Lax",
-      "rateLimiter": "In-memory sliding-window limiter; not a shared global counter across every production instance",
+      "rateLimiter": "In-process sliding-window limiter with a 20,000-key cap; public read APIs add global and per-route per-IP budgets, while login and guest-password endpoints retain dedicated limits. Counters are not shared across serverless instances; edge/WAF rate rules are still needed for a uniform distributed limit.",
       "xssProtection": "isomorphic-dompurify HTML sanitization",
       "vaultEncryption": "Client-side Web Crypto AES-256-GCM; PBKDF2-HMAC-SHA-256 at 600000 iterations for new items, legacy 100000-iteration decryption fallback",
       "panicLock": "Global Ctrl+Shift+L privacy overlay with account re-authentication; not a secure RAM wipe or OS lock",
@@ -46,7 +46,8 @@
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Import body bytes are capped while streaming at 4.5 MiB instead of buffering an unchecked request; checksum authenticity signatures and replacement-style restore remain unsupported.",
       "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
       "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage",
-      "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes."
+      "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes.",
+      "publicTools": "Public /tools page available without an account: scientific calculator uses a bounded recursive-descent parser (no eval), and unit converter runs fully offline for length, mass, temperature, time and decimal/binary data units. AI Model Radar makes an explicit direct-browser GET to the public Hugging Face Hub API, returns at most 12 public models, has a 12-second timeout, 20-second browser cooldown and 15-minute local cache. Benchmark Hub links to public leaderboard/research pages without fabricating scores, placing API keys in the client or proxying paid providers through the site."
     }
   },
   "tables": [
@@ -167,7 +168,8 @@
       "/collections",
       "/collections/[slug]",
       "/p/[slug]",
-      "/share/[token]"
+      "/share/[token]",
+      "/tools"
     ],
     "admin": [
       "/admin",
@@ -199,7 +201,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Track shared streaming request-body limits and regression tests across backup import, HTTP proxy, and Calendar/Habits APIs."
+      "shortDescription": "Track changed project files and their verification/security scope for the public Tools & AI Lab and public API hardening work."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -871,7 +873,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Document strict Calendar/Habits API validation, bounded requests and pagination, row-locked idempotent per-day completion, all-day/event editing UI and inactive-habit controls."
+      "shortDescription": "Document the public Tools & AI Lab (scientific calculator, offline unit conversion, direct on-demand Hugging Face/GitHub radars and benchmark source links), bounded login/guest JSON payloads, and the limits of per-process rate limiting."
     },
     {
       "relativePath": "src/app/api/admin/calendar-events/route.ts",
@@ -976,6 +978,214 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Regression tests cover exact UTF-8 byte boundaries, early declared-length rejection, streaming cancellation, malformed length headers, invalid UTF-8, and invalid limits."
+    },
+    {
+      "relativePath": "src/app/(public)/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Add a homepage hero entry point to the public Tools & AI Lab."
+    },
+    {
+      "relativePath": "src/app/(public)/tools/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Expose public scientific calculator, offline multi-category unit converter, on-demand Hugging Face model radar, on-demand GitHub open-source radar, and sourced benchmark links with browser-only caching and cooldowns."
+    },
+    {
+      "relativePath": "src/components/layout/public-header.tsx",
+      "fileName": "public-header.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Expose the public tools route in desktop and mobile navigation even when custom navigation omits it."
+    },
+    {
+      "relativePath": "src/components/layout/public-footer.tsx",
+      "fileName": "public-footer.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Add a discoverable public tools link in the footer."
+    },
+    {
+      "relativePath": "src/lib/tools/scientific-calculator.ts",
+      "fileName": "scientific-calculator.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Implement a bounded recursive-descent math parser without eval, with scientific functions, trig angle modes, constants, factorial, finite-result checks and clear invalid-input errors."
+    },
+    {
+      "relativePath": "tests/scientific-calculator.test.ts",
+      "fileName": "scientific-calculator.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test arithmetic precedence, powers, trig modes, scientific functions, factorial, percentages, limits, malformed expressions and JavaScript-injection rejection."
+    },
+    {
+      "relativePath": "src/lib/tools/unit-converter.ts",
+      "fileName": "unit-converter.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Provide offline conversion for length, mass, temperature, time and data units; distinguish decimal from binary prefixes and reject temperatures below absolute zero."
+    },
+    {
+      "relativePath": "tests/unit-converter.test.ts",
+      "fileName": "unit-converter.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test representative unit conversions, decimal/binary data factors, temperature conversion, invalid values and absolute-zero boundaries."
+    },
+    {
+      "relativePath": "src/lib/security/public-api-guard.ts",
+      "fileName": "public-api-guard.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Apply route-scoped and per-process global budgets to public database reads with explicit 429 and Retry-After headers; this is best-effort and not a distributed DDoS shield."
+    },
+    {
+      "relativePath": "tests/public-api-guard.test.ts",
+      "fileName": "public-api-guard.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Verify forwarded IP normalization and route-scoped 429 responses with Retry-After/no-store headers."
+    },
+    {
+      "relativePath": "src/lib/security/rate-limit.ts",
+      "fileName": "rate-limit.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Cap the in-process rate-limit map at 20,000 keys, prune expired records in bounded batches, fail closed at capacity rather than evict active limits, and normalize forwarded IP addresses."
+    },
+    {
+      "relativePath": "worker/src/index.ts",
+      "fileName": "index.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Bound the Cloudflare Worker per-isolate rate-limit map to 10,000 keys and periodically prune expired entries to cap memory growth."
+    },
+    {
+      "relativePath": "src/app/api/public/site/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Limit public site-configuration reads before database access."
+    },
+    {
+      "relativePath": "src/app/api/public/projects/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply public API rate limiting and cap project result count to 100."
+    },
+    {
+      "relativePath": "src/app/api/public/collections/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply public API rate limiting and cap collection result count to 100."
+    },
+    {
+      "relativePath": "src/app/api/public/content/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply public API rate limiting while retaining the existing maximum of 100 content items per response."
+    },
+    {
+      "relativePath": "src/app/api/public/content/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply a route-scoped request budget to public content detail reads."
+    },
+    {
+      "relativePath": "src/app/api/public/pages/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply a route-scoped budget to public page reads and limit rendered blocks to 200 per page response."
+    },
+    {
+      "relativePath": "src/app/api/public/collections/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply a route-scoped budget to public collection detail reads and cap returned collection items at 100."
+    },
+    {
+      "relativePath": "src/app/api/public/resources/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply public API rate limiting and cap resource result count to 100."
+    },
+    {
+      "relativePath": "src/app/api/public/search/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply a tighter public search budget, cap queries at 80 characters, reject SQL LIKE wildcard characters, and cap result sets at 20 content plus 10 pages."
+    },
+    {
+      "relativePath": "src/app/api/public/unlisted/[shareToken]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply a route-scoped budget to unlisted token reads and cap page blocks at 200 and collection items at 100."
+    },
+    {
+      "relativePath": "src/app/api/auth/login/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply IP rate limits and an 8 KiB streaming JSON body cap before database initialization; validate object shape and credentials fields before any database work."
+    },
+    {
+      "relativePath": "src/app/api/public/verify-password/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Keep guest-password attempt limiting and reject malformed or over-8 KiB JSON before database access; map oversized bodies to 413 and malformed input to 400."
+    },
+    {
+      "relativePath": "src/lib/tools/public-data.ts",
+      "fileName": "public-data.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Normalize untrusted Hugging Face and GitHub responses, reject invalid identifiers and URL injection, discard unsafe numeric/text fields and duplicate repository names, and cap display lists."
+    },
+    {
+      "relativePath": "tests/public-data-validation.test.ts",
+      "fileName": "public-data-validation.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Regression tests cover third-party payload shapes, identifier safety, duplicate repositories, unsafe links, malformed counts, and model/repository result caps."
     }
   ]
 }

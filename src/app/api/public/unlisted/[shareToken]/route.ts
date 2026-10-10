@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems, pages, contentBlocks, collections, collectionItems } from '@/lib/db/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicContent, toPublicPage, toPublicBlock, toPublicCollection } from '@/lib/api/public-serializer';
 
 export async function GET(
@@ -10,6 +11,8 @@ export async function GET(
   segmentData: { params: Promise<{ shareToken: string }> }
 ) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'unlisted-share', 30);
+    if (rateLimitResponse) return rateLimitResponse;
     // F2-10: Áp dụng mật khẩu bảo vệ khách đồng nhất trên toàn bộ website
     const access = await checkPublicAccessProtection();
     if (access.requirePassword && !access.hasValidGuestSession) {
@@ -63,7 +66,8 @@ export async function GET(
         .select()
         .from(contentBlocks)
         .where(eq(contentBlocks.pageId, rawPage.id))
-        .orderBy(asc(contentBlocks.sortOrder));
+        .orderBy(asc(contentBlocks.sortOrder))
+        .limit(200);
 
       const publicBlocks = rawBlocks.map((b) => toPublicBlock(b as unknown as Record<string, unknown>)).filter(Boolean);
       const publicPage = toPublicPage(
@@ -124,7 +128,8 @@ export async function GET(
           )
         )
         .where(eq(collectionItems.collectionId, colRaw.id))
-        .orderBy(asc(collectionItems.sortOrder));
+        .orderBy(asc(collectionItems.sortOrder))
+        .limit(100);
 
       const publicCol = toPublicCollection(
         colRaw as unknown as Record<string, unknown>,

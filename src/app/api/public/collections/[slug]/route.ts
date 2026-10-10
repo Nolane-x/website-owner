@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { collections, collectionItems, contentItems } from '@/lib/db/schema';
 import { eq, and, asc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicCollection, toPublicContent } from '@/lib/api/public-serializer';
 
 export async function GET(
@@ -10,6 +11,8 @@ export async function GET(
   segmentData: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const rateLimitResponse = checkPublicApiRateLimit(req, 'collection-detail', 60);
+    if (rateLimitResponse) return rateLimitResponse;
     const access = await checkPublicAccessProtection();
     if (access.requirePassword && !access.hasValidGuestSession) {
       return NextResponse.json({ error: 'Yêu cầu mật mã truy cập.' }, { status: 403 });
@@ -69,7 +72,8 @@ export async function GET(
         )
       )
       .where(eq(collectionItems.collectionId, colRaw.id))
-      .orderBy(asc(collectionItems.sortOrder));
+      .orderBy(asc(collectionItems.sortOrder))
+      .limit(100);
 
     const publicItems = rawItems
       .map((it) => toPublicContent(it as unknown as Record<string, unknown>))

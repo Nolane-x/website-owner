@@ -6,6 +6,7 @@ import { verifyPassword } from '@/lib/auth/password';
 import { createGuestSession, setGuestSessionCookie } from '@/lib/auth/guest-session';
 import { rateLimiter, getClientIp } from '@/lib/security/rate-limit';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
+import { BoundedRequestBodyTooLargeError, InvalidBoundedRequestBodyError, readBoundedRequestText } from '@/lib/security/bounded-request-body';
 
 export async function POST(req: NextRequest) {
   const originError = assertValidOrigin(req);
@@ -21,8 +22,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    const { password } = body;
+    let parsedBody: unknown;
+    try {
+      const rawBody = await readBoundedRequestText(req, 8 * 1024);
+      parsedBody = JSON.parse(rawBody) as unknown;
+    } catch (error) {
+      if (error instanceof BoundedRequestBodyTooLargeError) {
+        return NextResponse.json({ error: 'Yêu cầu vượt quá giới hạn 8 KiB.' }, { status: 413 });
+      }
+      if (error instanceof InvalidBoundedRequestBodyError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'Nội dung yêu cầu không phải JSON hợp lệ.' }, { status: 400 });
+    }
+
+    if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+      return NextResponse.json({ error: 'Nội dung yêu cầu phải là một object JSON.' }, { status: 400 });
+    }
+    const { password } = parsedBody as { password?: unknown };
 
     if (!password || typeof password !== 'string') {
       return NextResponse.json({ error: 'Vui lòng nhập mật khẩu khách.' }, { status: 400 });

@@ -50,6 +50,9 @@ export function PublicFooter({
             <Link href="/articles" className="hover:text-[var(--accent)] transition-colors">
               Bài viết
             </Link>
+            <Link href="/tools" className="hover:text-[var(--accent)] transition-colors">
+              Công cụ
+            </Link>
             <button
               onClick={scrollToTop}
               className="p-2 rounded-lg border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] transition-colors flex items-center gap-1"
