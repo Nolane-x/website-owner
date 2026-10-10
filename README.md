@@ -53,7 +53,7 @@
   - Chế độ tự động: Cơ sở dữ liệu nhúng **PGlite WASM** (lưu tại `./data/webos_pglite`, zero-config)
   - Chế độ Production: Kết nối **PostgreSQL / Supabase** thông qua biến môi trường `DATABASE_URL`
 - **Mã Hóa & Bảo Mật:** `bcryptjs`, `isomorphic-dompurify`, `Web Crypto API (AES-GCM, PBKDF2)`
-- **Edge Security Gateway:** Cloudflare Worker (tại thư mục `worker/`)
+- **Edge Security Gateway:** Cloudflare Worker (tại thư mục `worker/`). Gateway hiện để `workers_dev = false` vì chưa có custom domain/route được cấu hình; nếu `ORIGIN_URL` còn là placeholder, Worker trả `503` trước khi gửi bất kỳ request upstream nào. Không xem Worker là lớp bảo vệ production cho alias Vercel cho tới khi có domain/route thực tế và thử nghiệm end-to-end. Workers Free có hạn mức request theo ngày; không bật hostname công khai chỉ để thêm một đường vào thứ hai.
 
 ---
 

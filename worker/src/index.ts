@@ -20,15 +20,6 @@ function pruneExpiredRateLimitEntries(now: number): void {
   }
 }
 
-function reserveRateLimitSlot(now: number): void {
-  pruneExpiredRateLimitEntries(now);
-  while (rateLimitMap.size >= MAX_TRACKED_RATE_LIMIT_KEYS) {
-    const oldestKey = rateLimitMap.keys().next().value as string | undefined;
-    if (oldestKey === undefined) break;
-    rateLimitMap.delete(oldestKey);
-  }
-}
-
 function checkEdgeRateLimit(ip: string, isAuthEndpoint: boolean): boolean {
   const now = Date.now();
   edgeRequestCount += 1;
@@ -38,9 +29,16 @@ function checkEdgeRateLimit(ip: string, isAuthEndpoint: boolean): boolean {
 
   const windowMs = isAuthEndpoint ? 60 * 1000 : 30 * 1000;
   const maxRequests = isAuthEndpoint ? 5 : 60;
-  const record = rateLimitMap.get(ip);
-  if (!record || record.resetAt <= now) {
-    if (rateLimitMap.size >= MAX_TRACKED_RATE_LIMIT_KEYS) reserveRateLimitSlot(now);
+  let record = rateLimitMap.get(ip);
+  if (record && record.resetAt <= now) {
+    rateLimitMap.delete(ip);
+    record = undefined;
+  }
+  if (!record) {
+    if (rateLimitMap.size >= MAX_TRACKED_RATE_LIMIT_KEYS) {
+      // Preserve active limits instead of evicting them when an attacker rotates IPs.
+      return false;
+    }
     rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
     return true;
   }
@@ -48,6 +46,32 @@ function checkEdgeRateLimit(ip: string, isAuthEndpoint: boolean): boolean {
   if (record.count >= maxRequests) return false;
   record.count += 1;
   return true;
+}
+
+/**
+ * A placeholder or malformed upstream must never turn this gateway into a
+ * proxy to an unrelated site. Keep workers.dev disabled until a real route
+ * and production origin have been configured deliberately.
+ */
+export function getConfiguredOrigin(env: Env): URL | null {
+  const raw = env.ORIGIN_URL?.trim();
+  if (!raw) return null;
+
+  try {
+    const origin = new URL(raw);
+    if (
+      origin.protocol !== 'https:' ||
+      origin.hostname.toLowerCase() === 'your-domain.com' ||
+      origin.username !== '' ||
+      origin.password !== '' ||
+      origin.pathname !== '/' ||
+      origin.search !== '' ||
+      origin.hash !== ''
+    ) return null;
+    return origin;
+  } catch {
+    return null;
+  }
 }
 
 // Prohibited scanning paths commonly probed by malicious bots
@@ -102,11 +126,20 @@ const worker = {
       }
     }
 
-    // 3. Upstream Routing / Origin Forwarding
-    const origin = env.ORIGIN_URL ? new URL(env.ORIGIN_URL) : null;
-    const targetUrl = origin
-      ? new URL(url.pathname + url.search, origin.origin)
-      : new URL(request.url);
+    // 3. Fail closed when the gateway has not been deliberately configured.
+    // Never fall back to forwarding to the incoming workers.dev URL (recursion)
+    // or the placeholder domain (unintended third-party traffic).
+    const origin = getConfiguredOrigin(env);
+    if (!origin) {
+      return new Response('Gateway chưa được cấu hình origin HTTPS hợp lệ.', {
+        status: 503,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+    const targetUrl = new URL(url.pathname + url.search, origin.origin);
 
     // Forward request preserving headers and adding security markers
     const forwardHeaders = new Headers(request.headers);
