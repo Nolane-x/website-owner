@@ -11,6 +11,7 @@ type DatabaseFailureCategory =
   | 'permission_denied'
   | 'tls_configuration'
   | 'connection_capacity'
+  | 'resource_exhausted'
   | 'query_failed';
 
 type ErrorLike = {
@@ -126,6 +127,10 @@ function classifyDatabaseFailure(chain: ErrorLike[]): DatabaseFailureCategory {
   if (['53300', '53400'].some((code) => codes.includes(code)) ||
     /too many clients|remaining connection slots|connection limit exceeded/.test(messages)) {
     return 'connection_capacity';
+  }
+
+  if (codes.some((code) => code.startsWith('53'))) {
+    return 'resource_exhausted';
   }
 
   if (

@@ -388,7 +388,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Reduce each Vercel serverless instance PostgreSQL pool from 10 to 4 connections and close idle postgres.js connections after 5 seconds while preserving transaction-pooler compatibility."
+      "shortDescription": "Use a per-instance single-flight promise for schema/migration initialization, retry after transient failure, and bound postgres.js pool sessions with max=4 and idle_timeout=5."
     },
     {
       "relativePath": "src/lib/db/schema.ts",
@@ -1652,7 +1652,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Classify only confirmed connection-limit SQLSTATEs as connection capacity and safely expose an allow-listed SQLSTATE for reliable production diagnosis."
+      "shortDescription": "Distinguish actual too-many-connection SQLSTATEs from broader PostgreSQL class-53 resource exhaustion and safely return the allow-listed SQLSTATE."
     },
     {
       "relativePath": "tests/database-readiness.test.ts",
@@ -1660,7 +1660,23 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Regression tests distinguish PostgreSQL too-many-connections (53300) from other class-53 resource errors and ensure that only SQLSTATEs—not raw error details or credentials—are returned."
+      "shortDescription": "Regression tests distinguish SQLSTATE 53000/general resource exhaustion from 53300/connection capacity and verify secret-free diagnostic responses."
+    },
+    {
+      "relativePath": "src/lib/db/single-flight.ts",
+      "fileName": "single-flight.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Generic one-time initialization helper deduplicates concurrent callers and clears rejected promises to permit retry after transient failures."
+    },
+    {
+      "relativePath": "tests/database-single-flight.test.ts",
+      "fileName": "database-single-flight.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Regression tests prove concurrent initialization calls share one task and a failed task can be retried."
     }
   ]
-}
+}\n

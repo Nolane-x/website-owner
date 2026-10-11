@@ -167,7 +167,7 @@ describe('production readiness endpoint', () => {
     expect(body).not.toContain('private-password');
   });
 
-  it('does not mislabel every SQLSTATE class 53 error as a connection limit', async () => {
+  it('classifies other SQLSTATE class 53 resource failures accurately', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
     const databaseError = Object.assign(new Error('private server details'), { code: '53100' });
     vi.mocked(getDb).mockReturnValue({
@@ -177,13 +177,29 @@ describe('production readiness endpoint', () => {
     const response = await GET();
     const body = await response.text();
     expect(JSON.parse(body)).toMatchObject({
-      databaseFailure: 'query_failed',
+      databaseFailure: 'resource_exhausted',
       databaseFailureCode: '53100',
     });
     expect(body).not.toContain('private server details');
     expect(body).not.toContain('private-password');
   });
 
+  it('identifies SQLSTATE 53000 as a database resource exhaustion, not an ordinary query error', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    const databaseError = Object.assign(new Error('sensitive resource detail'), { code: '53000' });
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(databaseError),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'resource_exhausted',
+      databaseFailureCode: '53000',
+    });
+    expect(body).not.toContain('sensitive resource detail');
+    expect(body).not.toContain('private-password');
+  });
   it('returns a safe SQLSTATE code when the failure cannot be categorized', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
     const postgresError = Object.assign(

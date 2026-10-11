@@ -4,6 +4,7 @@ import postgres from 'postgres';
 import { PGlite } from '@electric-sql/pglite';
 import * as schema from './schema';
 import { resolveDatabaseUrl } from './config';
+import { createSingleFlight } from './single-flight';
 import path from 'path';
 import fs from 'fs';
 
@@ -61,8 +62,9 @@ export function getDb() {
 }
 
 // Hàm khởi tạo bảng và seed dữ liệu ban đầu
-export async function initializeDatabase() {
+async function initializeDatabaseOnce(): Promise<AppDatabase> {
   const db = getDb();
+
 
   // Tạo các bảng trực tiếp nếu chưa tồn tại (tương thích tuyệt đối cả Postgres và PGLite)
   const ddl = `
@@ -556,3 +558,6 @@ export async function initializeDatabase() {
 
   return db;
 }
+
+// All requests in an instance share one schema initialization; transient failures remain retryable.
+export const initializeDatabase = createSingleFlight(initializeDatabaseOnce);
