@@ -45,7 +45,7 @@ describe('production readiness endpoint', () => {
     expect(body).not.toContain('private-password');
   });
 
-  it('distinguishes an unreachable database without exposing the database error', async () => {
+  it('keeps unknown driver failures generic and secret-free', async () => {
     vi.stubEnv('POSTGRES_URL', 'postgres://private-user:private-password@db.example/test');
     vi.mocked(getDb).mockReturnValue({
       execute: vi.fn().mockRejectedValue(new Error('private-password must never be returned')),
@@ -63,7 +63,7 @@ describe('production readiness endpoint', () => {
     expect(body).not.toContain('private-password');
   });
 
-  it('classifies a host/network failure without exposing raw driver details', async () => {
+  it('classifies a direct host/network failure without exposing raw driver details', async () => {
     vi.stubEnv('DATABASE_URL', '');
     vi.stubEnv('POSTGRES_URL', 'postgres://private-user:private-password@db.example/test');
     vi.mocked(getDb).mockReturnValue({
@@ -81,5 +81,66 @@ describe('production readiness endpoint', () => {
       databaseReachable: false,
       databaseFailure: 'network_unreachable',
     });
+  });
+
+  it('classifies network errors wrapped by the ORM or driver', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    const nestedSocketError = Object.assign(new Error('getaddrinfo ENOTFOUND hidden-host'), {
+      code: 'ENOTFOUND',
+    });
+    const wrappedError = Object.assign(new Error('query execution failed'), {
+      cause: Object.assign(new Error('connection layer failed'), { cause: nestedSocketError }),
+    });
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(wrappedError),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    expect(response.status).toBe(503);
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'network_unreachable',
+      databaseConfigured: true,
+      databaseReachable: false,
+    });
+    expect(body).not.toContain('hidden-host');
+    expect(body).not.toContain('private-password');
+  });
+
+  it('classifies PostgreSQL authentication errors inside a wrapped cause', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    const postgresError = Object.assign(new Error('password authentication failed for hidden-user'), {
+      code: '28P01',
+    });
+    const wrappedError = Object.assign(new Error('query failed'), { cause: postgresError });
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(wrappedError),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    expect(response.status).toBe(503);
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'authentication_or_database_config',
+    });
+    expect(body).not.toContain('hidden-user');
+    expect(body).not.toContain('private-password');
+  });
+
+  it('recognizes postgres.js connection timeout codes', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(Object.assign(
+        new Error('connection timeout with private endpoint details'),
+        { code: 'CONNECT_TIMEOUT' },
+      )),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'network_unreachable',
+    });
+    expect(body).not.toContain('private endpoint details');
   });
 });

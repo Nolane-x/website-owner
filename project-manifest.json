@@ -1652,7 +1652,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Probe configured PostgreSQL connectivity and return only a sanitized failure category; raw connection errors and URLs are never exposed."
+      "shortDescription": "Classify wrapped PostgreSQL and socket error causes into a fixed secret-free readiness category, including postgres.js timeouts, authentication, TLS and connection capacity."
     },
     {
       "relativePath": "tests/database-readiness.test.ts",
@@ -1660,7 +1660,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Test secret-free readiness responses and classify network failures separately from generic query failures."
+      "shortDescription": "Regression tests verify secret-free readiness output and classification of nested ORM/driver network/authentication errors and postgres.js connection timeouts."
     }
   ]
 }
