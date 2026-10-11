@@ -35,12 +35,12 @@
 - Restore là thao tác thêm dữ liệu theo transaction, không thay thế hoặc đồng bộ database hiện có; chạy lại cùng backup có thể tạo bản sao trùng lặp. Workflow run history được phục hồi chỉ khi workflow nguồn được import và các ID quan hệ được ánh xạ lại. Backup legacy thiếu manifest được đánh dấu chưa xác minh. Checksum không phải chữ ký chống giả mạo và vẫn cần giữ bản sao ngoại tuyến an toàn.
 
 ### 6. Public Open Data & AI Lab
-- Trang `/tools` dành cho khách, truy cập từ trang chủ, header desktop/mobile và footer; không yêu cầu tài khoản. Trang này **không chứa máy tính khoa học**.
+- Trang `/tools` dành cho khách, truy cập từ trang chủ, header desktop/mobile và footer; không yêu cầu tài khoản. Có bộ **máy tính khoa học** (lượng giác Deg/Rad, lũy thừa, căn, logarit, giai thừa, phần trăm, hằng số và lịch sử phiên) cùng **bộ đổi đơn vị** cho độ dài, khối lượng, nhiệt độ, thời gian và dữ liệu. Hai công cụ chạy cục bộ trong trình duyệt, parser toán học không dùng `eval`, không gọi API và không gửi biểu thức/giá trị chuyển đổi lên máy chủ.
 - **AI Model Radar** tải tối đa 8 mô hình tạo văn bản từ Hugging Face Hub API khi khách chủ động bấm nút.
 - **Open-source Radar** tải tối đa 8 repository từ GitHub Search API khi khách chủ động bấm nút.
 - **Tech Signals** hiển thị tối đa 8 câu chuyện/thảo luận AI gần đây từ Hacker News Algolia API; đây là thảo luận cộng đồng, không được trình bày như tin tức đã xác minh.
 - **Benchmark Hub** liên kết tới Artificial Analysis, LMArena, Stanford HELM và bảng đánh giá mô hình mở của Hugging Face; có thêm feed HLE live từ API leaderboard công khai của Hugging Face, chỉ tải tối đa 8 dòng theo thao tác bấm. Trang giữ nguyên điểm/rank, ghi chú và cờ `verified`; không tự quy đổi điểm thành phần trăm hoặc coi kết quả cộng đồng chưa xác minh là kết quả đã chứng nhận.
-- **Giới hạn chi phí ở phía khách:** cả ba nguồn được gọi trực tiếp từ trình duyệt, không qua proxy của website, không yêu cầu/nhúng API key, không tự tải khi mở trang và không tự retry. Mỗi nguồn trả về tối đa 8 mục; thời gian chờ 10 giây, giới hạn phản hồi 180 KiB, cooldown cục bộ chung 45 giây và cache trình duyệt 30 phút. Rate limit của nhà cung cấp bên thứ ba vẫn áp dụng theo IP khách.
+- **Giới hạn chi phí ở phía khách:** cả bốn feed được gọi trực tiếp từ trình duyệt, không qua proxy của website, không yêu cầu/nhúng API key, không tự tải khi mở trang và không tự retry. Mỗi nguồn trả về tối đa 8 mục; thời gian chờ 10 giây, giới hạn phản hồi 180 KiB, cooldown cục bộ chung 45 giây và cache trình duyệt 30 phút. Rate limit của nhà cung cấp bên thứ ba vẫn áp dụng theo IP khách.
 - **Máy tính khoa học riêng của chủ sở hữu** được đặt tại `/admin/calculator`, đồng thời có trong sidebar, dashboard, desktop shortcut, Dock và Omni command `app open calculator`. Máy tính chạy hoàn toàn trong trình duyệt, giới hạn biểu thức 300 ký tự, dùng parser riêng (không dùng `eval`), không gửi biểu thức lên API và không lưu lịch sử ra máy chủ.
 - **Giảm tải API website:** public read API có giới hạn toàn cục và theo tuyến trên mỗi process, giới hạn số bản ghi trả về và trả `no-store` cho cache trình duyệt, CDN trung gian và Vercel CDN. Không shared-cache dữ liệu từ các route phụ thuộc cài đặt mật khẩu khách, để khi chủ sở hữu bật bảo vệ thì không còn phản hồi công khai cũ nằm trong cache chờ hết TTL. URL chia sẻ bằng token cũng luôn `private, no-store`. Các bộ đếm trong bộ nhớ không chia sẻ giữa các instance Vercel, vì vậy đây là lớp phòng vệ bổ sung chứ không phải cam kết chống DDoS; muốn giới hạn phân tán phải cấu hình WAF/rate rules ở nền tảng edge.
 
@@ -131,6 +131,7 @@ Truy cập:
 │   │   └── layout.tsx             # Root Layout
 │   ├── components/
 │   │   ├── layout/                # Sidebar, Admin Header, Public Header, Footer
+│   │   ├── public/                # Máy tính khoa học và đổi đơn vị phía khách
 │   │   └── ui/                    # Button, Input, Modal, Badge, Dropdown, Panic Lock...
 │   └── lib/
 │       ├── auth/                  # Password hashing, Session engine, Auth guards

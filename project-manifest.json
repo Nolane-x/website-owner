@@ -1307,6 +1307,30 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "14 regression cases verify HLE score/rank/verification parsing, hostile or invalid rows, duplicate detection, output size cap, note truncation and non-array rejection."
+    },
+    {
+      "relativePath": "src/app/(public)/tools/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Expose public Open Data Lab with on-demand Hugging Face models, GitHub LLM repositories, Hacker News AI discussions and HLE leaderboard; direct-browser-only fetch with bounded response, cooldown, cache, validated data and source/verification labels. Embeds client-only scientific calculator and unit converter; no server API proxy."
+    },
+    {
+      "relativePath": "src/components/public/public-calculator-tools.tsx",
+      "fileName": "public-calculator-tools.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Provide responsive public scientific calculator and unit converter for length, mass, temperature, time and data units; local-only math evaluation with a non-eval parser, bounded expression and conversion input, in-session history and copy results."
+    },
+    {
+      "relativePath": "README.md",
+      "fileName": "README.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Document visitor-facing local-only calculator and unit converter, open-data feeds, cache/cooldown limits and the caveat that per-process serverless rate limits do not replace global WAF protection."
     }
   ]
 }

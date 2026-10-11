@@ -18,6 +18,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { normalizeHleLeaderboard, type HleLeaderboardEntry } from '@/lib/open-data/hle-leaderboard';
+import { PublicCalculatorTools } from '@/components/public/public-calculator-tools';
 
 type Model = { id: string; downloads?: number; likes?: number; pipeline_tag?: string; lastModified?: string };
 type Repository = { full_name: string; html_url: string; description?: string | null; stargazers_count?: number; language?: string | null; updated_at?: string };
@@ -309,6 +310,8 @@ export default function PublicToolsPage() {
           </div>
         </div>
       </section>
+
+      <PublicCalculatorTools />
 
       {cooldownActive && (
         <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-[var(--text-secondary)]">
