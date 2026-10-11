@@ -1,5 +1,82 @@
 import { sanitizeHtml } from '../security/sanitize';
 
+const PUBLIC_URL_FIELD_NAMES = new Set([
+  'url', 'href', 'src', 'link', 'repourl', 'demourl', 'canonicalurl',
+  'coverimage', 'image', 'imageurl', 'backgroundimage', 'thumbnail',
+  'thumbnailurl', 'poster', 'iconurl', 'avatarurl', 'videourl',
+  'sourceurl', 'fileurl', 'downloadurl',
+]);
+const DATA_IMAGE_FIELD_NAMES = new Set([
+  'src', 'coverimage', 'image', 'imageurl', 'backgroundimage',
+  'thumbnail', 'thumbnailurl', 'poster', 'iconurl', 'avatarurl',
+]);
+
+function safePublicUrl(
+  value: unknown,
+  allowMailtoTel = false,
+  allowRasterDataImage = false,
+): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const candidate = value.trim();
+  const maxLength = allowRasterDataImage ? 512 * 1024 : 4_096;
+  if (
+    !candidate ||
+    candidate.length > maxLength ||
+    /[\u0000-\u001F\u007F]/.test(candidate) ||
+    candidate.includes('\\') ||
+    candidate.startsWith('//')
+  ) return undefined;
+
+  if (/^data:/i.test(candidate)) {
+    if (
+      allowRasterDataImage &&
+      /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,[A-Za-z0-9+/]+={0,2}$/i.test(candidate)
+    ) return candidate;
+    return undefined;
+  }
+
+  const hasExplicitScheme = /^[a-z][a-z\d+.-]*:/i.test(candidate);
+  let parsed: URL;
+  try {
+    parsed = hasExplicitScheme
+      ? new URL(candidate)
+      : new URL(candidate, 'https://public.invalid');
+  } catch {
+    return undefined;
+  }
+  if (parsed.username || parsed.password) return undefined;
+
+  if (!hasExplicitScheme) {
+    return parsed.origin === 'https://public.invalid' ? candidate : undefined;
+  }
+  if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return candidate;
+  if (allowMailtoTel && (parsed.protocol === 'mailto:' || parsed.protocol === 'tel:')) return candidate;
+  return undefined;
+}
+
+/** Recursively protect URL-bearing public block fields, including nested cards and gallery items. */
+function sanitizePublicUrlFields(value: unknown, fieldName?: string): unknown {
+  if (typeof value === 'string') {
+    const key = fieldName?.toLowerCase();
+    if (!key || (!PUBLIC_URL_FIELD_NAMES.has(key) && !key.endsWith('url'))) return value;
+    return safePublicUrl(
+      value,
+      key === 'href' || key === 'url' || key === 'link',
+      DATA_IMAGE_FIELD_NAMES.has(key),
+    ) ?? '';
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizePublicUrlFields(item));
+  }
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
+      key,
+      sanitizePublicUrlFields(nested, key),
+    ]),
+  );
+}
+
 /**
  * PUBLIC SERIALIZERS & DTOs
  * Rule VIII: Tuyệt đối không trả nguyên bản JSON metadata từ database ra ngoài công khai.
@@ -123,8 +200,13 @@ export function toPublicContent(item: Record<string, unknown> | null | undefined
 
   const allowedMetaKeys = ['readingTime', 'author', 'license', 'canonicalUrl', 'summary', 'toc'];
   for (const k of allowedMetaKeys) {
-    if (rawMeta[k] !== undefined) {
-      publicMetadata[k] = rawMeta[k];
+    if (rawMeta[k] === undefined) continue;
+    const safeValue = sanitizePublicUrlFields(rawMeta[k], k);
+    if (k === 'canonicalUrl') {
+      const canonicalUrl = safePublicUrl(safeValue);
+      if (canonicalUrl) publicMetadata[k] = canonicalUrl;
+    } else {
+      publicMetadata[k] = safeValue;
     }
   }
 
@@ -135,7 +217,7 @@ export function toPublicContent(item: Record<string, unknown> | null | undefined
     type: String(item.type || 'article'),
     description: item.description ? String(item.description).normalize('NFC') : null,
     content: item.content ? sanitizeHtml(String(item.content)) : null,
-    coverImage: item.coverImage ? String(item.coverImage) : null,
+    coverImage: safePublicUrl(item.coverImage, false, true) ?? null,
     icon: item.icon ? String(item.icon) : null,
     category: item.category ? String(item.category).normalize('NFC') : null,
     tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
@@ -152,8 +234,8 @@ export function toPublicProject(item: Record<string, unknown> | null | undefined
 
   const rawMeta = (typeof item.metadata === 'object' && item.metadata !== null ? item.metadata : {}) as Record<string, unknown>;
   const publicMetadata: PublicProjectDTO['metadata'] = {
-    repoUrl: rawMeta.repoUrl ? String(rawMeta.repoUrl) : undefined,
-    demoUrl: rawMeta.demoUrl ? String(rawMeta.demoUrl) : undefined,
+    repoUrl: safePublicUrl(rawMeta.repoUrl),
+    demoUrl: safePublicUrl(rawMeta.demoUrl),
     techStack: Array.isArray(rawMeta.techStack) ? (rawMeta.techStack as string[]) : undefined,
     status: rawMeta.status ? String(rawMeta.status) : undefined,
     year: rawMeta.year ? String(rawMeta.year) : undefined,
@@ -165,7 +247,7 @@ export function toPublicProject(item: Record<string, unknown> | null | undefined
     slug: String(item.slug || ''),
     description: item.description ? String(item.description).normalize('NFC') : null,
     content: item.content ? sanitizeHtml(String(item.content)) : null,
-    coverImage: item.coverImage ? String(item.coverImage) : null,
+    coverImage: safePublicUrl(item.coverImage, false, true) ?? null,
     icon: item.icon ? String(item.icon) : null,
     category: item.category ? String(item.category).normalize('NFC') : 'Engineering',
     tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
@@ -181,7 +263,7 @@ export function toPublicResource(item: Record<string, unknown> | null | undefine
 
   const rawMeta = (typeof item.metadata === 'object' && item.metadata !== null ? item.metadata : {}) as Record<string, unknown>;
   const publicMetadata: PublicResourceDTO['metadata'] = {
-    url: rawMeta.url ? String(rawMeta.url) : '#',
+    url: safePublicUrl(rawMeta.url, true) ?? '#',
     provider: rawMeta.provider ? String(rawMeta.provider) : 'Web',
     downloadAllowed: Boolean(rawMeta.downloadAllowed),
     openInNewTab: rawMeta.openInNewTab !== false,
@@ -217,7 +299,8 @@ export function toPublicBlock(block: Record<string, unknown> | null | undefined)
   const settings = (typeof block.settingsJson === 'object' && block.settingsJson !== null ? block.settingsJson : {}) as Record<string, unknown>;
 
   // Xử lý text/markdown/html an toàn
-  const sanitizedContent = { ...content };
+  const sanitizedContent = sanitizePublicUrlFields(content) as Record<string, unknown>;
+  const sanitizedSettings = sanitizePublicUrlFields(settings) as Record<string, unknown>;
   if (typeof sanitizedContent.text === 'string') {
     sanitizedContent.text = sanitizeHtml(sanitizedContent.text);
   }
@@ -253,9 +336,9 @@ export function toPublicBlock(block: Record<string, unknown> | null | undefined)
     blockType,
     sortOrder: typeof block.sortOrder === 'number' ? block.sortOrder : 0,
     contentJson: sanitizedContent,
-    settingsJson: settings,
+    settingsJson: sanitizedSettings,
     content: sanitizedContent,
-    settings,
+    settings: sanitizedSettings,
   };
 }
 
@@ -276,7 +359,7 @@ export function toPublicPage(
     title: String(page.title || '').normalize('NFC'),
     slug: String(page.slug || ''),
     description: page.description ? String(page.description).normalize('NFC') : null,
-    coverImage: page.coverImage ? String(page.coverImage) : null,
+    coverImage: safePublicUrl(page.coverImage, false, true) ?? null,
     isFeatured: Boolean(page.isFeatured),
     publishedAt: page.publishedAt ? new Date(page.publishedAt as string | Date).toISOString() : null,
     blocks: publicBlocks,
@@ -300,7 +383,7 @@ export function toPublicCollection(
     name: String(col.name || '').normalize('NFC'),
     slug: String(col.slug || ''),
     description: col.description ? String(col.description).normalize('NFC') : null,
-    coverImage: col.coverImage ? String(col.coverImage) : null,
+    coverImage: safePublicUrl(col.coverImage, false, true) ?? null,
     icon: col.icon ? String(col.icon) : null,
     isFeatured: Boolean(col.isFeatured),
     items: publicItems,
@@ -334,7 +417,16 @@ export function toPublicSiteSettings(settingsMap: Record<string, unknown>): Publ
   let publicNavItems = defaultPublicNavItems;
   const rawPublicNav = settingsMap['public_navigation'];
   if (typeof rawPublicNav === 'object' && rawPublicNav !== null && Array.isArray((rawPublicNav as { items?: unknown }).items)) {
-    publicNavItems = (rawPublicNav as { items: PublicNavigationItem[] }).items;
+    const normalizedItems = ((rawPublicNav as { items: unknown[] }).items).flatMap((value): PublicNavigationItem[] => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+      const item = value as Record<string, unknown>;
+      const id = typeof item.id === 'string' ? item.id.trim().slice(0, 100) : '';
+      const label = typeof item.label === 'string' ? item.label.normalize('NFC').trim().slice(0, 80) : '';
+      const href = safePublicUrl(item.href, true);
+      if (!id || !label || !href) return [];
+      return [{ id, label, href, visible: typeof item.visible === 'boolean' ? item.visible : true }];
+    });
+    if (normalizedItems.length > 0) publicNavItems = normalizedItems;
   }
 
   const rawPublicAccess = (typeof settingsMap['public_access'] === 'object' && settingsMap['public_access'] !== null

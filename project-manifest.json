@@ -16,7 +16,7 @@
       "sessionTokens": "256-bit cryptographically secure, SHA-256 hashed in DB",
       "cookiePolicy": "HttpOnly, Secure in production, SameSite=Lax",
       "rateLimiter": "In-process sliding-window limiter capped at 20,000 keys; public read APIs apply global and per-route per-IP budgets before database access. The counter is not shared across serverless instances, so it is a best-effort abuse guard only; edge/WAF/distributed rules are required for uniform global limiting.",
-      "xssProtection": "isomorphic-dompurify HTML sanitization",
+      "xssProtection": "isomorphic-dompurify HTML sanitization plus recursive public DTO URL validation; executable schemes and protocol-relative URL destinations are filtered from navigation, metadata, resources, projects and nested page blocks/settings.",
       "vaultEncryption": "Client-side Web Crypto AES-256-GCM; PBKDF2-HMAC-SHA-256 at 600000 iterations for new items, legacy 100000-iteration decryption fallback",
       "panicLock": "Global Ctrl+Shift+L privacy overlay with account re-authentication; not a secure RAM wipe or OS lock",
       "zeroDefaultCredentials": true,
@@ -24,7 +24,9 @@
       "contentRevisions": true,
       "softDeleteTrash": true,
       "aiDataFlow": "Copilot API key is session/component state only; retrieval context is opt-in; external provider requests leave the browser and are subject to provider/network policies",
-      "publicApiCache": "Database-backed public APIs and public explore-feed responses use private, no-store cache headers so a changed guest-password gate cannot be bypassed via a shared CDN entry. Public explore data uses a fixed allow-list of six upstream APIs, server-side Next.js fetch revalidation for five minutes, bounded JSON payloads, timeout, per-IP rate limiting, guest-password enforcement, and a five-minute bounded browser cache."
+      "publicApiCache": "Database-backed public APIs and public explore-feed responses use private, no-store cache headers so a changed guest-password gate cannot be bypassed via a shared CDN entry. Public explore data uses a fixed allow-list of six upstream APIs, server-side Next.js fetch revalidation for five minutes, bounded JSON payloads, timeout, per-IP rate limiting, guest-password enforcement, and a five-minute bounded browser cache.",
+      "publicUrlSerialization": "Public URL fields are validated with scheme, control-character, credential, protocol-relative and size checks; bounded base64 raster images are the only allowed data URLs.",
+      "dependencyAudit": "npm audit --omit=dev reports zero known production dependency vulnerabilities. The full development-tree audit still flags the braces 3.0.3 high-severity advisory in eslint-config-next fast-glob/micromatch; registry has no patched braces release yet, so it remains dev-only and is tracked rather than hidden."
     },
     "edgeGateway": {
       "engine": "Cloudflare Worker (Wrangler)",
@@ -37,7 +39,8 @@
     },
     "ciCd": {
       "pipeline": ".github/workflows/ci.yml",
-      "edgeDeployment": ".github/workflows/cloudflare-worker.yml"
+      "edgeDeployment": ".github/workflows/cloudflare-worker.yml",
+      "productionDependencyAudit": "npm audit --omit=dev --audit-level=moderate runs in CI after npm ci and before lint/typecheck/tests/build."
     },
     "functionalStatus": {
       "copilot": "Shared multi-provider AI catalog with OpenAI-compatible presets (OpenAI, Gemini, Groq, DeepSeek, OpenRouter, Mistral, Together, Fireworks, xAI, Cerebras, Perplexity, Cohere, NVIDIA NIM, SambaNova, SiliconFlow, Hugging Face, DeepInfra, Hyperbolic, Novita, Nebius), native Anthropic Messages, Ollama, LM Studio/vLLM/llama.cpp/LiteLLM and custom compatible endpoints; supports model-list discovery where available, manual model IDs, URL validation, per-request timeout and direct-browser requests. AI Workbench and Creator Studio now persist provider/model/endpoint preferences and bounded recent chat history locally; API keys remain session-only unless the owner explicitly enables device-local remembrance, then AES-GCM encrypted data is stored in IndexedDB, not localStorage or the website database. Credentials are not synchronized between browsers/devices, and local persistence does not protect against XSS or a compromised browser session. Personal-data retrieval remains keyword-based, not full RAG or agent runtime.",
@@ -204,7 +207,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Track the public explore portal, its allow-listed API gateway, per-source caching and access guard, in-page details and regression tests."
+      "shortDescription": "Track the current public explore portal, shared public feed normalization, serializer URL guards, dependency resolution and production audit CI."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -532,7 +535,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Pin Node.js 24.x và jsdom 25.0.1 cho nhánh dependency của isomorphic-dompurify để tránh lỗi runtime serverless."
+      "shortDescription": "Override stale transitive esbuild instances to the supported installed version while retaining the DOMPurify/jsdom runtime compatibility pin."
     },
     {
       "relativePath": "package-lock.json",
@@ -540,7 +543,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Lock jsdom 25.0.1 bên trong isomorphic-dompurify; giữ jsdom 30.1.2 độc lập cho Vitest."
+      "shortDescription": "Resolve the dependency graph with esbuild 0.28.2 deduplicated across Vite and legacy Drizzle loader dependencies."
     },
     {
       "relativePath": "next.config.ts",
@@ -556,7 +559,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Use SHA-pinned Node 24-compatible checkout/setup-node actions and pin CI to Ubuntu 24.04 before ubuntu-latest image migration."
+      "shortDescription": "Add a production-only npm security audit gate before lint, typecheck, tests and production build."
     },
     {
       "relativePath": "tests/sanitize-runtime.test.ts",
@@ -996,7 +999,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Automatically load six API-backed public feeds; provide cross-feed search, inline expandable model/repository/story/benchmark/paper/security details, abstract text, cache status and graceful error handling."
+      "shortDescription": "Fix Unicode/control-character sanitization for external Hacker News text; preserve ordinary letters, normalize control characters and keep bounded inline feed rendering."
     },
     {
       "relativePath": "src/components/layout/public-header.tsx",
@@ -1340,7 +1343,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Normalize bounded Europe PMC abstracts and GitHub advisory metadata for inline public display."
+      "shortDescription": "Add shared bounded public-feed text normalization that strips C0/C1 controls without deleting Unicode letters and preserves line breaks/tabs; retain abstract and advisory normalization."
     },
     {
       "relativePath": "tests/public-open-data-feeds.test.ts",
@@ -1348,7 +1351,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Verify that Europe PMC abstracts survive normalization for on-page reading."
+      "shortDescription": "Cover control-character stripping, Unicode preservation, newline/tab handling, output bounds and metadata normalization."
     },
     {
       "relativePath": "src/components/layout/public-header.tsx",
@@ -1587,16 +1590,32 @@
       "fileName": "route.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Serve six allow-listed public research feeds through bounded server-side fetch, five-minute upstream cache, timeout, per-IP rate limiting, guest access protection, payload compaction and no-store edge responses."
+      "status": "modified",
+      "shortDescription": "Normalize external discussion text correctly while keeping six allow-listed feeds, upstream cache, bounded payloads, rate limits, guest protection and no-store responses."
     },
     {
       "relativePath": "tests/public-explore-api.test.ts",
       "fileName": "public-explore-api.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Regress incorrect external story sanitization; verify ordinary letters survive while controls are removed alongside API access and payload guards."
+    },
+    {
+      "relativePath": "src/lib/api/public-serializer.ts",
+      "fileName": "public-serializer.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Harden public DTO serialization by validating navigation, canonical, project, resource and media URLs recursively within nested blocks/settings; reject executable schemes and protocol-relative destinations."
+    },
+    {
+      "relativePath": "tests/public-serializer-security.test.ts",
+      "fileName": "public-serializer-security.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Test source allow-list and SSRF prevention, guest-password gate, five-minute upstream caching, response payload compaction, no-store headers and upstream failure handling."
+      "shortDescription": "Regression-test public serializer URL trust boundaries across projects, resources, canonical metadata, nested block/settings fields and navigation."
     }
   ]
 }

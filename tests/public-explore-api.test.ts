@@ -63,6 +63,25 @@ describe('public explore feed API', () => {
     }]);
   });
 
+  it('sanitizes external discussion text without deleting normal letters', async () => {
+    const payload = {
+      hits: [{
+        objectID: 'story-1',
+        title: 'Unicode and technology',
+        story_text: 'unicode\u0000 technology\nsecond line\twith tab\u0007',
+      }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+
+    const response = await GET(new Request('https://site.example/api/public/explore?source=news'));
+    expect(response.status).toBe(200);
+    const result = await response.json() as { hits: Array<{ story_text?: string }> };
+    expect(result.hits[0]?.story_text).toBe('unicode technology\nsecond line\twith tab ');
+  });
+
   it('compacts repository search payloads before sending them to visitors', async () => {
     const largePayload = {
       total_count: 90,

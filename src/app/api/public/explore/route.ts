@@ -1,4 +1,5 @@
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { normalizePublicFeedText } from '@/lib/open-data/public-feeds';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 
 const SOURCE_ENDPOINTS = {
@@ -134,7 +135,7 @@ function compactPayload(source: ExploreSource, payload: unknown): unknown {
         return [{
           objectID: item.objectID, title: item.title, story_title: item.story_title,
           url: item.url, story_url: item.story_url,
-          story_text: typeof item.story_text === 'string' ? item.story_text.slice(0, 2400) : undefined,
+          story_text: normalizePublicFeedText(item.story_text, 2_400),
           points: item.points, num_comments: item.num_comments, created_at: item.created_at,
           author: typeof item.author === 'string' ? item.author.slice(0, 80) : undefined,
         }];

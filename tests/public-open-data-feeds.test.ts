@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeEuropePmcPapers, normalizeSecurityAdvisories } from '@/lib/open-data/public-feeds';
+import { normalizeEuropePmcPapers, normalizePublicFeedText, normalizeSecurityAdvisories } from '@/lib/open-data/public-feeds';
+
+describe('public feed text normalization', () => {
+  it('preserves ordinary Unicode, newlines and tabs while replacing control characters', () => {
+    const value = 'unicode\u0000 technology\nsecond\tline\u0007 c1\u0085 text';
+    expect(normalizePublicFeedText(value)).toBe('unicode technology\nsecond\tline c1 text');
+  });
+
+  it('bounds string length and rejects non-string values', () => {
+    expect(normalizePublicFeedText('012345', 3)).toBe('012');
+    expect(normalizePublicFeedText(null)).toBeUndefined();
+    expect(normalizePublicFeedText('value', -1)).toBe('value');
+  });
+});
 
 describe('public Europe PMC feed normalization', () => {
   it('normalizes article metadata and constructs links on the trusted source host', () => {

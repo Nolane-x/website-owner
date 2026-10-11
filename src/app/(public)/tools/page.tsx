@@ -22,6 +22,7 @@ import {
 import { normalizeHleLeaderboard, type HleLeaderboardEntry } from '@/lib/open-data/hle-leaderboard';
 import {
   normalizeEuropePmcPapers,
+  normalizePublicFeedText,
   normalizeSecurityAdvisories,
   type EuropePmcPaper,
   type PublicSecurityAdvisory,
@@ -271,7 +272,7 @@ function normalizeStories(input: unknown): Story[] {
       objectID: item.objectID.slice(0, 100),
       title: typeof item.title === 'string' ? item.title.slice(0, 300) : typeof item.story_title === 'string' ? item.story_title.slice(0, 300) : undefined,
       url: url || undefined,
-      story_text: typeof item.story_text === 'string' ? item.story_text.replace(/[\\u0000-\\u001f\\u007f]/g, ' ').slice(0, 2400) : undefined,
+      story_text: normalizePublicFeedText(item.story_text, 2_400),
       author: typeof item.author === 'string' ? item.author.slice(0, 80) : undefined,
       points: typeof item.points === 'number' && Number.isFinite(item.points) ? Math.max(0, item.points) : undefined,
       num_comments: typeof item.num_comments === 'number' && Number.isFinite(item.num_comments) ? Math.max(0, item.num_comments) : undefined,

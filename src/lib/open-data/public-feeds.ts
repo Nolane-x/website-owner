@@ -1,3 +1,10 @@
+/** Strip non-printing control characters from external feed text while preserving line breaks and tabs. */
+export function normalizePublicFeedText(value: unknown, maxLength = 2_400): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const boundedLength = Number.isSafeInteger(maxLength) && maxLength >= 0 ? maxLength : 2_400;
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, ' ').replace(/ {2,}/g, ' ').slice(0, boundedLength);
+}
+
 export type EuropePmcPaper = {
   id: string;
   title: string;
