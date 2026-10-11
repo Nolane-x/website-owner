@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Calculator, Clipboard, Check, Trash2, RotateCcw } from 'lucide-react';
 import { CalculatorInputError, calculateScientificExpression } from '@/lib/tools/scientific-calculator';
+import { loadCalculatorPreferences, saveCalculatorPreferences } from '@/lib/tools/calculator-preferences';
+import { PREFERENCE_PERSISTENCE_EVENT, reportPreferencePersistence, type PreferencePersistenceResult } from '@/lib/persistence-events';
 
 const keys = [
   ['AC', 'AC', 'utility'], ['(', '(', 'utility'], [')', ')', 'utility'], ['⌫', 'BACKSPACE', 'utility'],
@@ -22,13 +24,29 @@ function formatResult(value: number): string {
 }
 
 export function CalculatorApp() {
-  const [expression, setExpression] = useState('sqrt(144) + 2^3');
-  const [result, setResult] = useState<number | null>(null);
+  const [initialPreferences] = useState(() => loadCalculatorPreferences());
+  const [expression, setExpression] = useState(initialPreferences.expression);
+  const [result, setResult] = useState<number | null>(initialPreferences.result);
   const [error, setError] = useState('');
-  const [angleMode, setAngleMode] = useState<'deg' | 'rad'>('deg');
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [angleMode, setAngleMode] = useState<'deg' | 'rad'>(initialPreferences.angleMode);
+  const [history, setHistory] = useState<HistoryItem[]>(initialPreferences.history);
   const [copied, setCopied] = useState(false);
+  const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handlePersistence = (event: Event) => {
+      const detail = (event as CustomEvent<PreferencePersistenceResult>).detail;
+      if (detail?.scope === 'owner-calculator') setPersistenceWarning(detail.message);
+    };
+    window.addEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+    return () => window.removeEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+  }, []);
+
+  useEffect(() => {
+    const saved = saveCalculatorPreferences({ expression, result, angleMode, history });
+    reportPreferencePersistence('owner-calculator', saved ? null : 'Không thể lưu cài đặt/lịch sử trong trình duyệt này. Hãy kiểm tra quyền lưu dữ liệu website.');
+  }, [expression, result, angleMode, history]);
 
   const calculate = useCallback(() => {
     try {
@@ -124,7 +142,8 @@ export function CalculatorApp() {
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <h3 className="text-xs font-semibold text-slate-200">Lịch sử tính toán</h3>
-              <p className="mt-1 text-[10px] text-slate-500">Chỉ lưu trong phiên hiện tại</p>
+              <p className="mt-1 text-[10px] text-slate-500">Tự lưu cục bộ trên thiết bị này</p>
+              {persistenceWarning && <p role="status" className="mt-2 text-[10px] leading-5 text-amber-300">{persistenceWarning}</p>}
             </div>
             <button type="button" onClick={() => setHistory([])} className="rounded-md p-2 text-slate-500 hover:bg-slate-800 hover:text-rose-300" title="Xóa lịch sử"><Trash2 size={14} /></button>
           </div>

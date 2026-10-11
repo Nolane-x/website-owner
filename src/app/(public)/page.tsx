@@ -197,7 +197,7 @@ export default function PublicHomePage() {
           <Link href="/tools">
             <Button variant="outline" className="flex items-center gap-2">
               <Code2 size={16} />
-              <span>Công cụ &amp; AI Lab</span>
+              <span>Khám phá tri thức &amp; AI Lab</span>
             </Button>
           </Link>
         </div>

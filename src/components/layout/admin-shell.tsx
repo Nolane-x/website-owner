@@ -158,7 +158,6 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           onOpenWallpaperStudio={() => openWindow('wallpapers', 'Custom Wallpaper Studio')}
           onOpenScreensaver={() => setScreensaverOpen(true)}
           onToggleRadio={() => openWindow('music', 'Phòng Thẩm Âm & Lo-Fi')}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         />
       ) : (
         /* Mode 2: Traditional Workspace Grid Shell */

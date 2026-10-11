@@ -51,7 +51,7 @@ export function PublicFooter({
               Bài viết
             </Link>
             <Link href="/tools" className="hover:text-[var(--accent)] transition-colors">
-              Công cụ
+              Khám phá tri thức
             </Link>
             <button
               onClick={scrollToTop}

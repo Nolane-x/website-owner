@@ -3,20 +3,50 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Play, Pause, RotateCcw, Volume2, Maximize2, Minimize2 } from 'lucide-react';
 import { ambientSynth } from '@/lib/audio/ambient-synth';
+import { loadFocusPreferences, saveFocusPreferences } from '@/lib/audio/focus-preferences';
+import { PREFERENCE_PERSISTENCE_EVENT, reportPreferencePersistence, type PreferencePersistenceResult } from '@/lib/persistence-events';
 
 export function FocusApp() {
-  const [minutes, setMinutes] = useState(25);
-  const [seconds, setSeconds] = useState(0);
+  const [initialPreferences] = useState(() => loadFocusPreferences());
+  const [minutes, setMinutes] = useState(Math.floor(initialPreferences.remainingSeconds / 60));
+  const [seconds, setSeconds] = useState(initialPreferences.remainingSeconds % 60);
   const [isActive, setIsActive] = useState(false);
-  const [mode, setMode] = useState<'work' | 'shortBreak' | 'longBreak'>('work');
-  const [sessionCount, setSessionCount] = useState(0);
-  const [sessionGoal, setSessionGoal] = useState('Tập trung phát triển kiến trúc Web OS 5.0 hoàn hảo');
+  const [mode, setMode] = useState<'work' | 'shortBreak' | 'longBreak'>(initialPreferences.mode);
+  const [sessionCount, setSessionCount] = useState(initialPreferences.sessionCount);
+  const [sessionGoal, setSessionGoal] = useState(initialPreferences.sessionGoal);
   const [isZenMode, setIsZenMode] = useState(false);
+  const [preferencesWarning, setPreferencesWarning] = useState<string | null>(null);
 
   // Sound Lab Faders
-  const [rainVol, setRainVol] = useState(0.4);
-  const [wavesVol, setWavesVol] = useState(0);
-  const [campfireVol, setCampfireVol] = useState(0);
+  const [rainVol, setRainVol] = useState(initialPreferences.rainVolume);
+  const [wavesVol, setWavesVol] = useState(initialPreferences.wavesVolume);
+  const [campfireVol, setCampfireVol] = useState(initialPreferences.campfireVolume);
+
+  useEffect(() => {
+    const handlePersistence = (event: Event) => {
+      const detail = (event as CustomEvent<PreferencePersistenceResult>).detail;
+      if (detail?.scope === 'focus-studio') setPreferencesWarning(detail.message);
+    };
+    window.addEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+    return () => window.removeEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+  }, []);
+
+  useEffect(() => {
+    const saved = saveFocusPreferences({
+      mode,
+      remainingSeconds: minutes * 60 + seconds,
+      sessionCount,
+      sessionGoal,
+      rainVolume: rainVol,
+      wavesVolume: wavesVol,
+      campfireVolume: campfireVol,
+    });
+    reportPreferencePersistence('focus-studio', saved ? null : 'Không thể lưu cài đặt Focus Studio trên trình duyệt này.');
+  }, [mode, minutes, seconds, sessionCount, sessionGoal, rainVol, wavesVol, campfireVol]);
+
+  // Closing the app pauses the timer and stops its audio; preferences and remaining
+  // time are saved locally and restored on the next open without autoplay.
+  useEffect(() => () => { ambientSynth.stop(); }, []);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -174,11 +204,14 @@ export function FocusApp() {
         <div className="w-full max-w-md">
           <input
             type="text"
+            maxLength={500}
             value={sessionGoal}
             onChange={(e) => setSessionGoal(e.target.value)}
             placeholder="Mục tiêu của phiên làm việc này..."
             className="w-full text-center px-4 py-2 rounded-2xl bg-stone-900/60 border border-stone-800 text-xs text-stone-300 focus:outline-none focus:border-emerald-500"
           />
+          {preferencesWarning && <p role="status" className="mt-2 text-center text-[10px] text-amber-300">{preferencesWarning}</p>}
+          {!preferencesWarning && <p className="mt-2 text-center text-[10px] text-stone-500">Mục tiêu, âm lượng và thời gian còn lại được tự lưu cục bộ. Khi mở lại, bộ đếm tạm dừng và âm thanh không tự phát.</p>}
         </div>
 
         {/* Control Buttons */}

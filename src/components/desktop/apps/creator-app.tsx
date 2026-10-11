@@ -3,6 +3,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { PenTool, Sparkles, FileText, RefreshCw, Sliders, Save, AlertTriangle, KeyRound } from 'lucide-react';
 import { AI_PROVIDER_PRESETS, completeChat, getAIProviderPreset, listChatModels, type RemoteAIProvider } from '@/lib/ai/client';
+import {
+  clearRememberedApiKey,
+  loadAIAppPreferences,
+  loadRememberedApiKey,
+  saveAIAppPreferences,
+  saveRememberedApiKey,
+} from '@/lib/ai/local-preferences';
+import { PREFERENCE_PERSISTENCE_EVENT, reportPreferencePersistence, type PreferencePersistenceResult } from '@/lib/persistence-events';
 
 type Stage = 'idea' | 'brief' | 'research' | 'draft' | 'review' | 'approved' | 'published';
 interface ContentItem {
@@ -43,6 +51,114 @@ export function CreatorStudioApp() {
   const [ollamaUrl, setOllamaUrl] = useState('https://api.groq.com/openai/v1');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [preferencesHydrated, setPreferencesHydrated] = useState(false);
+  const [rememberApiKey, setRememberApiKey] = useState(false);
+
+  useEffect(() => {
+    const handlePersistence = (event: Event) => {
+      const detail = (event as CustomEvent<PreferencePersistenceResult>).detail;
+      if (detail?.scope === 'creator-studio') setNotice(detail.message || '');
+    };
+    window.addEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+    return () => window.removeEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    const hydrate = async () => {
+      const preferences = loadAIAppPreferences('creator-studio', {
+        provider: 'groq',
+        model: 'openai/gpt-oss-20b',
+        baseUrl: 'https://api.groq.com/openai/v1',
+      });
+      const provider = preferences.provider === 'search' ? 'groq' : preferences.provider;
+      setAiProvider(provider);
+      setAiModel(preferences.model);
+      setOllamaUrl(preferences.baseUrl);
+      try {
+        const savedKey = await loadRememberedApiKey('creator-studio', provider);
+        if (!disposed && savedKey) {
+          setApiKey(savedKey);
+          setRememberApiKey(true);
+          setNotice('Đã khôi phục cấu hình AI và API key đã mã hóa trên trình duyệt này.');
+        }
+      } catch (caught) {
+        if (!disposed) setNotice(caught instanceof Error ? caught.message : 'Không thể khôi phục API key đã lưu.');
+      } finally {
+        if (!disposed) setPreferencesHydrated(true);
+      }
+    };
+    void hydrate();
+    return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesHydrated) return;
+    const saved = saveAIAppPreferences('creator-studio', { provider: aiProvider, model: aiModel, baseUrl: ollamaUrl });
+    reportPreferencePersistence('creator-studio', saved ? null : 'Không thể lưu cài đặt AI trên trình duyệt. Hãy kiểm tra quyền lưu dữ liệu website.');
+  }, [preferencesHydrated, aiProvider, aiModel, ollamaUrl]);
+
+  const handleProviderChange = async (next: RemoteAIProvider) => {
+    const preset = getAIProviderPreset(next);
+    setAiProvider(next);
+    setAiModel(preset.defaultModel);
+    setOllamaUrl(preset.defaultBaseUrl);
+    setApiKey('');
+    setRememberApiKey(false);
+    setAvailableModels([]);
+    setError(null);
+    setNotice(null);
+    try {
+      const savedKey = await loadRememberedApiKey('creator-studio', next);
+      if (savedKey) {
+        setApiKey(savedKey);
+        setRememberApiKey(true);
+        setNotice('Đã khôi phục API key đã lưu cho provider này.');
+      }
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Không thể khôi phục API key đã lưu.');
+    }
+  };
+
+  const handleRememberApiKeyToggle = async (enabled: boolean) => {
+    if (!enabled) {
+      setRememberApiKey(false);
+      try {
+        await clearRememberedApiKey('creator-studio', aiProvider);
+        setNotice('Đã xóa API key đã lưu trên trình duyệt; key trong phiên hiện tại vẫn còn hiệu lực.');
+      } catch (caught) {
+        setNotice(caught instanceof Error ? caught.message : 'Không thể xóa API key đã lưu.');
+      }
+      return;
+    }
+    setRememberApiKey(true);
+    if (!apiKey.trim()) {
+      setNotice('Nhập API key rồi rời khỏi ô nhập để lưu key đã mã hóa.');
+      return;
+    }
+    try {
+      await saveRememberedApiKey('creator-studio', aiProvider, apiKey);
+      setNotice('Đã lưu API key dưới dạng mã hóa trên trình duyệt này.');
+    } catch (caught) {
+      setRememberApiKey(false);
+      setNotice(caught instanceof Error ? caught.message : 'Không thể lưu API key đã mã hóa.');
+    }
+  };
+
+  const handleApiKeyBlur = async () => {
+    if (!rememberApiKey) return;
+    if (!apiKey.trim()) {
+      try { await clearRememberedApiKey('creator-studio', aiProvider); } catch { /* best-effort local secret cleanup */ }
+      setRememberApiKey(false);
+      return;
+    }
+    try {
+      await saveRememberedApiKey('creator-studio', aiProvider, apiKey);
+      setNotice('API key đã được cập nhật trong kho mã hóa cục bộ.');
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Không thể cập nhật API key đã mã hóa.');
+    }
+  };
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -272,16 +388,18 @@ export function CreatorStudioApp() {
               </section>
 
               {showAiSettings && <section className="p-4 rounded-2xl border border-purple-800/60 bg-purple-950/15 space-y-3">
-                <div className="flex items-center gap-2 text-purple-200 text-xs font-bold"><Sliders className="w-4 h-4" />Model/provider (khóa không được lưu)</div>
+                <div className="flex items-center gap-2 text-purple-200 text-xs font-bold"><Sliders className="w-4 h-4" />Cài đặt AI (tự lưu)</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <label className="space-y-1"><span className="block text-[10px] text-stone-500">Provider</span><select value={aiProvider} onChange={(event) => { const next = event.target.value as RemoteAIProvider; const preset = getAIProviderPreset(next); setAiProvider(next); setApiKey(''); setAiModel(preset.defaultModel); setOllamaUrl(preset.defaultBaseUrl); setAvailableModels([]); setError(null); setNotice(null); }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs"><optgroup label="Cloud providers">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'cloud').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup><optgroup label="Local / self-hosted">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'local').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup><optgroup label="Custom">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'custom').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup></select></label>
+                  <label className="space-y-1"><span className="block text-[10px] text-stone-500">Provider</span><select value={aiProvider} onChange={(event) => { void handleProviderChange(event.target.value as RemoteAIProvider); }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs"><optgroup label="Cloud providers">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'cloud').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup><optgroup label="Local / self-hosted">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'local').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup><optgroup label="Custom">{AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'custom').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup></select></label>
                   <label className="space-y-1"><span className="block text-[10px] text-stone-500">Model ID</span><input value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>
                 </div>
                 {['custom', 'ollama', 'lmstudio', 'vllm', 'llamacpp', 'litellm'].includes(aiProvider) && <label className="block space-y-1"><span className="block text-[10px] text-stone-500">Base URL / endpoint</span><input value={ollamaUrl} onChange={(event) => { setOllamaUrl(event.target.value); setAvailableModels([]); }} placeholder="https://your-endpoint.example/v1" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>}
-                <div className="flex items-end gap-2"><label className="block flex-1 min-w-0 space-y-1"><span className="block text-[10px] text-stone-500">API key {getAIProviderPreset(aiProvider).requiresApiKey ? '(bắt buộc)' : '(tuỳ chọn)'}</span><input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Chỉ giữ trong phiên khi cửa sổ đang mở" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>{apiKey && <button type="button" onClick={() => setApiKey('')} className="px-2.5 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-[11px]">Xóa key</button>}</div>
+                <div className="flex items-end gap-2"><label className="block flex-1 min-w-0 space-y-1"><span className="block text-[10px] text-stone-500">API key {getAIProviderPreset(aiProvider).requiresApiKey ? '(bắt buộc)' : '(tuỳ chọn)'}</span><input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} onBlur={() => { void handleApiKeyBlur(); }} placeholder="Dán key; chỉ lưu nếu bật ghi nhớ" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-2 text-xs" /></label>{apiKey && <button type="button" onClick={() => { setApiKey(''); setRememberApiKey(false); void clearRememberedApiKey('creator-studio', aiProvider).then(() => setNotice('Đã xóa API key khỏi phiên và kho cục bộ.')).catch(() => setNotice('Đã xóa key khỏi phiên, nhưng không thể xác minh việc xóa bản đã lưu.')); }} className="px-2.5 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-[11px]">Xóa key</button>}</div>
+                <label className="flex items-start gap-2 text-[11px] text-stone-300"><input type="checkbox" checked={rememberApiKey} onChange={(event) => { void handleRememberApiKeyToggle(event.target.checked); }} className="mt-0.5" /><span><strong>Ghi nhớ API key trên thiết bị này</strong><span className="block mt-0.5 text-stone-500">Key được mã hóa bằng AES-GCM và lưu trong IndexedDB; không lưu vào database của website. Tắt lựa chọn này để xóa bản đã lưu.</span></span></label>
                 <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => void handleLoadModels()} disabled={loadingModels || generatingAi} className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-[11px]">{loadingModels ? 'Đang tải model…' : 'Tải danh sách model'}</button>{availableModels.length > 0 && <select aria-label="Chọn model đã phát hiện" value={availableModels.includes(aiModel) ? aiModel : ''} onChange={(event) => setAiModel(event.target.value)} className="min-w-0 flex-1 bg-stone-950 border border-stone-700 rounded-lg px-2 py-1.5 text-xs"><option value="">Chọn model đã phát hiện…</option>{availableModels.map((item) => <option key={item} value={item}>{item}</option>)}</select>}</div>
                 <p className="text-[10px] text-stone-500">{getAIProviderPreset(aiProvider).description}</p>
-                <p className="text-[10px] text-amber-200/80">Khi tạo dàn ý, nội dung đã chọn và API key được gửi trực tiếp từ trình duyệt tới endpoint đã chọn, không qua API của website và không lưu vào database/localStorage. Chỉ dùng endpoint bạn tin cậy; CORS có thể chặn request. Model ID vẫn có thể nhập thủ công.</p>
+                <p className="text-[10px] text-amber-200/80">Provider/model/base URL được tự lưu trên trình duyệt này. API key chỉ được lưu nếu bạn bật ghi nhớ; khi lưu, key được mã hóa bằng AES-GCM trong IndexedDB, không đưa vào database website. Khi tạo dàn ý, nội dung và key vẫn được gửi trực tiếp tới endpoint bạn chọn.</p>
+                {!preferencesHydrated && <p className="text-[10px] text-stone-500">Đang khôi phục cài đặt AI đã lưu…</p>}
               </section>}
 
               <section className="p-4 rounded-2xl border border-stone-800 bg-stone-900/40 space-y-3">

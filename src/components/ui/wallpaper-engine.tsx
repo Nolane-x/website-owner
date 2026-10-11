@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { playSound } from '@/lib/audio/sound-fx';
 import { CanvasShaders, ShaderMode } from '@/components/wallpaper/canvas-shaders';
 import { generateCssFilterString } from '@/lib/wallpaper/wallpaper-utils';
+import { loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, normalizeWallpaperFilters } from '@/lib/wallpaper/wallpaper-preferences';
 import { WallpaperFilters, WallpaperMediaType } from '@/lib/types';
 
 export type WallpaperStyle = 'default' | 'aurora' | 'matrix' | 'starfield' | 'obsidian';
@@ -20,18 +21,19 @@ interface ActiveWallpaper5State {
 export function WallpaperEngine() {
   const [style, setStyle] = useState<WallpaperStyle>(() => {
     if (typeof window === 'undefined') return 'default';
-    return (localStorage.getItem('webos_wallpaper_mode') as WallpaperStyle) || 'default';
-  });
-
-  const [activeCustom, setActiveCustom] = useState<ActiveWallpaper5State | null>(() => {
-    if (typeof window === 'undefined') return null;
     try {
-      const saved = localStorage.getItem('webos_active_wallpaper_v5');
-      return saved ? JSON.parse(saved) : null;
+      const saved = localStorage.getItem('webos_wallpaper_mode');
+      return saved && ['default', 'aurora', 'matrix', 'starfield', 'obsidian'].includes(saved)
+        ? saved as WallpaperStyle
+        : 'default';
     } catch {
-      return null;
+      return 'default';
     }
   });
+
+  const [activeCustom, setActiveCustom] = useState<ActiveWallpaper5State | null>(() => (
+    loadActiveWallpaperPreference()
+  ));
 
   useEffect(() => {
     const handleStyleChange = (e: Event) => {
@@ -45,7 +47,8 @@ export function WallpaperEngine() {
     const handleCustomChange = (e: Event) => {
       const customEvent = e as CustomEvent<ActiveWallpaper5State>;
       if (customEvent.detail) {
-        setActiveCustom(customEvent.detail);
+        const normalized = normalizeActiveWallpaperPreference(customEvent.detail);
+        if (normalized) setActiveCustom(normalized);
       }
     };
 
@@ -71,12 +74,14 @@ export function WallpaperEngine() {
         }>).find((item) => item.id === activeCustom.wallpaperId);
         const url = saved?.localDataUrl || saved?.sourceUrl || '';
         if (cancelled || !saved || !url) return;
-        const restored: ActiveWallpaper5State = {
+        // Never replace a user-edited browser filter/shader state with the
+        // older filter snapshot attached to the media-library record.
+        const restored: ActiveWallpaper5State = normalizeActiveWallpaperPreference({
           ...activeCustom,
           type: saved.type,
           url,
-          filters: saved.filtersJson || activeCustom.filters,
-        };
+          filters: normalizeWallpaperFilters(activeCustom.filters ?? saved.filtersJson),
+        }) ?? activeCustom;
         setActiveCustom(restored);
       } catch {
         // The desktop keeps its built-in fallback when the saved asset cannot be loaded.

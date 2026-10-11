@@ -18,13 +18,19 @@ import {
   Trophy,
 } from 'lucide-react';
 import { normalizeHleLeaderboard, type HleLeaderboardEntry } from '@/lib/open-data/hle-leaderboard';
-import { PublicCalculatorTools } from '@/components/public/public-calculator-tools';
+import {
+  normalizeEuropePmcPapers,
+  normalizeSecurityAdvisories,
+  type EuropePmcPaper,
+  type PublicSecurityAdvisory,
+} from '@/lib/open-data/public-feeds';
 
 type Model = { id: string; downloads?: number; likes?: number; pipeline_tag?: string; lastModified?: string };
 type Repository = { full_name: string; html_url: string; description?: string | null; stargazers_count?: number; language?: string | null; updated_at?: string };
 type Story = { objectID: string; title?: string; story_title?: string; url?: string | null; story_url?: string | null; points?: number; num_comments?: number; created_at?: string };
-type SourceId = 'models' | 'repos' | 'news' | 'hle';
+type SourceId = 'models' | 'repos' | 'news' | 'hle' | 'papers' | 'security';
 type FeedState<T> = { items: T[]; savedAt: number | null; status: string };
+type CooldownState = Partial<Record<SourceId, number>>;
 
 const CACHE_MS = 30 * 60 * 1000;
 const COOLDOWN_MS = 45 * 1000;
@@ -34,14 +40,99 @@ const CACHE_KEYS: Record<SourceId, string> = {
   repos: 'webos:public-feed:v2:repos',
   news: 'webos:public-feed:v2:news',
   hle: 'webos:public-feed:v2:hle',
+  papers: 'webos:public-feed:v1:papers',
+  security: 'webos:public-feed:v1:security-advisories',
 };
-const LAST_REQUEST_KEY = 'webos:public-feed:v2:last-request';
+const LAST_REQUEST_KEY = 'webos:public-feed:v3:last-request:';
 
 const benchmarks = [
   { name: 'Artificial Analysis', type: 'Hiệu năng, độ trễ & chi phí', description: 'So sánh mô hình theo các phép đo được công bố; hãy kiểm tra phiên bản và phương pháp chấm.', href: 'https://artificialanalysis.ai/models' },
   { name: 'LMArena Leaderboard', type: 'Bình chọn câu trả lời', description: 'Thứ hạng dựa trên đánh giá so sánh của người dùng; không đại diện cho mọi tác vụ.', href: 'https://lmarena.ai/leaderboard' },
   { name: 'Stanford HELM', type: 'Nghiên cứu & đánh giá', description: 'Khung đánh giá theo nhiều kịch bản, tiêu chí và phương pháp luận.', href: 'https://crfm.stanford.edu/helm/' },
   { name: 'Hugging Face Open LLM Leaderboard', type: 'Mô hình mở', description: 'Tham khảo kết quả trên benchmark được mô tả cụ thể; kiểm tra trạng thái hoạt động và ngày cập nhật.', href: 'https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard' },
+];
+
+const informationCollections = [
+  {
+    category: 'AI, mô hình & dữ liệu huấn luyện',
+    description: 'Khám phá model card, dataset, kỹ thuật mới và cách các nhóm nghiên cứu đánh giá hệ thống AI.',
+    sources: [
+      { name: 'Hugging Face Models', description: 'Thư viện model và model card.', href: 'https://huggingface.co/models' },
+      { name: 'Hugging Face Datasets', description: 'Khám phá dataset và giấy phép sử dụng.', href: 'https://huggingface.co/datasets' },
+      { name: 'Papers with Code', description: 'Bài báo đi cùng benchmark và mã nguồn khi có.', href: 'https://paperswithcode.com/' },
+      { name: 'Stanford HELM', description: 'Nghiên cứu đánh giá mô hình theo kịch bản.', href: 'https://crfm.stanford.edu/helm/' },
+    ],
+  },
+  {
+    category: 'Nghiên cứu khoa học',
+    description: 'Nguồn tra cứu bài báo, metadata xuất bản, preprint và tài liệu khoa học.',
+    sources: [
+      { name: 'Europe PMC', description: 'Tìm kiếm bài báo và metadata khoa học.', href: 'https://europepmc.org/' },
+      { name: 'arXiv', description: 'Preprint trong khoa học, toán học và máy tính.', href: 'https://arxiv.org/' },
+      { name: 'Crossref', description: 'Metadata xuất bản và DOI.', href: 'https://www.crossref.org/' },
+      { name: 'PubMed', description: 'Tìm kiếm tài liệu y sinh từ NCBI.', href: 'https://pubmed.ncbi.nlm.nih.gov/' },
+    ],
+  },
+  {
+    category: 'An ninh mạng & quyền riêng tư',
+    description: 'Tra cứu cảnh báo lỗ hổng, hướng dẫn phòng thủ và khuyến nghị từ nguồn chuyên trách.',
+    sources: [
+      { name: 'GitHub Security Advisories', description: 'Cảnh báo bảo mật cho hệ sinh thái phần mềm.', href: 'https://github.com/advisories' },
+      { name: 'CISA KEV Catalog', description: 'Danh mục lỗ hổng đã bị khai thác ngoài thực tế.', href: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog' },
+      { name: 'NIST National Vulnerability Database', description: 'Tra cứu CVE và dữ liệu lỗ hổng.', href: 'https://nvd.nist.gov/' },
+      { name: 'OWASP Cheat Sheet Series', description: 'Hướng dẫn thực hành bảo mật ứng dụng.', href: 'https://cheatsheetseries.owasp.org/' },
+    ],
+  },
+  {
+    category: 'Mã nguồn mở & công nghệ phát triển',
+    description: 'Tìm dự án, thư viện, ngôn ngữ, công cụ và cách cộng đồng duy trì phần mềm.',
+    sources: [
+      { name: 'GitHub Trending', description: 'Dự án đang được chú ý trên GitHub.', href: 'https://github.com/trending' },
+      { name: 'GitLab Explore', description: 'Khám phá dự án và nhóm phát triển.', href: 'https://gitlab.com/explore' },
+      { name: 'Codeberg', description: 'Nền tảng lưu trữ dự án cộng đồng.', href: 'https://codeberg.org/explore' },
+      { name: 'PyPI', description: 'Tra cứu gói Python và thông tin phát hành.', href: 'https://pypi.org/' },
+    ],
+  },
+  {
+    category: 'Dữ liệu mở & thống kê',
+    description: 'Tìm bộ dữ liệu có nguồn gốc rõ ràng phục vụ học tập, nghiên cứu và phân tích.',
+    sources: [
+      { name: 'World Bank Open Data', description: 'Chỉ số phát triển và thống kê quốc tế.', href: 'https://data.worldbank.org/' },
+      { name: 'Our World in Data', description: 'Bài phân tích đi kèm dữ liệu và nguồn.', href: 'https://ourworldindata.org/' },
+      { name: 'UCI Machine Learning Repository', description: 'Bộ dữ liệu phục vụ học máy và giáo dục.', href: 'https://archive.ics.uci.edu/' },
+      { name: 'Data.gov', description: 'Danh mục dữ liệu mở của chính phủ Hoa Kỳ.', href: 'https://data.gov/' },
+    ],
+  },
+  {
+    category: 'Tài liệu kỹ thuật & tiêu chuẩn web',
+    description: 'Ưu tiên tài liệu chuẩn, nguyên bản và có hướng dẫn để kiểm chứng cách triển khai.',
+    sources: [
+      { name: 'MDN Web Docs', description: 'Tài liệu web về HTML, CSS và JavaScript.', href: 'https://developer.mozilla.org/' },
+      { name: 'W3C Standards', description: 'Tiêu chuẩn và hướng dẫn nền tảng web.', href: 'https://www.w3.org/standards/' },
+      { name: 'RFC Editor', description: 'Đặc tả giao thức Internet và tài liệu RFC.', href: 'https://www.rfc-editor.org/' },
+      { name: 'WHATWG', description: 'Các tiêu chuẩn HTML và nền tảng web.', href: 'https://whatwg.org/' },
+    ],
+  },
+  {
+    category: 'Học tập & kiến thức nền',
+    description: 'Tài liệu học lập trình, khoa học máy tính, toán học và các chủ đề học thuật.',
+    sources: [
+      { name: 'Harvard CS50', description: 'Khóa học nhập môn khoa học máy tính.', href: 'https://cs50.harvard.edu/' },
+      { name: 'MIT OpenCourseWare', description: 'Tài liệu học tập công khai từ MIT.', href: 'https://ocw.mit.edu/' },
+      { name: 'Khan Academy', description: 'Bài học và luyện tập nhiều môn học.', href: 'https://www.khanacademy.org/' },
+      { name: 'freeCodeCamp', description: 'Lộ trình học phát triển phần mềm miễn phí.', href: 'https://www.freecodecamp.org/' },
+    ],
+  },
+  {
+    category: 'Tin công nghệ & cộng đồng',
+    description: 'Đối chiếu nhiều góc nhìn, phân biệt tin biên tập với thảo luận cộng đồng.',
+    sources: [
+      { name: 'Hacker News', description: 'Thảo luận của cộng đồng công nghệ.', href: 'https://news.ycombinator.com/' },
+      { name: 'The New Stack', description: 'Tin và phân tích về hạ tầng phần mềm.', href: 'https://thenewstack.io/' },
+      { name: 'Ars Technica', description: 'Tin tức và phân tích công nghệ.', href: 'https://arstechnica.com/' },
+      { name: 'ACM Queue', description: 'Bài viết chuyên sâu cho kỹ sư phần mềm.', href: 'https://queue.acm.org/' },
+    ],
+  },
 ];
 
 function defaultFeed<T>(): FeedState<T> {
@@ -170,11 +261,14 @@ export default function PublicToolsPage() {
   const [repos, setRepos] = useState<FeedState<Repository>>(defaultFeed);
   const [news, setNews] = useState<FeedState<Story>>(defaultFeed);
   const [hle, setHle] = useState<FeedState<HleLeaderboardEntry>>(defaultFeed);
+  const [papers, setPapers] = useState<FeedState<EuropePmcPaper>>(defaultFeed);
+  const [security, setSecurity] = useState<FeedState<PublicSecurityAdvisory>>(defaultFeed);
   const [loadingSource, setLoadingSource] = useState<SourceId | null>(null);
-  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState<CooldownState>({});
   const [clockNow, setClockNow] = useState(0);
   const [storageReady, setStorageReady] = useState(false);
-  const cooldownActive = cooldownUntil > clockNow;
+  const cooldownUntilMax = Math.max(0, ...Object.values(cooldownUntil).filter((value): value is number => typeof value === 'number'));
+  const cooldownActive = Object.values(cooldownUntil).some((until) => typeof until === 'number' && until > clockNow);
 
   useEffect(() => {
     // Defer storage hydration until the browser's first animation frame so React's
@@ -190,19 +284,45 @@ export default function PublicToolsPage() {
           if (typeof payload.savedAt !== 'number' || !Number.isFinite(payload.savedAt) || payload.savedAt > now || !Array.isArray(payload.items) || payload.items.length > 8) continue;
           if (now - payload.savedAt > CACHE_MS) continue;
           const savedAt = payload.savedAt;
-          if (source === 'models') setModels({ items: normalizeModels(payload.items), savedAt, status: 'Đang hiển thị cache cục bộ còn hạn; chưa gọi API.' });
-          else if (source === 'repos') setRepos({ items: normalizeRepos({ items: payload.items }), savedAt, status: 'Đang hiển thị cache cục bộ còn hạn; chưa gọi API.' });
-          else if (source === 'news') setNews({ items: normalizeStories({ hits: payload.items }), savedAt, status: 'Cached locally; not calling the API.' });
-          else setHle({ items: normalizeHleLeaderboard(payload.items), savedAt, status: 'Cached locally; not calling the API.' });
+          const cacheStatus = 'Đang hiển thị dữ liệu đã lưu trong trình duyệt; chưa gọi API.';
+          if (source === 'models') setModels({ items: normalizeModels(payload.items), savedAt, status: cacheStatus });
+          else if (source === 'repos') setRepos({ items: normalizeRepos({ items: payload.items }), savedAt, status: cacheStatus });
+          else if (source === 'news') setNews({ items: normalizeStories({ hits: payload.items }), savedAt, status: cacheStatus });
+          else if (source === 'hle') setHle({ items: normalizeHleLeaderboard(payload.items), savedAt, status: cacheStatus });
+          else if (source === 'papers') {
+            const cached = payload.items.flatMap((entry) => {
+              if (!entry || typeof entry !== 'object') return [];
+              const paper = entry as Partial<EuropePmcPaper>;
+              const separator = typeof paper.id === 'string' ? paper.id.indexOf(':') : -1;
+              if (separator < 1) return [];
+              return [{ source: paper.id!.slice(0, separator), id: paper.id!.slice(separator + 1), title: paper.title, authorString: paper.authors, journalTitle: paper.journal, pubYear: paper.year, doi: paper.doi, citedByCount: paper.citedByCount, isOpenAccess: paper.openAccess ? 'Y' : 'N' }];
+            });
+            setPapers({ items: normalizeEuropePmcPapers({ resultList: { result: cached } }), savedAt, status: cacheStatus });
+          } else {
+            const cached = payload.items.flatMap((entry) => {
+              if (!entry || typeof entry !== 'object') return [];
+              const advisory = entry as Partial<PublicSecurityAdvisory>;
+              if (!advisory.ghsaId) return [];
+              return [{ ghsa_id: advisory.ghsaId, cve_id: advisory.cveId, summary: advisory.summary, description: advisory.description, severity: advisory.severity, published_at: advisory.publishedAt, vulnerabilities: [{ package: { name: advisory.packageName, ecosystem: advisory.ecosystem }, first_patched_version: advisory.patchedVersion }] }];
+            });
+            setSecurity({ items: normalizeSecurityAdvisories(cached), savedAt, status: cacheStatus });
+          }
         } catch {
           // Storage can be disabled or contain malformed data; page remains usable.
         }
       }
       try {
-        const lastRequest = Number(window.localStorage.getItem(LAST_REQUEST_KEY) || '0');
-        if (Number.isFinite(lastRequest) && lastRequest > 0) setCooldownUntil(lastRequest + COOLDOWN_MS);
+        const restoredCooldowns: CooldownState = {};
+        for (const source of Object.keys(CACHE_KEYS) as SourceId[]) {
+          const lastRequest = Number(window.localStorage.getItem(LAST_REQUEST_KEY + source) || '0');
+          if (Number.isFinite(lastRequest) && lastRequest > 0 && lastRequest <= now) {
+            const until = lastRequest + COOLDOWN_MS;
+            if (until > now) restoredCooldowns[source] = until;
+          }
+        }
+        setCooldownUntil(restoredCooldowns);
       } catch {
-        // The cooldown is best-effort when browser storage is unavailable.
+        // Cooldowns are best-effort when browser storage is unavailable.
       }
       setStorageReady(true);
     });
@@ -210,31 +330,34 @@ export default function PublicToolsPage() {
   }, []);
 
   useEffect(() => {
-    if (!cooldownUntil) return;
+    if (cooldownUntilMax <= Date.now()) return;
     const timer = window.setInterval(() => {
       const now = Date.now();
       setClockNow(now);
-      if (now >= cooldownUntil) window.clearInterval(timer);
+      if (now >= cooldownUntilMax) window.clearInterval(timer);
     }, 500);
     return () => window.clearInterval(timer);
-  }, [cooldownUntil]);
+  }, [cooldownUntilMax]);
 
   const getFeed = useCallback(async (source: SourceId) => {
     if (loadingSource) return;
     const now = Date.now();
-    const current = source === 'models' ? models : source === 'repos' ? repos : source === 'news' ? news : hle;
+    const current = source === 'models' ? models : source === 'repos' ? repos : source === 'news' ? news : source === 'hle' ? hle : source === 'papers' ? papers : security;
     const updateStatus = (status: string) => {
       if (source === 'models') setModels((previous) => ({ ...previous, status }));
       else if (source === 'repos') setRepos((previous) => ({ ...previous, status }));
       else if (source === 'news') setNews((previous) => ({ ...previous, status }));
-      else setHle((previous) => ({ ...previous, status }));
+      else if (source === 'hle') setHle((previous) => ({ ...previous, status }));
+      else if (source === 'papers') setPapers((previous) => ({ ...previous, status }));
+      else setSecurity((previous) => ({ ...previous, status }));
     };
     if (current.savedAt && now - current.savedAt < CACHE_MS && current.items.length) {
       updateStatus('Đang dùng cache cục bộ 30 phút; chưa phát sinh yêu cầu API mới.');
       return;
     }
-    if (now < cooldownUntil) {
-      updateStatus('Đang giới hạn tần suất. Hãy đợi ' + Math.ceil((cooldownUntil - now) / 1000) + ' giây.');
+    const sourceCooldownUntil = cooldownUntil[source] ?? 0;
+    if (now < sourceCooldownUntil) {
+      updateStatus('Nguồn này đang có cooldown. Hãy thử lại sau ' + Math.ceil((sourceCooldownUntil - now) / 1000) + ' giây; các nguồn khác vẫn có thể sử dụng.');
       return;
     }
 
@@ -243,9 +366,9 @@ export default function PublicToolsPage() {
     const requestAt = Date.now();
     setLoadingSource(source);
     setClockNow(requestAt);
-    setCooldownUntil(requestAt + COOLDOWN_MS);
+    setCooldownUntil((previous) => ({ ...previous, [source]: requestAt + COOLDOWN_MS }));
     updateStatus('Đang tải trực tiếp từ nguồn công khai…');
-    try { window.localStorage.setItem(LAST_REQUEST_KEY, String(requestAt)); }
+    try { window.localStorage.setItem(LAST_REQUEST_KEY + source, String(requestAt)); }
     catch { /* In-memory throttling remains active for this page session. */ }
 
     const endpoints: Record<SourceId, string> = {
@@ -253,24 +376,37 @@ export default function PublicToolsPage() {
       repos: 'https://api.github.com/search/repositories?q=topic%3Allm&sort=stars&order=desc&per_page=8',
       news: 'https://hn.algolia.com/api/v1/search_by_date?query=AI%20model&tags=story&hitsPerPage=8',
       hle: 'https://huggingface.co/api/datasets/cais/hle/leaderboard',
+      papers: 'https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=TITLE_ABS%3A%22large%20language%20model%22%20OR%20TITLE_ABS%3A%22artificial%20intelligence%22&format=json&resultType=lite&pageSize=8&sort_date=y',
+      security: 'https://api.github.com/advisories?per_page=8&sort=published&direction=desc',
     };
 
     try {
       const response = await fetch(endpoints[source], {
         method: 'GET', signal: controller.signal,
-        headers: { Accept: 'application/json', ...(source === 'repos' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}) },
+        headers: {
+          Accept: source === 'security' ? 'application/vnd.github+json' : 'application/json',
+          ...(source === 'repos' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
+          ...(source === 'security' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
+        },
         cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer',
       });
       const payload = await readJsonLimited<unknown>(response);
-      const normalized = source === 'models' ? normalizeModels(payload) : source === 'repos' ? normalizeRepos(payload) : source === 'news' ? normalizeStories(payload) : normalizeHleLeaderboard(payload);
+      const normalized = source === 'models' ? normalizeModels(payload)
+        : source === 'repos' ? normalizeRepos(payload)
+        : source === 'news' ? normalizeStories(payload)
+        : source === 'hle' ? normalizeHleLeaderboard(payload)
+        : source === 'papers' ? normalizeEuropePmcPapers(payload)
+        : normalizeSecurityAdvisories(payload);
       const savedAt = Date.now();
       const status = normalized.length
         ? 'Đã tải ' + normalized.length + ' mục. Dữ liệu chỉ mang tính tham khảo, không phải bảo chứng chất lượng.'
         : 'Nguồn API không trả về kết quả công khai phù hợp.';
-      if (source === 'models') setModels({ items: normalizeModels(payload), savedAt, status });
-      else if (source === 'repos') setRepos({ items: normalizeRepos(payload), savedAt, status });
-      else if (source === 'news') setNews({ items: normalizeStories(payload), savedAt, status });
-      else setHle({ items: normalizeHleLeaderboard(payload), savedAt, status });
+      if (source === 'models') setModels({ items: normalized as Model[], savedAt, status });
+      else if (source === 'repos') setRepos({ items: normalized as Repository[], savedAt, status });
+      else if (source === 'news') setNews({ items: normalized as Story[], savedAt, status });
+      else if (source === 'hle') setHle({ items: normalized as HleLeaderboardEntry[], savedAt, status });
+      else if (source === 'papers') setPapers({ items: normalized as EuropePmcPaper[], savedAt, status });
+      else setSecurity({ items: normalized as PublicSecurityAdvisory[], savedAt, status });
       try { window.localStorage.setItem(CACHE_KEYS[source], JSON.stringify({ savedAt, items: normalized })); }
       catch { /* Keep results in memory when storage is unavailable. */ }
     } catch (cause) {
@@ -281,13 +417,13 @@ export default function PublicToolsPage() {
       window.clearTimeout(timeout);
       setLoadingSource(null);
     }
-  }, [cooldownUntil, loadingSource, models, news, repos, hle]);
+  }, [cooldownUntil, loadingSource, models, news, repos, hle, papers, security]);
 
   const disabled = (source: SourceId): boolean => {
     if (!storageReady || loadingSource !== null) return true;
-    const savedAt = source === 'models' ? models.savedAt : source === 'repos' ? repos.savedAt : source === 'news' ? news.savedAt : hle.savedAt;
-    const isFresh = typeof savedAt === 'number' && clockNow >= savedAt && clockNow - savedAt < CACHE_MS;
-    return cooldownActive && !isFresh;
+    const current = source === 'models' ? models : source === 'repos' ? repos : source === 'news' ? news : source === 'hle' ? hle : source === 'papers' ? papers : security;
+    const isFresh = typeof current.savedAt === 'number' && clockNow >= current.savedAt && clockNow - current.savedAt < CACHE_MS;
+    return (cooldownUntil[source] ?? 0) > clockNow && !isFresh;
   };
 
   return (
@@ -300,22 +436,21 @@ export default function PublicToolsPage() {
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--bg-page)] px-3 py-1 text-[11px] font-mono text-[var(--accent)]"><Sparkles size={13} /> OPEN DATA LAB</span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--bg-page)] px-3 py-1 text-[11px] text-[var(--text-muted)]"><ShieldCheck size={13} /> Không cần tài khoản</span>
           </div>
-          <h1 className="max-w-4xl text-3xl font-serif font-bold tracking-tight text-[var(--text-primary)] sm:text-4xl md:text-5xl">Bức tranh AI và công nghệ từ dữ liệu mở.</h1>
-          <p className="max-w-3xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">Khám phá mô hình AI đang được quan tâm, dự án mã nguồn mở và thảo luận công nghệ. Mỗi nguồn có liên kết gốc, giới hạn dữ liệu và cache cục bộ — trang không tự gọi API khi bạn mở.</p>
+          <h1 className="max-w-4xl text-3xl font-serif font-bold tracking-tight text-[var(--text-primary)] sm:text-4xl md:text-5xl">Bản đồ tri thức số: AI, khoa học, bảo mật và dữ liệu mở.</h1>
+          <p className="max-w-3xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">Một cổng thông tin để đọc, khám phá và đối chiếu kiến thức từ nguồn gốc: mô hình AI, nghiên cứu khoa học, mã nguồn mở, an ninh mạng, dữ liệu công cộng, tiêu chuẩn kỹ thuật và tài liệu học tập. Không cần tài khoản, không tải phần mềm chỉ để xem thông tin.</p>
           <div className="flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
-            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">01 · AI Models</span>
-            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">02 · Open-source Radar</span>
-            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">03 · Tech News</span>
-            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">04 · Benchmarks</span>
+            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">01 · AI & Benchmarks</span>
+            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">02 · Khoa học & bài báo</span>
+            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">03 · An ninh mạng</span>
+            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">04 · Mã nguồn mở</span>
+            <span className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2">05 · Dữ liệu & học tập</span>
           </div>
         </div>
       </section>
 
-      <PublicCalculatorTools />
-
       {cooldownActive && (
-        <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-[var(--text-secondary)]">
-          Đang giới hạn các yêu cầu dữ liệu giữa các nguồn để tránh quá tải API bên thứ ba. Bạn có thể tải lại sau khoảng {Math.max(1, Math.ceil((cooldownUntil - clockNow) / 1000))} giây; dữ liệu cache vẫn xem được mà không gọi API mới.
+        <div role="status" className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface-subtle)] px-4 py-3 text-xs text-[var(--text-secondary)]">
+          Để tránh gọi lặp, mỗi nguồn dữ liệu có thời gian chờ riêng 45 giây và cache cục bộ 30 phút. Các nguồn khác vẫn có thể được mở trong lúc chờ.
         </div>
       )}
 
@@ -407,6 +542,56 @@ export default function PublicToolsPage() {
           </div>
           <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://huggingface.co/docs/hub/leaderboard-data-guide" target="_blank" rel="noopener noreferrer">Hugging Face Leaderboard API</a>. Một số điểm do cộng đồng gửi lên; hãy xem nhãn xác minh và ghi chú trước khi so sánh.</p>
         </article>
+
+        <article className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div><div className="mb-1 flex items-center gap-2 text-xs font-mono uppercase tracking-wide text-[var(--accent)]"><BookOpen size={14} /> RESEARCH RADAR</div><h2 className="text-lg font-serif font-bold">Nghiên cứu khoa học mới</h2></div>
+            <a href="https://europepmc.org/" target="_blank" rel="noopener noreferrer" aria-label="Mở Europe PMC" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
+          </div>
+          <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Bài báo liên quan đến trí tuệ nhân tạo và mô hình ngôn ngữ từ Europe PMC. Đây là metadata thư mục; quyền đọc toàn văn phụ thuộc từng bài và giấy phép.</p>
+          <button type="button" onClick={() => getFeed('papers')} disabled={disabled('papers')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'papers' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'papers' ? 'Đang tải…' : papers.items.length ? 'Xem dữ liệu đã tải / kiểm tra cache' : 'Tải bài nghiên cứu'}</button>
+          <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{papers.status}</p>
+          {papers.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(papers.savedAt).toLocaleString('vi-VN')} · cache 30 phút</p>}
+          <div className="space-y-2">
+            {papers.items.map((paper) => (
+              <div key={paper.id} className="rounded-xl border border-[var(--border-color)] p-3">
+                <a href={paper.url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold leading-5 text-[var(--text-primary)] hover:text-[var(--accent)]">{paper.title}</a>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]">
+                  {paper.year && <span>{paper.year}</span>}{paper.journal && <span>{paper.journal}</span>}{paper.citedByCount !== undefined && <span>Trích dẫn: {formatNumber(paper.citedByCount)}</span>}
+                  {paper.openAccess && <span className="rounded-md border border-emerald-500/30 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">Open Access</span>}
+                </div>
+                {paper.authors && <p className="mt-2 text-[10px] leading-5 text-[var(--text-secondary)]">{paper.authors}</p>}
+                {paper.doi && <p className="mt-1 text-[10px] text-[var(--text-muted)]">DOI: <a href={'https://doi.org/' + encodeURIComponent(paper.doi)} target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--accent)]">{paper.doi}</a></p>}
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://europepmc.org/RestfulWebService" target="_blank" rel="noopener noreferrer">Europe PMC REST API</a>. Truy vấn chỉ đọc, không cần API key và gửi trực tiếp từ trình duyệt.</p>
+        </article>
+
+        <article className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div><div className="mb-1 flex items-center gap-2 text-xs font-mono uppercase tracking-wide text-[var(--accent)]"><ShieldCheck size={14} /> SECURITY RADAR</div><h2 className="text-lg font-serif font-bold">Cảnh báo bảo mật phần mềm</h2></div>
+            <a href="https://github.com/advisories" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub Security Advisories" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
+          </div>
+          <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Cảnh báo lỗ hổng công khai đã được GitHub xem xét, hữu ích khi theo dõi thư viện và chuỗi cung ứng phần mềm. Không thay thế quy trình đánh giá rủi ro của dự án.</p>
+          <button type="button" onClick={() => getFeed('security')} disabled={disabled('security')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'security' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'security' ? 'Đang tải…' : security.items.length ? 'Xem dữ liệu đã tải / kiểm tra cache' : 'Tải cảnh báo bảo mật'}</button>
+          <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{security.status}</p>
+          {security.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(security.savedAt).toLocaleString('vi-VN')} · cache 30 phút</p>}
+          <div className="space-y-2">
+            {security.items.map((advisory) => (
+              <div key={advisory.ghsaId} className="rounded-xl border border-[var(--border-color)] p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <a href={advisory.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 text-xs font-semibold leading-5 text-[var(--text-primary)] hover:text-[var(--accent)]">{advisory.summary}</a>
+                  <span className={advisory.severity === 'critical' || advisory.severity === 'high' ? 'rounded-md border border-red-500/30 px-2 py-1 text-[9px] font-semibold uppercase text-red-700 dark:text-red-300' : 'rounded-md border border-[var(--border-color)] px-2 py-1 text-[9px] font-semibold uppercase text-[var(--text-muted)]'}>{advisory.severity || 'unknown'}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]"><span>{advisory.ghsaId}</span>{advisory.cveId && <span>{advisory.cveId}</span>}{advisory.publishedAt && <span>{new Date(advisory.publishedAt).toLocaleDateString('vi-VN')}</span>}</div>
+                {advisory.description && <p className="mt-2 line-clamp-3 text-[10px] leading-5 text-[var(--text-secondary)]">{advisory.description}</p>}
+                {advisory.packageName && <p className="mt-2 text-[10px] text-[var(--text-muted)]">Gói: {advisory.packageName}{advisory.ecosystem ? ' · ' + advisory.ecosystem : ''}{advisory.patchedVersion ? ' · Bản sửa: ' + advisory.patchedVersion : ''}</p>}
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://docs.github.com/en/rest/security-advisories/global-advisories" target="_blank" rel="noopener noreferrer">GitHub Global Security Advisories API</a>. Chỉ hiển thị thông tin công khai mà nguồn cung cấp.</p>
+        </article>
       </section>
 
       <section className="space-y-5">
@@ -424,8 +609,38 @@ export default function PublicToolsPage() {
         </div>
       </section>
 
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--border-color)] pb-4">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-mono uppercase tracking-wide text-[var(--accent)]"><BookOpen size={14} /> KNOWLEDGE DIRECTORY</div>
+            <h2 className="text-2xl font-serif font-bold text-[var(--text-primary)]">Khám phá theo lĩnh vực</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-6 text-[var(--text-secondary)]">Danh bạ nguồn tham khảo được tuyển chọn theo chủ đề. Đây là liên kết trực tiếp đến nhà xuất bản hoặc tổ chức nguồn, không phải nội dung được website tự xác minh theo thời gian thực.</p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] px-3 py-1.5 text-[10px] text-[var(--text-muted)]"><ShieldCheck size={12} /> Ưu tiên nguồn gốc</span>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {informationCollections.map((collection) => (
+            <article key={collection.category} className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
+              <h3 className="text-base font-serif font-bold text-[var(--text-primary)]">{collection.category}</h3>
+              <p className="mt-2 text-xs leading-6 text-[var(--text-secondary)]">{collection.description}</p>
+              <div className="mt-4 space-y-3">
+                {collection.sources.map((source) => (
+                  <a key={source.name} href={source.href} target="_blank" rel="noopener noreferrer" className="group flex items-start justify-between gap-3 rounded-lg px-2 py-2 -mx-2 transition hover:bg-[var(--bg-surface-subtle)]">
+                    <span className="min-w-0">
+                      <strong className="block text-xs font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)]">{source.name}</strong>
+                      <span className="mt-0.5 block text-[10px] leading-5 text-[var(--text-muted)]">{source.description}</span>
+                    </span>
+                    <ExternalLink size={13} className="mt-0.5 shrink-0 text-[var(--text-muted)]" />
+                  </a>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface-subtle)] p-4 sm:p-6">
-        <div className="flex items-start gap-3"><Info size={18} className="mt-0.5 shrink-0 text-[var(--accent)]" /><div><h2 className="text-sm font-bold">Giới hạn và quyền riêng tư</h2><p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">Không gọi API khi vừa mở trang. Mỗi lượt chỉ lấy tối đa 8 mục từ mỗi nguồn, timeout 10 giây, hủy phản hồi lớn hơn 180 KiB, cache local 30 phút và dùng chung thời gian chờ 45 giây giữa các nguồn. Request API gửi trực tiếp từ trình duyệt khách nên không tiêu tốn lượt gọi máy chủ Vercel của website; mỗi nhà cung cấp vẫn có giới hạn riêng và có thể tạm thời từ chối truy cập. Không gửi nội dung nhập riêng tư, không dùng khóa API, không có proxy mở cho người dùng.</p><p className="mt-2 text-[10px] text-[var(--text-muted)]">Dữ liệu ngoài được chuẩn hóa trước khi render; nội dung, sao, lượt tải và điểm bình chọn đều có thể thay đổi. Khi API không hoạt động, khách vẫn mở được nguồn chính thức.</p></div></div>
+        <div className="flex items-start gap-3"><Info size={18} className="mt-0.5 shrink-0 text-[var(--accent)]" /><div><h2 className="text-sm font-bold">Minh bạch dữ liệu và quyền riêng tư</h2><p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">Trang không gọi feed API khi vừa mở. Sáu nguồn dữ liệu động chỉ chạy khi khách bấm yêu cầu, tối đa 8 mục mỗi nguồn, timeout 10 giây, hủy phản hồi trên 180 KiB và cache cục bộ 30 phút. Cooldown 45 giây áp dụng riêng cho từng nguồn để có thể khám phá nhiều lĩnh vực mà không gọi lặp liên tục. Lời gọi diễn ra trực tiếp từ trình duyệt, không dùng API key, không qua proxy của website và không tiêu tốn lượt gọi backend của website; nhà cung cấp vẫn áp dụng giới hạn riêng.</p><p className="mt-2 text-[10px] leading-5 text-[var(--text-muted)]">Dữ liệu hiển thị là metadata do nguồn bên ngoài cung cấp và có thể thay đổi hoặc có sai sót. Số sao, lượt tải, trích dẫn và mức độ nghiêm trọng không tự chứng minh chất lượng hay mức rủi ro toàn diện. Khi API lỗi, khách vẫn có thể mở trang nguồn chính thức. Danh bạ theo lĩnh vực là các liên kết tham khảo được tuyển chọn; hãy xem giấy phép, ngày cập nhật và phương pháp luận tại nguồn.</p></div></div>
       </section>
     </div>
   );

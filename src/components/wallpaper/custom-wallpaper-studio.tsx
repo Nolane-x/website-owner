@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CustomWallpaper, WallpaperMediaType, WallpaperFilters } from '@/lib/types';
 import { ShaderMode } from './canvas-shaders';
+import { loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, saveActiveWallpaperPreference } from '@/lib/wallpaper/wallpaper-preferences';
 import {
   Image as ImageIcon,
   Video,
@@ -23,29 +24,20 @@ export function CustomWallpaperStudio() {
   const [wallpapers, setWallpapers] = useState<CustomWallpaper[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active current wallpaper selection with lazy initializer
+  // Active wallpaper, post-processing filters and shader mode are durable owner
+  // preferences. Validate local data before it can reach CSS/media/shader rendering.
   const [currentWallpaper, setCurrentWallpaper] = useState<{
     type: WallpaperMediaType;
     url: string;
     filters: WallpaperFilters;
     shader: ShaderMode;
     wallpaperId?: string | null;
-  }>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('webos_active_wallpaper_v5');
-        if (saved) return JSON.parse(saved);
-      } catch {
-        // Ignore
-      }
-    }
-    return {
-      type: 'image',
-      url: '/images/hero-bg.jpg',
-      filters: { dim: 20, blur: 0, contrast: 100, saturation: 100, vignette: false, scanlines: false },
-      shader: 'none',
-      wallpaperId: null,
-    };
+  }>(() => loadActiveWallpaperPreference() ?? {
+    type: 'image',
+    url: '/images/hero-bg.jpg',
+    filters: { dim: 20, blur: 0, contrast: 100, saturation: 100, vignette: false, scanlines: false },
+    shader: 'none',
+    wallpaperId: null,
   });
 
   // Upload & URL form
@@ -58,20 +50,21 @@ export function CustomWallpaperStudio() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const saveActiveWallpaper = (wp: typeof currentWallpaper, wallpaperId: string | null = currentWallpaper.wallpaperId || null) => {
-    const nextWallpaper = { ...wp, wallpaperId };
-    setCurrentWallpaper(nextWallpaper);
-    try {
-      // Persist the database ID for uploaded assets instead of duplicating a large Base64 URL in localStorage.
-      const persisted = nextWallpaper.url.startsWith('data:') && wallpaperId
-        ? { ...nextWallpaper, url: '' }
-        : nextWallpaper;
-      localStorage.setItem('webos_active_wallpaper_v5', JSON.stringify(persisted));
-      window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: nextWallpaper }));
-      setErrorMessage(null);
-      setStatusMessage('Đã áp dụng hình nền và lưu cấu hình trên trình duyệt.');
-    } catch {
-      setErrorMessage('Hình nền đang được áp dụng trong phiên này nhưng không thể lưu cấu hình. Khi tải lại trang, lựa chọn có thể không được khôi phục.');
+    const nextWallpaper = normalizeActiveWallpaperPreference({ ...wp, wallpaperId });
+    if (!nextWallpaper) {
+      setErrorMessage('Cấu hình hình nền không hợp lệ; lựa chọn trước đó vẫn được giữ.');
+      return;
     }
+    setCurrentWallpaper(nextWallpaper);
+    // Always update the desktop immediately, even when browser storage is blocked.
+    window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: nextWallpaper }));
+    if (!saveActiveWallpaperPreference(nextWallpaper)) {
+      setStatusMessage(null);
+      setErrorMessage('Hình nền đã áp dụng trong phiên này nhưng trình duyệt không lưu được cấu hình. Hãy bật quyền lưu dữ liệu website để khôi phục sau khi đóng.');
+      return;
+    }
+    setErrorMessage(null);
+    setStatusMessage('Đã áp dụng hình nền, bộ lọc và shader; cấu hình đã lưu trên trình duyệt này.');
   };
 
   const fetchWallpapers = useCallback(async () => {
@@ -101,12 +94,17 @@ export function CustomWallpaperStudio() {
     const savedWallpaper = wallpapers.find((item) => item.id === currentWallpaper.wallpaperId);
     const resolvedUrl = savedWallpaper?.localDataUrl || savedWallpaper?.sourceUrl || '';
     if (!savedWallpaper || !resolvedUrl) return;
-    const restored = {
+    // The active local selection is authoritative for post-processing and shader
+    // preferences. The database copy is only a fallback for older records.
+    // The saved browser preference owns shader and filter state. Database filter
+    // metadata is only used as a fallback for old/missing values, never over a live edit.
+    const restored = normalizeActiveWallpaperPreference({
       ...currentWallpaper,
       type: savedWallpaper.type,
       url: resolvedUrl,
-      filters: savedWallpaper.filtersJson || currentWallpaper.filters,
-    };
+      filters: currentWallpaper.filters ?? savedWallpaper.filtersJson,
+    });
+    if (!restored) return;
     void Promise.resolve().then(() => {
       setCurrentWallpaper(restored);
       window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: restored }));

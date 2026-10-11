@@ -30,10 +30,10 @@ export function PublicHeader({
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
-  // Keep the public tool area discoverable even when the owner customizes navigation.
+  // Keep the public knowledge portal discoverable even when the owner customizes navigation.
   const visibleNavItems = navItems.some((item) => item.href === '/tools')
-    ? navItems
-    : [...navItems, { label: 'Công cụ', href: '/tools' }];
+    ? navItems.map((item) => item.href === '/tools' ? { ...item, label: 'Khám phá' } : item)
+    : [...navItems, { label: 'Khám phá', href: '/tools' }];
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => {

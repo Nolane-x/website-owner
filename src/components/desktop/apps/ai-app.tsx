@@ -1,8 +1,18 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
-import { Sparkles, Send, Bot, User, KeyRound, Loader2, Calendar, ShieldCheck, Search } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Sparkles, Send, Bot, User, KeyRound, Loader2, Calendar, ShieldCheck, Search, Trash2 } from 'lucide-react';
 import { AI_PROVIDER_PRESETS, completeChat, getAIProviderPreset, listChatModels, type RemoteAIProvider, type ChatMessageInput } from '@/lib/ai/client';
+import {
+  clearRememberedApiKey,
+  loadAIAppPreferences,
+  loadAIChatHistory,
+  loadRememberedApiKey,
+  saveAIAppPreferences,
+  saveAIChatHistory,
+  saveRememberedApiKey,
+} from '@/lib/ai/local-preferences';
+import { PREFERENCE_PERSISTENCE_EVENT, reportPreferencePersistence, type PreferencePersistenceResult } from '@/lib/persistence-events';
 
 interface ChatMessage {
   id: string;
@@ -102,6 +112,146 @@ export function AiApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [includeContext, setIncludeContext] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [preferencesHydrated, setPreferencesHydrated] = useState(false);
+  const [rememberApiKey, setRememberApiKey] = useState(false);
+  const [preferenceNotice, setPreferenceNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handlePersistence = (event: Event) => {
+      const detail = (event as CustomEvent<PreferencePersistenceResult>).detail;
+      if (detail?.scope === 'ai-workbench') setPreferenceNotice(detail.message);
+    };
+    window.addEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+    return () => window.removeEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    const hydrate = async () => {
+      const defaults = {
+        provider: 'search' as const,
+        model: 'openai/gpt-oss-20b',
+        baseUrl: 'http://localhost:11434',
+        includeContext: false,
+      };
+      const preferences = loadAIAppPreferences('ai-workbench', defaults);
+      setProvider(preferences.provider);
+      setModel(preferences.model);
+      setBaseUrl(preferences.baseUrl);
+      setIncludeContext(preferences.includeContext ?? false);
+
+      const history = loadAIChatHistory('ai-workbench');
+      if (history) setMessages(history);
+
+      try {
+        if (preferences.provider !== 'search') {
+          const savedKey = await loadRememberedApiKey('ai-workbench', preferences.provider);
+          if (!disposed && savedKey) {
+            setApiKey(savedKey);
+            setRememberApiKey(true);
+          }
+        }
+      } catch (error) {
+        if (!disposed) {
+          setPreferenceNotice(error instanceof Error
+            ? error.message
+            : 'Không thể mở kho API key mã hóa trên trình duyệt này.');
+        }
+      } finally {
+        if (!disposed) setPreferencesHydrated(true);
+      }
+    };
+    void hydrate();
+    return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesHydrated) return;
+    const saved = saveAIAppPreferences('ai-workbench', { provider, model, baseUrl, includeContext });
+    reportPreferencePersistence('ai-workbench', saved ? null : 'Trình duyệt không cho phép lưu cài đặt. Hãy bật quyền lưu dữ liệu website rồi thử lại.');
+  }, [preferencesHydrated, provider, model, baseUrl, includeContext]);
+
+  useEffect(() => {
+    if (!preferencesHydrated) return;
+    const saved = saveAIChatHistory('ai-workbench', messages);
+    reportPreferencePersistence('ai-workbench', saved ? null : 'Không thể lưu lịch sử chat cục bộ. Hãy kiểm tra dung lượng/quyền lưu của trình duyệt.');
+  }, [preferencesHydrated, messages]);
+
+  const handleProviderChange = async (next: RemoteAIProvider | 'search') => {
+    setProvider(next);
+    setAvailableModels([]);
+    setErrorMessage(null);
+    setApiKey('');
+    setRememberApiKey(false);
+    setPreferenceNotice(null);
+    if (next === 'search') return;
+    const preset = getAIProviderPreset(next);
+    setModel(preset.defaultModel);
+    setBaseUrl(preset.defaultBaseUrl);
+    try {
+      const savedKey = await loadRememberedApiKey('ai-workbench', next);
+      if (savedKey) {
+        setApiKey(savedKey);
+        setRememberApiKey(true);
+        setPreferenceNotice('Đã khôi phục API key được mã hóa cho provider này.');
+      }
+    } catch (error) {
+      setPreferenceNotice(error instanceof Error ? error.message : 'Không thể khôi phục API key đã lưu.');
+    }
+  };
+
+  const handleRememberApiKeyToggle = async (enabled: boolean) => {
+    if (provider === 'search') return;
+    if (!enabled) {
+      setRememberApiKey(false);
+      try {
+        await clearRememberedApiKey('ai-workbench', provider);
+        setPreferenceNotice('Đã xóa API key đã lưu trên trình duyệt. Key trong phiên hiện tại vẫn dùng được.');
+      } catch (error) {
+        setPreferenceNotice(error instanceof Error ? error.message : 'Không thể xóa API key đã lưu.');
+      }
+      return;
+    }
+    setRememberApiKey(true);
+    if (!apiKey.trim()) {
+      setPreferenceNotice('Hãy nhập API key rồi rời khỏi ô nhập để lưu key đã mã hóa.');
+      return;
+    }
+    try {
+      await saveRememberedApiKey('ai-workbench', provider, apiKey);
+      setPreferenceNotice('Đã lưu API key dưới dạng mã hóa trong kho cục bộ của trình duyệt này.');
+    } catch (error) {
+      setRememberApiKey(false);
+      setPreferenceNotice(error instanceof Error ? error.message : 'Không thể lưu API key được mã hóa.');
+    }
+  };
+
+  const handleApiKeyBlur = async () => {
+    if (provider === 'search' || !rememberApiKey) return;
+    if (!apiKey.trim()) {
+      try { await clearRememberedApiKey('ai-workbench', provider); } catch { /* best-effort local secret cleanup */ }
+      setRememberApiKey(false);
+      return;
+    }
+    try {
+      await saveRememberedApiKey('ai-workbench', provider, apiKey);
+      setPreferenceNotice('API key đã được cập nhật trong kho mã hóa cục bộ.');
+    } catch (error) {
+      setPreferenceNotice(error instanceof Error ? error.message : 'Không thể cập nhật API key đã mã hóa.');
+    }
+  };
+
+  const handleClearChat = () => {
+    if (!window.confirm('Xóa lịch sử trò chuyện AI đã lưu trên trình duyệt này? Thao tác này không thể hoàn tác.')) return;
+    setMessages([{
+      id: 'intro',
+      sender: 'assistant',
+      text: 'AI Copilot đã sẵn sàng. Bạn có thể tra cứu dữ liệu riêng đang được lưu trong Personal Web OS, hoặc kết nối một model qua API/endpoint do bạn cấu hình. Kết quả tra cứu cục bộ được phân biệt rõ với câu trả lời do model sinh ra.',
+      timestamp: nowLabel(),
+    }]);
+    setErrorMessage(null);
+    setPreferenceNotice('Đã xóa lịch sử trò chuyện cục bộ.');
+  };
 
   const handleGenerateStandup = () => {
     setInput('Tóm tắt công việc, nhiệm vụ đang mở và nội dung gần đây của tôi.');
@@ -235,6 +385,9 @@ export function AiApp() {
           <button onClick={handleGenerateStandup} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 transition text-[11px]">
             <Calendar className="w-3.5 h-3.5 text-emerald-400" /><span>Hỏi về tiến độ</span>
           </button>
+          <button onClick={handleClearChat} className="p-1.5 rounded-lg bg-stone-800 text-stone-300 hover:text-rose-300" title="Xóa lịch sử trò chuyện">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
           <button onClick={() => setShowSettings((open) => !open)} className="p-1.5 rounded-lg bg-stone-800 text-stone-300 hover:text-white" title="Cấu hình model">
             <KeyRound className="w-3.5 h-3.5" />
           </button>
@@ -246,18 +399,7 @@ export function AiApp() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <label className="space-y-1">
               <span className="block text-[11px] text-stone-400">Chế độ xử lý</span>
-              <select value={provider} onChange={(event) => {
-                const next = event.target.value as RemoteAIProvider | 'search';
-                setProvider(next);
-                setApiKey('');
-                setAvailableModels([]);
-                setErrorMessage(null);
-                if (next !== 'search') {
-                  const preset = getAIProviderPreset(next);
-                  setModel(preset.defaultModel);
-                  setBaseUrl(preset.defaultBaseUrl);
-                }
-              }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-1.5 text-xs text-stone-200">
+              <select value={provider} onChange={(event) => { void handleProviderChange(event.target.value as RemoteAIProvider | 'search'); }} className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2 py-1.5 text-xs text-stone-200">
                 <option value="search">Tra cứu dữ liệu (không dùng AI cloud)</option>
                 <optgroup label="Cloud providers">
                   {AI_PROVIDER_PRESETS.filter((preset) => preset.category === 'cloud').map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
@@ -280,10 +422,14 @@ export function AiApp() {
               <div className="flex items-end gap-2">
                 <label className="block flex-1 min-w-0 space-y-1">
                   <span className="block text-[11px] text-stone-400">API key {getAIProviderPreset(provider).requiresApiKey ? '(bắt buộc)' : '(tuỳ chọn)'}</span>
-                  <input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Dán API key; không lưu vào website/localStorage" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
+                  <input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} onBlur={() => { void handleApiKeyBlur(); }} placeholder="Dán API key; chỉ lưu nếu bạn bật ghi nhớ" className="w-full bg-stone-950 border border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-white" />
                 </label>
-                {apiKey && <button type="button" onClick={() => setApiKey('')} className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-[11px]">Xóa key</button>}
+                {apiKey && <button type="button" onClick={() => { setApiKey(''); setRememberApiKey(false); void clearRememberedApiKey('ai-workbench', provider).then(() => setPreferenceNotice('Đã xóa API key khỏi phiên và kho cục bộ.')).catch(() => setPreferenceNotice('Đã xóa key khỏi phiên, nhưng không thể xác minh việc xóa bản đã lưu.')); }} className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-[11px]">Xóa key</button>}
               </div>
+              <label className="flex items-start gap-2 text-[11px] text-stone-300">
+                <input type="checkbox" checked={rememberApiKey} onChange={(event) => { void handleRememberApiKeyToggle(event.target.checked); }} className="mt-0.5" />
+                <span><strong>Ghi nhớ API key trên thiết bị này</strong><span className="block mt-0.5 text-stone-500">Key được mã hóa bằng AES-GCM và giữ trong IndexedDB của trình duyệt; không gửi vào database của website. Tắt lựa chọn này để xóa bản đã lưu.</span></span>
+              </label>
               {['custom', 'ollama', 'lmstudio', 'vllm', 'llamacpp', 'litellm'].includes(provider) && (
                 <label className="block space-y-1">
                   <span className="block text-[11px] text-stone-400">Base URL / endpoint</span>
@@ -302,14 +448,16 @@ export function AiApp() {
                 )}
               </div>
               <p className="text-[10px] text-stone-500">{getAIProviderPreset(provider).description}</p>
-              <p className="text-[10px] leading-relaxed text-amber-200/80">API key và prompt được gửi trực tiếp từ trình duyệt tới endpoint đã chọn; ứng dụng không gửi chúng tới API của website và không lưu vào database/localStorage. Chỉ dùng endpoint bạn tin cậy. Một số provider chặn CORS hoặc /models; bạn vẫn có thể nhập Model ID thủ công.</p>
+              <p className="text-[10px] leading-relaxed text-amber-200/80">Model/provider/base URL và lịch sử chat được tự động lưu trên trình duyệt này. API key chỉ được lưu nếu bạn chủ động bật ghi nhớ; key đã lưu được mã hóa cục bộ. Khi gửi câu hỏi, key và prompt vẫn được gửi trực tiếp tới endpoint bạn chọn, không qua API của website.</p>
+              {preferenceNotice && <p role="status" className="text-[10px] leading-relaxed text-emerald-300">{preferenceNotice}</p>}
             </>
           )}
           <label className="flex items-start gap-2 text-[11px] text-stone-300">
             <input type="checkbox" checked={includeContext} onChange={(event) => setIncludeContext(event.target.checked)} className="mt-0.5" />
             <span><strong>Cho phép đưa dữ liệu cá nhân vào context cho model</strong> (chỉ truy vấn theo từ khóa của câu hỏi, tối đa 6 đoạn). Mặc định tắt.</span>
           </label>
-          <div className="flex items-center gap-2 text-[10px] text-stone-400"><ShieldCheck className="w-3.5 h-3.5" /> Không sử dụng API key mặc định hay giả lập câu trả lời.</div>
+          {preferenceNotice && provider === 'search' && <p role="status" className="text-[10px] leading-relaxed text-emerald-300">{preferenceNotice}</p>}
+          <div className="flex items-center gap-2 text-[10px] text-stone-400"><ShieldCheck className="w-3.5 h-3.5" /> {preferencesHydrated ? 'Cài đặt được lưu tự động trên trình duyệt này.' : 'Đang khôi phục cài đặt đã lưu…'} Không sử dụng API key mặc định hay giả lập câu trả lời.</div>
         </div>
       )}
 

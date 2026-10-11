@@ -14,7 +14,6 @@ interface VirtualDesktopProps {
   onOpenWallpaperStudio?: () => void;
   onOpenScreensaver?: () => void;
   onToggleRadio?: () => void;
-  onOpenCommandPalette?: () => void;
   wallpaperBackground?: React.ReactNode;
 }
 
@@ -22,7 +21,6 @@ export function VirtualDesktop({
   onOpenWallpaperStudio,
   onOpenScreensaver,
   onToggleRadio,
-  onOpenCommandPalette,
   wallpaperBackground,
 }: VirtualDesktopProps) {
   const { windows, desktopMode, isOmniOpen, setOmniOpen } = useWindowManager();
@@ -33,13 +31,12 @@ export function VirtualDesktop({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        onOpenCommandPalette?.();
         setOmniOpen(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setOmniOpen, onOpenCommandPalette]);
+  }, [setOmniOpen]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     // Only open context menu when clicking on desktop canvas itself

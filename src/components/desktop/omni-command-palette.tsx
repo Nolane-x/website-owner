@@ -25,6 +25,20 @@ export function OmniCommandPalette({ isOpen, onClose }: OmniCommandPaletteProps)
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setQuery('');
+      setSelectedIndex(0);
+      onClose();
+    };
+    document.addEventListener('keydown', closeOnEscape, true);
+    return () => document.removeEventListener('keydown', closeOnEscape, true);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
         setQuery('');

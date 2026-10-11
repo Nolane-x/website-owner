@@ -44,20 +44,31 @@ export function CommandMenu({
   onTriggerFocusStudio?: () => void;
 }) {
   const router = useRouter();
-  const { setDesktopMode } = useWindowManager();
+  const { setDesktopMode, desktopMode } = useWindowManager();
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && open) {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenChange(false);
+        setSearch('');
+        return;
+      }
+      // The virtual desktop owns Ctrl/Cmd+K while it is active. Letting both
+      // palettes handle the same shortcut opens two layers and Escape closes only one.
+      if (desktopMode === 'desktop') return;
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        e.stopPropagation();
         playSound('pop');
         onOpenChange(!open);
       }
     };
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
-  }, [open, onOpenChange]);
+    document.addEventListener('keydown', down, true);
+    return () => document.removeEventListener('keydown', down, true);
+  }, [desktopMode, open, onOpenChange]);
 
   if (!open) return null;
 

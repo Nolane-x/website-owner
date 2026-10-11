@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, saveActiveWallpaperPreference } from '../src/lib/wallpaper/wallpaper-preferences';
 import {
   generateCssFilterString,
   getShaderDimensions,
@@ -34,5 +35,52 @@ describe('Wallpaper Matrix Utilities & Filter Generators', () => {
     expect(bounds.pixelRatio).toBe(2);
     expect(bounds.scaledWidth).toBe(3840);
     expect(bounds.scaledHeight).toBe(2160);
+  });
+});
+
+describe('Wallpaper persistence and shader preferences', () => {
+  it('restores the user-selected shader and filters for database-backed uploads', () => {
+    const records = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => records.get(key) ?? null,
+      setItem: (key: string, value: string) => { records.set(key, value); },
+      removeItem: (key: string) => { records.delete(key); },
+      clear: () => records.clear(),
+      key: (index: number) => [...records.keys()][index] ?? null,
+      get length() { return records.size; },
+    } as Storage;
+
+    const active = {
+      type: 'image' as const,
+      url: 'data:image/png;base64,AAAA',
+      wallpaperId: 'wallpaper-123',
+      shader: 'waves' as const,
+      filters: { dim: 37, blur: 7, contrast: 121, saturation: 143, vignette: true, scanlines: true },
+    };
+
+    expect(saveActiveWallpaperPreference(active, storage)).toBe(true);
+    const raw = JSON.parse(storage.getItem('webos_active_wallpaper_v5') || '{}');
+    expect(raw.url).toBe('');
+    expect(raw.shader).toBe('waves');
+    expect(raw.filters).toEqual(active.filters);
+
+    const restored = loadActiveWallpaperPreference(storage);
+    expect(restored).toEqual({ ...active, url: '' });
+  });
+
+  it('normalizes invalid shader, unsafe URL and hostile filter values without resetting valid preferences', () => {
+    const normalized = normalizeActiveWallpaperPreference({
+      type: 'image',
+      url: 'javascript:alert(1)',
+      wallpaperId: 'wallpaper-456',
+      shader: 'javascript',
+      filters: { dim: 500, blur: -7, contrast: 120, saturation: 999, vignette: 'yes', scanlines: true },
+    });
+
+    expect(normalized).toMatchObject({
+      url: '',
+      shader: 'none',
+      filters: { dim: 100, blur: 0, contrast: 120, saturation: 300, vignette: false, scanlines: true },
+    });
   });
 });

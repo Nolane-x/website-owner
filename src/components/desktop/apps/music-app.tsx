@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Radio, Play, Pause, Volume2, VolumeX, CloudRain, Waves, Flame, Wind, Disc, AlertTriangle, Loader2 } from 'lucide-react';
 import { AmbientMixer } from '@/lib/audio/ambient-mixer';
 import type { AmbientSoundType } from '@/lib/audio/ambient-synth';
+import { loadMusicPreferences, saveMusicPreferences } from '@/lib/audio/audio-preferences';
+import { PREFERENCE_PERSISTENCE_EVENT, reportPreferencePersistence, type PreferencePersistenceResult } from '@/lib/persistence-events';
 
 interface AmbientTrack {
   id: AmbientSoundType;
@@ -20,24 +22,40 @@ const TRACKS: AmbientTrack[] = [
   { id: 'whitenoise', title: 'White noise', description: 'Nhiễu trắng liên tục', icon: <Wind className="w-4 h-4 text-stone-400" /> },
 ];
 
-const DEFAULT_VOLUMES: Record<AmbientSoundType, number> = {
-  rain: 0.42, ocean: 0.4, campfire: 0.35, binaural: 0.15, whitenoise: 0.2,
-};
-
 export function MusicApp() {
+  const [initialPreferences] = useState(() => loadMusicPreferences());
   const [mixer] = useState(() => new AmbientMixer());
   const [activeLayers, setActiveLayers] = useState<AmbientSoundType[]>([]);
-  const [volumes, setVolumes] = useState<Record<AmbientSoundType, number>>(DEFAULT_VOLUMES);
-  const [masterVolume, setMasterVolume] = useState(0.5);
+  const [volumes, setVolumes] = useState<Record<AmbientSoundType, number>>(initialPreferences.volumes);
+  const [masterVolume, setMasterVolume] = useState(initialPreferences.masterVolume);
   const [bars, setBars] = useState<number[]>(Array.from({ length: 12 }, () => 3));
   const [audioSupported, setAudioSupported] = useState(true);
+  const [preferencesWarning, setPreferencesWarning] = useState<string | null>(null);
 
   const [isRadioPlaying, setIsRadioPlaying] = useState(false);
   const [isRadioLoading, setIsRadioLoading] = useState(false);
-  const [radioVolume, setRadioVolume] = useState(0.6);
+  const [radioVolume, setRadioVolume] = useState(initialPreferences.radioVolume);
   const [radioError, setRadioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeSet = useMemo(() => new Set(activeLayers), [activeLayers]);
+
+  useEffect(() => {
+    const handlePersistence = (event: Event) => {
+      const detail = (event as CustomEvent<PreferencePersistenceResult>).detail;
+      if (detail?.scope === 'audio-lab') setPreferencesWarning(detail.message);
+    };
+    window.addEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+    return () => window.removeEventListener(PREFERENCE_PERSISTENCE_EVENT, handlePersistence);
+  }, []);
+
+  useEffect(() => {
+    const saved = saveMusicPreferences({ volumes, masterVolume, radioVolume });
+    reportPreferencePersistence('audio-lab', saved ? null : 'Không thể lưu âm lượng vào trình duyệt này; hãy kiểm tra quyền lưu dữ liệu website.');
+  }, [volumes, masterVolume, radioVolume]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = radioVolume;
+  }, [radioVolume]);
 
   useEffect(() => {
     const audioElement = audioRef.current;
@@ -167,7 +185,8 @@ export function MusicApp() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h4 className="font-semibold text-stone-200">Bộ trộn nhiều lớp tổng hợp</h4>
-            <p className="text-[11px] text-stone-500 mt-1">Mỗi lớp có gain độc lập; nhiều lớp có thể phát đồng thời. Phổ tần số đọc từ AnalyserNode thật.</p>
+            <p className="text-[11px] text-stone-500 mt-1">Mỗi lớp có gain độc lập; nhiều lớp có thể phát đồng thời. Phổ tần số đọc từ AnalyserNode thật. Âm lượng được tự lưu; khi mở lại không tự phát âm thanh.</p>
+            {preferencesWarning && <p role="status" className="mt-1 text-[10px] text-amber-300">{preferencesWarning}</p>}
           </div>
           <div className="flex items-center gap-2 text-stone-400">
             <span>Master</span>
