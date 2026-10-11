@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicProject } from '@/lib/api/public-serializer';
 
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
 
     const projects = rawProjects.map(toPublicProject).filter(Boolean);
 
-    return NextResponse.json({ projects });
+    return NextResponse.json({ projects }, { headers: getPublicApiCacheHeaders(access) });
   } catch (error) {
     console.error('Lỗi API public projects:', error);
     return NextResponse.json({ error: 'Không thể tải danh sách dự án.' }, { status: 500 });

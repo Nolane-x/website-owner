@@ -34,14 +34,15 @@
 - Import hỗ trợ bước preview không ghi database: xác minh checksum, hiển thị số lượng theo module và cảnh báo trước khi người dùng xác nhận restore.
 - Restore là thao tác thêm dữ liệu theo transaction, không thay thế hoặc đồng bộ database hiện có; chạy lại cùng backup có thể tạo bản sao trùng lặp. Workflow run history được phục hồi chỉ khi workflow nguồn được import và các ID quan hệ được ánh xạ lại. Backup legacy thiếu manifest được đánh dấu chưa xác minh. Checksum không phải chữ ký chống giả mạo và vẫn cần giữ bản sao ngoại tuyến an toàn.
 
-### 6. Public Tools & AI Lab
-- Trang `/tools` dành cho khách, truy cập từ trang chủ, header desktop/mobile và footer; không yêu cầu tài khoản.
-- **Máy tính khoa học** chạy hoàn toàn trong trình duyệt, dùng parser biểu thức riêng (không dùng `eval`), hỗ trợ lượng giác DEG/RAD, căn, lũy thừa, log, giai thừa, phần trăm và lịch sử trong phiên.
-- **Bộ chuyển đổi đơn vị offline** hỗ trợ độ dài, khối lượng, nhiệt độ, thời gian và dữ liệu; phân biệt MB thập phân với MiB nhị phân và từ chối nhiệt độ thấp hơn 0 K.
-- **AI Model Radar** chỉ gọi Hugging Face Hub API trực tiếp từ trình duyệt sau thao tác bấm nút; tối đa 12 model, timeout 12 giây, cooldown phía trình duyệt 20 giây, cache cục bộ 15 phút. Không proxy qua máy chủ website, không có API key và không chạy polling nền.
-- **Open-source Radar** gọi GitHub Search API trực tiếp từ trình duyệt khi khách bấm nút; tối đa 10 repository, timeout 12 giây, cooldown cục bộ 60 giây và cache 60 phút. Không dùng token, không proxy qua máy chủ, không tự retry; rate limit của GitHub tính theo IP khách và endpoint tìm kiếm có hạn mức riêng.
-- **Benchmark Hub** liên kết tới Artificial Analysis, LMArena, Stanford HELM và Hugging Face; không giả lập điểm số hoặc gắn nhãn lượt tải là benchmark.
-- **Hạn chế chi phí:** những công cụ tính toán không gọi backend; Radar gọi nguồn bên thứ ba trực tiếp. Rate limit trên public API của Next.js là theo process và chỉ best-effort; cần cấu hình rate rules/WAF ở hạ tầng nếu cần hạn mức phân tán toàn cầu.
+### 6. Public Open Data & AI Lab
+- Trang `/tools` dành cho khách, truy cập từ trang chủ, header desktop/mobile và footer; không yêu cầu tài khoản. Trang này **không chứa máy tính khoa học**.
+- **AI Model Radar** tải tối đa 8 mô hình tạo văn bản từ Hugging Face Hub API khi khách chủ động bấm nút.
+- **Open-source Radar** tải tối đa 8 repository từ GitHub Search API khi khách chủ động bấm nút.
+- **Tech Signals** hiển thị tối đa 8 câu chuyện/thảo luận AI gần đây từ Hacker News Algolia API; đây là thảo luận cộng đồng, không được trình bày như tin tức đã xác minh.
+- **Benchmark Hub** liên kết tới Artificial Analysis, LMArena, Stanford HELM và bảng đánh giá mô hình mở của Hugging Face; có thêm feed HLE live từ API leaderboard công khai của Hugging Face, chỉ tải tối đa 8 dòng theo thao tác bấm. Trang giữ nguyên điểm/rank, ghi chú và cờ `verified`; không tự quy đổi điểm thành phần trăm hoặc coi kết quả cộng đồng chưa xác minh là kết quả đã chứng nhận.
+- **Giới hạn chi phí ở phía khách:** cả ba nguồn được gọi trực tiếp từ trình duyệt, không qua proxy của website, không yêu cầu/nhúng API key, không tự tải khi mở trang và không tự retry. Mỗi nguồn trả về tối đa 8 mục; thời gian chờ 10 giây, giới hạn phản hồi 180 KiB, cooldown cục bộ chung 45 giây và cache trình duyệt 30 phút. Rate limit của nhà cung cấp bên thứ ba vẫn áp dụng theo IP khách.
+- **Máy tính khoa học riêng của chủ sở hữu** được đặt tại `/admin/calculator`, đồng thời có trong sidebar, dashboard, desktop shortcut, Dock và Omni command `app open calculator`. Máy tính chạy hoàn toàn trong trình duyệt, giới hạn biểu thức 300 ký tự, dùng parser riêng (không dùng `eval`), không gửi biểu thức lên API và không lưu lịch sử ra máy chủ.
+- **Giảm tải API website:** public read API có giới hạn toàn cục và theo tuyến trên mỗi process, giới hạn số bản ghi trả về và trả `no-store` cho cache trình duyệt, CDN trung gian và Vercel CDN. Không shared-cache dữ liệu từ các route phụ thuộc cài đặt mật khẩu khách, để khi chủ sở hữu bật bảo vệ thì không còn phản hồi công khai cũ nằm trong cache chờ hết TTL. URL chia sẻ bằng token cũng luôn `private, no-store`. Các bộ đếm trong bộ nhớ không chia sẻ giữa các instance Vercel, vì vậy đây là lớp phòng vệ bổ sung chứ không phải cam kết chống DDoS; muốn giới hạn phân tán phải cấu hình WAF/rate rules ở nền tảng edge.
 
 ---
 
@@ -105,13 +106,14 @@ Truy cập:
 │   │   │   ├── p/[slug]/          # Trình kết xuất trang Canvas Blocks
 │   │   │   ├── projects/          # Danh sách & Chi tiết dự án
 │   │   │   ├── resources/         # Thư viện tài nguyên Link-First
-│   │   │   ├── tools/             # Máy tính khoa học, chuyển đổi đơn vị, AI Model Radar và benchmark links
+│   │   │   ├── tools/             # AI models, open-source radar, tech discussion and benchmark links (public)
 │   │   │   ├── share/[token]/     # Xem nội dung chia sẻ Unlisted bí mật
 │   │   │   ├── layout.tsx         # Layout công khai (Header, Footer, Khóa khách)
 │   │   │   └── page.tsx           # Trang chủ công khai (Hero, Dự án, Tài nguyên)
 │   │   ├── admin/                 # Không gian riêng tư (Private Workspace)
 │   │   │   ├── collections/       # Quản lý bộ sưu tập
 │   │   │   ├── content/           # Quản lý ghi chú & bài viết
+│   │   │   ├── calculator/        # Máy tính khoa học chỉ dành cho chủ sở hữu
 │   │   │   ├── login/             # Trang đăng nhập chủ nhân
 │   │   │   ├── pages/             # Trình quản lý & dựng Canvas Page
 │   │   │   ├── projects/          # Quản lý dự án kỹ thuật

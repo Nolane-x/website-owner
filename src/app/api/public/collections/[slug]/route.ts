@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { collections, collectionItems, contentItems } from '@/lib/db/schema';
 import { eq, and, asc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicCollection, toPublicContent } from '@/lib/api/public-serializer';
 
@@ -87,7 +88,7 @@ export async function GET(
     return NextResponse.json({
       collection: publicCol,
       items: publicItems,
-    });
+    }, { headers: getPublicApiCacheHeaders(access) });
   } catch (error) {
     console.error('Lỗi API public collection slug:', error);
     return NextResponse.json({ error: 'Không thể tải bộ sưu tập.' }, { status: 500 });

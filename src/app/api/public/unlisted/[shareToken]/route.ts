@@ -43,7 +43,7 @@ export async function GET(
 
     if (items.length > 0) {
       const publicItem = toPublicContent(items[0] as unknown as Record<string, unknown>);
-      return NextResponse.json({ item: publicItem, itemType: 'content' });
+      return NextResponse.json({ item: publicItem, itemType: 'content' }, { headers: { 'Cache-Control': 'private, no-store, max-age=0' } });
     }
 
     // 2. Thử tìm trong pages với visibility='UNLISTED', status='PUBLISHED' và chưa bị xóa
@@ -79,7 +79,7 @@ export async function GET(
         item: publicPage,
         blocks: publicBlocks,
         itemType: 'page',
-      });
+      }, { headers: { 'Cache-Control': 'private, no-store, max-age=0' } });
     }
 
     // 3. Thử tìm trong collections với visibility='UNLISTED', status='PUBLISHED' và chưa bị xóa (F2-12)
@@ -140,7 +140,7 @@ export async function GET(
         item: publicCol,
         items: publicCol?.items || [],
         itemType: 'collection',
-      });
+      }, { headers: { 'Cache-Control': 'private, no-store, max-age=0' } });
     }
 
     return NextResponse.json({ error: 'Nội dung chia sẻ không tồn tại hoặc đã bị thu hồi.' }, { status: 404 });

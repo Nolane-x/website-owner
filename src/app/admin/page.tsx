@@ -155,6 +155,12 @@ export default function AdminDashboardPage() {
               <span>Ghi chép mới</span>
             </Button>
           </Link>
+          <Link href="/admin/calculator">
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <Sparkles size={15} />
+              <span>Máy tính riêng</span>
+            </Button>
+          </Link>
           <Link href="/" target="_blank">
             <Button size="sm" variant="outline" className="gap-1.5 text-emerald-600 border-emerald-600/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/20">
               <Eye size={15} />

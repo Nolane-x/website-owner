@@ -25,6 +25,7 @@ import {
   Globe,
   Inbox,
   Monitor,
+  Calculator,
 } from 'lucide-react';
 import { useWindowManager } from '@/lib/desktop/window-manager-context';
 
@@ -54,6 +55,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   Code2,
   Globe,
   Inbox,
+  Calculator,
 };
 
 export function AdminSidebar({
@@ -80,6 +82,7 @@ export function AdminSidebar({
     { id: 'resources', label: 'Tài nguyên Link', href: '/admin/resources', icon: 'Bookmark', visible: true },
     { id: 'snippets', label: 'Kho Đoạn mã', href: '/admin/snippets', icon: 'Code2', visible: true },
     { id: 'api-tester', label: 'Thử nghiệm API', href: '/admin/api-tester', icon: 'Globe', visible: true },
+    { id: 'calculator', label: 'Máy tính khoa học', href: '/admin/calculator', icon: 'Calculator', visible: true },
     { id: 'subscriptions', label: 'Chi phí & Dịch vụ', href: '/admin/subscriptions', icon: 'CreditCard', visible: true },
     { id: 'pages', label: 'Trình dựng Trang', href: '/admin/pages', icon: 'Compass', visible: true },
     { id: 'collections', label: 'Bộ sưu tập', href: '/admin/collections', icon: 'Layers', visible: true },

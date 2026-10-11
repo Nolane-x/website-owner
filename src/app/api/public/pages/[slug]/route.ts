@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { pages, contentBlocks } from '@/lib/db/schema';
 import { eq, and, asc, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicPage, toPublicBlock } from '@/lib/api/public-serializer';
 
@@ -55,7 +56,7 @@ export async function GET(
     return NextResponse.json({
       page: publicPage,
       blocks: publicBlocks,
-    });
+    }, { headers: getPublicApiCacheHeaders(access) });
   } catch (error) {
     console.error('Lỗi API public page:', error);
     return NextResponse.json({ error: 'Không thể tải trang.' }, { status: 500 });

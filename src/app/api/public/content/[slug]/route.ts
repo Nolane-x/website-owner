@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicContent } from '@/lib/api/public-serializer';
 
@@ -46,7 +47,7 @@ export async function GET(
       return NextResponse.json({ error: 'Nội dung không tồn tại hoặc chưa được xuất bản.' }, { status: 404 });
     }
 
-    return NextResponse.json({ item: publicItem });
+    return NextResponse.json({ item: publicItem }, { headers: getPublicApiCacheHeaders(access) });
   } catch (error) {
     console.error('Lỗi lấy bài viết công khai:', error);
     return NextResponse.json({ error: 'Không thể tải nội dung.' }, { status: 500 });

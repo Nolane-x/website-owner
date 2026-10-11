@@ -15,7 +15,7 @@
       "passwordHashing": "Bcrypt (12 rounds salt)",
       "sessionTokens": "256-bit cryptographically secure, SHA-256 hashed in DB",
       "cookiePolicy": "HttpOnly, Secure in production, SameSite=Lax",
-      "rateLimiter": "In-process sliding-window limiter with a 20,000-key cap; public read APIs add global and per-route per-IP budgets, while login and guest-password endpoints retain dedicated limits. Counters are not shared across serverless instances; edge/WAF rate rules are still needed for a uniform distributed limit.",
+      "rateLimiter": "In-process sliding-window limiter capped at 20,000 keys; public read APIs apply global and per-route per-IP budgets before database access. The counter is not shared across serverless instances, so it is a best-effort abuse guard only; edge/WAF/distributed rules are required for uniform global limiting.",
       "xssProtection": "isomorphic-dompurify HTML sanitization",
       "vaultEncryption": "Client-side Web Crypto AES-256-GCM; PBKDF2-HMAC-SHA-256 at 600000 iterations for new items, legacy 100000-iteration decryption fallback",
       "panicLock": "Global Ctrl+Shift+L privacy overlay with account re-authentication; not a secure RAM wipe or OS lock",
@@ -23,7 +23,8 @@
       "guestSessionZeroKnowledge": true,
       "contentRevisions": true,
       "softDeleteTrash": true,
-      "aiDataFlow": "Copilot API key is session/component state only; retrieval context is opt-in; external provider requests leave the browser and are subject to provider/network policies"
+      "aiDataFlow": "Copilot API key is session/component state only; retrieval context is opt-in; external provider requests leave the browser and are subject to provider/network policies",
+      "publicApiCache": "Database-backed public GET APIs explicitly disable browser, intermediary CDN and Vercel CDN caching because the guest-password setting is mutable; this prevents a formerly public shared-cache entry from bypassing a newly enabled access gate until TTL expiry. Unlisted share-token responses are always private/no-store. Public Open Data feeds use bounded per-browser localStorage cache and fetch third-party providers directly without calling website APIs."
     },
     "edgeGateway": {
       "engine": "Cloudflare Worker (Wrangler)",
@@ -47,7 +48,7 @@
       "audioLab": "Procedural multi-layer Web Audio mixer with independent layer/master gain and spectrum from AnalyserNode; external radio remains third-party and failure is surfaced",
       "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID to avoid storing the full Data URL in localStorage",
       "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes.",
-      "publicTools": "Public /tools page available without an account: scientific calculator uses a bounded recursive-descent parser (no eval), and unit converter runs fully offline for length, mass, temperature, time and decimal/binary data units. AI Model Radar makes an explicit direct-browser GET to the public Hugging Face Hub API, returns at most 12 public models, has a 12-second timeout, 20-second browser cooldown and 15-minute local cache. Benchmark Hub links to public leaderboard/research pages without fabricating scores, placing API keys in the client or proxying paid providers through the site."
+      "publicTools": "Public /tools is an account-free Open Data Lab with four click-to-load direct-browser feeds: up to 8 Hugging Face text-generation models, 8 GitHub topic:llm repositories, 8 recent Hacker News AI-model discussions, and up to 8 rows from the public Hugging Face HLE leaderboard. HLE rows preserve score/rank, notes and the source verified flag; community-submitted/unverified values are explicitly marked, never presented as certified scores. Direct calls use no server proxy or credentials, have a 10-second timeout, a streaming 180 KiB response ceiling, 45-second shared browser cooldown and 30-minute per-provider local cache; no API request runs on page open. Benchmark Hub also links to Artificial Analysis, LMArena, Stanford HELM and Hugging Face without inventing scores. The scientific calculator is private-owner-only at /admin/calculator and in the owner desktop/Dock/Omni palette; its bounded 300-character recursive-descent parser runs locally with no eval, network call, server persistence or remote computation. Database-backed public GET APIs have per-process global/per-route budgets and always emit no-store across browser/CDN/Vercel because the guest-password gate is mutable and revocation should not wait for a stale shared response. Unlisted-token responses are private/no-store. In-memory rate budgets are not distributed; provider-level WAF rules remain necessary for global DoS resistance."
     }
   },
   "tables": [
@@ -201,7 +202,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Track changed project files and their verification/security scope for the public Tools & AI Lab and public API hardening work."
+      "shortDescription": "Track the public HLE leaderboard feed, normalizer and regression tests; document score verification semantics, request limits, owner-only calculator and public API no-store policy."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -873,7 +874,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Document the public Tools & AI Lab (scientific calculator, offline unit conversion, direct on-demand Hugging Face/GitHub radars and benchmark source links), bounded login/guest JSON payloads, and the limits of per-process rate limiting."
+      "shortDescription": "Document HLE live leaderboard integration and its verification semantics, public feed limits, browser-only data sources, owner-only scientific calculator and no-store/rate-limit safeguards."
     },
     {
       "relativePath": "src/app/api/admin/calendar-events/route.ts",
@@ -992,8 +993,8 @@
       "fileName": "page.tsx",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Expose public scientific calculator, offline multi-category unit converter, on-demand Hugging Face model radar, on-demand GitHub open-source radar, and sourced benchmark links with browser-only caching and cooldowns."
+      "status": "modified",
+      "shortDescription": "Expose public Open Data Lab with on-demand Hugging Face models, GitHub LLM repositories, Hacker News AI discussions, and actual HLE leaderboard rows. Fetch is direct-browser only, max 8 rows/feed, 10s timeout, 180 KiB streamed response ceiling, 45s cross-feed cooldown and 30m local cache. The HLE panel preserves score/rank/notes/source verified flag and labels unverified community results; no owner calculator or server API proxy is exposed."
     },
     {
       "relativePath": "src/components/layout/public-header.tsx",
@@ -1081,7 +1082,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Limit public site-configuration reads before database access."
+      "shortDescription": "Apply public API request budgets and explicit no-store response headers; expose the current access-protection state without shared-cache normalization."
     },
     {
       "relativePath": "src/app/api/public/projects/route.ts",
@@ -1089,7 +1090,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public API rate limiting and cap project result count to 100."
+      "shortDescription": "Apply public read rate budget and no-store headers for project listings; preserve public-only query filters and the 100-item cap."
     },
     {
       "relativePath": "src/app/api/public/collections/route.ts",
@@ -1097,7 +1098,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public API rate limiting and cap collection result count to 100."
+      "shortDescription": "Apply public read rate budget and no-store headers for collection listings."
     },
     {
       "relativePath": "src/app/api/public/content/route.ts",
@@ -1105,7 +1106,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public API rate limiting while retaining the existing maximum of 100 content items per response."
+      "shortDescription": "Apply public read rate budgets and no-store headers while retaining public/published/deleted filters and bounded pagination."
     },
     {
       "relativePath": "src/app/api/public/content/[slug]/route.ts",
@@ -1113,7 +1114,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply a route-scoped request budget to public content detail reads."
+      "shortDescription": "Apply route-scoped request budget and no-store headers to public content detail reads."
     },
     {
       "relativePath": "src/app/api/public/pages/[slug]/route.ts",
@@ -1121,7 +1122,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply a route-scoped budget to public page reads and limit rendered blocks to 200 per page response."
+      "shortDescription": "Apply route-scoped budget and no-store headers to public page detail; rendered blocks remain bounded."
     },
     {
       "relativePath": "src/app/api/public/collections/[slug]/route.ts",
@@ -1129,7 +1130,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply a route-scoped budget to public collection detail reads and cap returned collection items at 100."
+      "shortDescription": "Apply a route-scoped budget and no-store headers to collection detail while preserving public query filters and bounded related items."
     },
     {
       "relativePath": "src/app/api/public/resources/route.ts",
@@ -1137,7 +1138,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public API rate limiting and cap resource result count to 100."
+      "shortDescription": "Apply public read rate budget and no-store headers for resource listings; preserve public-only query filters and the 100-item cap."
     },
     {
       "relativePath": "src/app/api/public/search/route.ts",
@@ -1153,7 +1154,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply a route-scoped budget to unlisted token reads and cap page blocks at 200 and collection items at 100."
+      "shortDescription": "Apply route-scoped budgets and private/no-store headers to all successful share-token responses; prevent shared caching of token-protected content."
     },
     {
       "relativePath": "src/app/api/auth/login/route.ts",
@@ -1210,6 +1211,102 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Test invalid/placeholder origin rejection, safe HTTPS-origin parsing and a fail-closed 503 response proving no upstream fetch occurs."
+    },
+    {
+      "relativePath": "src/app/admin/calculator/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Owner-only scientific calculator page protected by AdminShell authentication; all arithmetic is evaluated locally in the browser and never sent to a server."
+    },
+    {
+      "relativePath": "src/components/desktop/apps/calculator-app.tsx",
+      "fileName": "calculator-app.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Owner-only Web OS calculator UI with DEG/RAD, keypad, local calculation history and clipboard copy; expression bounded to 300 characters and no eval/network calls."
+    },
+    {
+      "relativePath": "src/components/desktop/window-app-registry.tsx",
+      "fileName": "window-app-registry.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Lazy-load and register the owner-only scientific calculator in the private Web OS window manager."
+    },
+    {
+      "relativePath": "src/components/desktop/desktop-dock.tsx",
+      "fileName": "desktop-dock.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Expose the private scientific calculator in the authenticated virtual desktop Dock."
+    },
+    {
+      "relativePath": "src/components/desktop/desktop-widgets.tsx",
+      "fileName": "desktop-widgets.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Expose the private scientific calculator as an authenticated virtual desktop shortcut."
+    },
+    {
+      "relativePath": "src/components/desktop/omni-command-palette.tsx",
+      "fileName": "omni-command-palette.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Add owner Omni command app open calculator to launch the scientific calculator without making it a public tool."
+    },
+    {
+      "relativePath": "src/components/layout/admin-sidebar.tsx",
+      "fileName": "admin-sidebar.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Add calculator navigation only to the authenticated owner workspace sidebar."
+    },
+    {
+      "relativePath": "src/app/admin/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Add a private-dashboard quick action to the owner-only scientific calculator."
+    },
+    {
+      "relativePath": "src/lib/security/public-api-cache.ts",
+      "fileName": "public-api-cache.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Apply no-store to browser, downstream CDN and Vercel CDN for database-backed public APIs; access-gate settings are mutable, so shared caching could delay password-protection changes."
+    },
+    {
+      "relativePath": "tests/public-api-cache.test.ts",
+      "fileName": "public-api-cache.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Verify all cache layers remain disabled for public read responses, both before and after guest-password protection is enabled."
+    },
+    {
+      "relativePath": "src/lib/open-data/hle-leaderboard.ts",
+      "fileName": "hle-leaderboard.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Normalize untrusted Hugging Face HLE leaderboard JSON: validate rank/model IDs/score, reject control/URL injection, de-duplicate models, bound notes and parameters, preserve verified status, cap output at 8 rows."
+    },
+    {
+      "relativePath": "tests/hle-leaderboard.test.ts",
+      "fileName": "hle-leaderboard.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "14 regression cases verify HLE score/rank/verification parsing, hostile or invalid rows, duplicate detection, output size cap, note truncation and non-array rejection."
     }
   ]
 }

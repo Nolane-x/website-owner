@@ -3,6 +3,7 @@ import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
 import { eq, and, desc, or, isNull, type SQL } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
+import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicResource } from '@/lib/api/public-serializer';
 
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
       .map((r) => toPublicResource(r as unknown as Record<string, unknown>))
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
-    return NextResponse.json({ resources });
+    return NextResponse.json({ resources }, { headers: getPublicApiCacheHeaders(access) });
   } catch (error) {
     console.error('Lỗi API public resources:', error);
     return NextResponse.json({ error: 'Không thể tải danh sách tài nguyên.' }, { status: 500 });

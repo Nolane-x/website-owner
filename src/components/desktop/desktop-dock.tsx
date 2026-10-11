@@ -24,6 +24,7 @@ import {
   Calendar,
   Shield,
   Hourglass,
+  Calculator,
 } from 'lucide-react';
 
 interface DockApp {
@@ -104,6 +105,12 @@ const DOCK_APPS: DockApp[] = [
     appId: 'privacy',
     title: 'Trung tâm Riêng tư',
     icon: <Shield className="w-5 h-5 text-emerald-400" />,
+    color: 'hover:bg-emerald-500/20',
+  },
+  {
+    appId: 'calculator',
+    title: 'M?y t?nh khoa h?c ri?ng',
+    icon: <Calculator className="w-5 h-5 text-emerald-300" />,
     color: 'hover:bg-emerald-500/20',
   },
   {

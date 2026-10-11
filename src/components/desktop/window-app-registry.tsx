@@ -37,6 +37,11 @@ export const DynamicDevToolsApp = dynamic(
   { loading: LoadingFallback, ssr: false }
 );
 
+export const DynamicCalculatorApp = dynamic(
+  () => import('@/components/desktop/apps/calculator-app').then((m) => m.CalculatorApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
 export const DynamicResearchApp = dynamic(
   () => import('@/components/desktop/apps/research-app').then((m) => m.ResearchApp),
   { loading: LoadingFallback, ssr: false }
@@ -140,6 +145,8 @@ export function renderAppContent(appId: string) {
       return <DynamicWallpapersApp />;
     case 'music':
       return <DynamicMusicApp />;
+    case 'calculator':
+      return <DynamicCalculatorApp />;
     case 'devtools':
       return <DynamicDevToolsApp />;
     case 'research':

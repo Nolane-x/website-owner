@@ -13,6 +13,7 @@ import {
   Cpu,
   Database,
   Quote,
+  Calculator,
 } from 'lucide-react';
 
 interface DesktopIconItem {
@@ -36,6 +37,11 @@ const DESKTOP_ICONS: DesktopIconItem[] = [
     appId: 'vault',
     title: 'Két bảo mật AES',
     icon: <Lock className="w-8 h-8 text-amber-400 group-hover:scale-110 transition-transform" />,
+  },
+  {
+    appId: 'calculator',
+    title: 'M?y t?nh khoa h?c',
+    icon: <Calculator className="w-8 h-8 text-emerald-400 group-hover:scale-110 transition-transform" />,
   },
   {
     appId: 'devtools',
