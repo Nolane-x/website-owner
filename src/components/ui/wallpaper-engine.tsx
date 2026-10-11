@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles } from 'lucide-react';
 import { playSound } from '@/lib/audio/sound-fx';
 import { CanvasShaders, ShaderMode } from '@/components/wallpaper/canvas-shaders';
@@ -34,6 +34,11 @@ export function WallpaperEngine() {
   const [activeCustom, setActiveCustom] = useState<ActiveWallpaper5State | null>(() => (
     loadActiveWallpaperPreference()
   ));
+  const activeCustomRef = useRef(activeCustom);
+
+  useEffect(() => {
+    activeCustomRef.current = activeCustom;
+  }, [activeCustom]);
 
   useEffect(() => {
     const handleStyleChange = (e: Event) => {
@@ -60,35 +65,39 @@ export function WallpaperEngine() {
     };
   }, []);
 
-  // Rehydrate uploaded local assets by ID; avoid storing multi-megabyte Base64 payloads in localStorage.
+  // Rehydrate only when the selected asset ID/URL changes, not whenever a
+  // slider adjusts filter values or the shader mode changes.
+  const activeWallpaperId = activeCustom?.wallpaperId;
+  const activeWallpaperUrl = activeCustom?.url;
   useEffect(() => {
-    if (!activeCustom?.wallpaperId || activeCustom.url) return;
+    const wallpaperId = activeWallpaperId;
+    if (!wallpaperId || activeWallpaperUrl) return;
     let cancelled = false;
-    void Promise.resolve().then(async () => {
-      try {
-        const response = await fetch('/api/admin/wallpapers', { cache: 'no-store' });
+    void fetch('/api/admin/wallpapers/' + encodeURIComponent(wallpaperId), { cache: 'no-store' })
+      .then(async (response) => {
         const payload = await response.json();
-        if (!response.ok || !Array.isArray(payload.wallpapers)) return;
-        const saved = (payload.wallpapers as Array<{
+        if (!response.ok || !payload.wallpaper) return;
+        const saved = payload.wallpaper as {
           id: string; type: WallpaperMediaType; localDataUrl?: string | null; sourceUrl?: string | null; filtersJson?: WallpaperFilters;
-        }>).find((item) => item.id === activeCustom.wallpaperId);
-        const url = saved?.localDataUrl || saved?.sourceUrl || '';
-        if (cancelled || !saved || !url) return;
-        // Never replace a user-edited browser filter/shader state with the
-        // older filter snapshot attached to the media-library record.
+        };
+        const url = saved.localDataUrl || saved.sourceUrl || '';
+        const latest = activeCustomRef.current;
+        if (cancelled || saved.id !== wallpaperId || !url || !latest || latest.wallpaperId !== wallpaperId || latest.url) return;
+        // The latest filter/shader state wins even if the user adjusts it while
+        // the asset request is in flight.
         const restored: ActiveWallpaper5State = normalizeActiveWallpaperPreference({
-          ...activeCustom,
+          ...latest,
           type: saved.type,
           url,
-          filters: normalizeWallpaperFilters(activeCustom.filters ?? saved.filtersJson),
-        }) ?? activeCustom;
+          filters: normalizeWallpaperFilters(latest.filters ?? saved.filtersJson),
+        }) ?? latest;
         setActiveCustom(restored);
-      } catch {
+      })
+      .catch(() => {
         // The desktop keeps its built-in fallback when the saved asset cannot be loaded.
-      }
-    });
+      });
     return () => { cancelled = true; };
-  }, [activeCustom]);
+  }, [activeWallpaperId, activeWallpaperUrl]);
 
   // 1. If 5.0 Custom Wallpaper is configured
   if (activeCustom && activeCustom.url) {

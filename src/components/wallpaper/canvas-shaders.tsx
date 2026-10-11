@@ -37,7 +37,6 @@ export function CanvasShaders({ mode, className = '' }: CanvasShadersProps) {
     };
 
     handleResize();
-    window.addEventListener('resize', handleResize);
 
     // 1. Matrix Rain state
     const fontSize = 14;
@@ -67,7 +66,21 @@ export function CanvasShaders({ mode, className = '' }: CanvasShadersProps) {
     // 4. Cosmic Waves state
     let waveStep = 0;
 
-    const render = () => {
+    // A decorative background should never consume an entire CPU core.
+    // Cap drawing to 30 FPS and suspend it completely while the tab is hidden.
+    const targetFrameMs = 1000 / 30;
+    let lastFrameAt = 0;
+    let isPaused = document.hidden;
+
+    const render = (now: number) => {
+      animId = 0;
+      if (isPaused || document.hidden) return;
+      if (now - lastFrameAt < targetFrameMs) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+      lastFrameAt = now;
+
       if (mode === 'matrix') {
         // Semi-transparent black to create trailing effect
         ctx.fillStyle = 'rgba(10, 10, 10, 0.08)';
@@ -180,11 +193,25 @@ export function CanvasShaders({ mode, className = '' }: CanvasShadersProps) {
       animId = requestAnimationFrame(render);
     };
 
-    animId = requestAnimationFrame(render);
+    const handleVisibilityChange = () => {
+      isPaused = document.hidden;
+      if (isPaused) {
+        if (animId) cancelAnimationFrame(animId);
+        animId = 0;
+      } else {
+        lastFrameAt = 0;
+        if (!animId) animId = requestAnimationFrame(render);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (!isPaused) animId = requestAnimationFrame(render);
 
     return () => {
-      cancelAnimationFrame(animId);
+      if (animId) cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [mode]);
 

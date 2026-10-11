@@ -55,6 +55,14 @@
 - **Bàn phím:** Ctrl/Cmd+K chỉ mở palette phù hợp chế độ desktop/workspace; Escape đóng palette hiện hành. Đã có regression test cho cả workspace command menu và desktop Omni palette.
 - Các thiết lập này được lưu **trên đúng browser profile và origin website**. Xóa site data, mở ở thiết bị khác hoặc đổi sang một domain/preview URL khác có thể không mang theo cài đặt. Việc mã hóa key trong browser bảo vệ dữ liệu lưu trữ khỏi đọc trực tiếp thông thường, nhưng không bảo vệ được trước XSS hoặc một phiên trình duyệt đã bị chiếm quyền.
 
+### 8. Hiệu năng giao diện và tải hình nền
+- **Thư viện wallpaper trả metadata nhẹ:** danh sách hình nền không truy vấn/trả cột Data URL lớn của mọi ảnh/video. Cờ `hasLocalDataUrl` dùng để hiển thị trạng thái asset; chỉ endpoint `/api/admin/wallpapers/:id` mới tải nội dung của đúng tệp cần khôi phục/xem/chọn. Các thao tác yêu thích/chỉnh metadata không còn đọc lại hoặc gửi đi Data URL của tệp.
+- **Lưu bố cục desktop có debounce 220 ms:** kéo/thay đổi kích thước cửa sổ không còn chạy `JSON.stringify` và ghi localStorage đồng bộ ở mọi pointer event. Snapshot cuối vẫn được flush khi trang rời đi (`pagehide`).
+- **Shader nền giới hạn khoảng 30 FPS:** dừng animation hoàn toàn khi tab trình duyệt bị ẩn và tiếp tục khi tab hiện lại. Shader là trang trí nền, không được chiếm toàn bộ chu kỳ CPU.
+- **Trạng thái lưu thiết lập chỉ phát event khi thay đổi:** ghi thành công liên tục từ slider/timer không phát event toàn cục lặp đi lặp lại; chỉ thay đổi trạng thái lưu thành công/thất bại mới thông báo UI.
+- **Focus Studio giữ một timer duy nhất cho cả phiên:** không hủy/tạo lại interval mỗi giây; dữ liệu đếm ngược được đọc từ snapshot ref mới nhất.
+- **Public Open Data Lab:** đồng hồ cooldown chỉ cập nhật mỗi giây, không phải hai lần mỗi giây. Feed vẫn tải theo thao tác của người dùng, không tự gọi lúc mở trang.
+
 ---
 
 ## 🛠️ Công Nghệ Sử Dụng

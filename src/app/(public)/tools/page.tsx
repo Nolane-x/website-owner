@@ -335,7 +335,7 @@ export default function PublicToolsPage() {
       const now = Date.now();
       setClockNow(now);
       if (now >= cooldownUntilMax) window.clearInterval(timer);
-    }, 500);
+    }, 1000);
     return () => window.clearInterval(timer);
   }, [cooldownUntilMax]);
 

@@ -46,10 +46,10 @@
       "calendarHabits": "Owner-scoped database-backed events and habits with strict ISO/date/timezone and size validation, bounded pagination, and 64 KiB request caps. Habit completion uses per-day desired-state updates inside a row-locked transaction, retries are idempotent, and generic habit patches reject whole-array history replacement to prevent concurrent lost updates. UI supports incremental loading, all-day events, event editing, habit pause/resume and explicit request failures; external calendar sync remains unimplemented.",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Import body bytes are capped while streaming at 4.5 MiB instead of buffering an unchecked request; checksum authenticity signatures and replacement-style restore remain unsupported.",
       "audioLab": "Procedural multi-layer Web Audio mixer with independent per-layer/master gain and spectrum from AnalyserNode. Per-layer, master and radio volumes are validated and saved locally; closing the app stops audio, while reopening restores volumes without surprise autoplay. External radio remains third-party and failures are surfaced.",
-      "wallpaperStudio": "Wallpaper library CRUD validates media/URL input, surfaces save/delete/favorite errors and persists large asset selection by database ID. Active wallpaper selection, filter values and shader mode use a validated local preference snapshot; the local edit takes precedence over stale filtersJson when a database-backed upload is rehydrated, preserving the chosen shader/filter values after closing and reopening the app.",
+      "wallpaperStudio": "Wallpaper library list uses a metadata-only query that excludes the multi-megabyte localDataUrl column and returns a local-asset flag. The selected uploaded image/video is loaded through the owner-scoped /api/admin/wallpapers/:id endpoint only when needed; favorite and metadata updates never select or resend the full asset. Active selection, filters and shader persist by ID without changing the chosen settings after reopen.",
       "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes.",
-      "publicTools": "Public /tools is an account-free Knowledge Portal and Open Data Lab, not a public calculator. The guest view does not render the owner scientific calculator or unit converter; calculator remains private at /admin/calculator and the authenticated owner desktop/Dock/Omni palette. Six on-demand direct-browser feeds provide up to 8 Hugging Face text-generation models, 8 GitHub topic:llm repositories, 8 recent Hacker News AI discussions, 8 HLE leaderboard rows, 8 Europe PMC research metadata records, and 8 GitHub Global Security Advisories. The portal also has a curated reference directory for AI/models/datasets, scientific research, cybersecurity, open-source software, public datasets/statistics, web standards, learning and technology communities. HLE entries preserve score/rank, notes and source verified flag; community/unverified rows are explicitly labelled and not certified. Feed calls use no website backend proxy or API credentials, a 10-second timeout, 180 KiB streamed response ceiling, a 45-second per-feed cooldown and 30-minute browser cache; no feed runs on page open. External metadata is normalized and trusted-source links are constructed from validated identifiers. Benchmark Hub links to Artificial Analysis, LMArena, Stanford HELM and Hugging Face without fabricating scores. Database-backed public GET APIs have per-process global/per-route budgets and always emit no-store across browser/CDN/Vercel because the guest-password gate is mutable. Unlisted-token responses are private/no-store. In-memory rate budgets are not distributed; provider-level WAF rules remain necessary for global DoS resistance.",
-      "ownerSettingsPersistence": "Durable owner preferences survive closing/reopening their app windows: AI provider/model/endpoint, opt-in encrypted API keys and recent bounded chat history; calculator expression/result/angle mode/history; Audio Lab per-layer/master/radio volumes; Focus Studio goal, countdown remaining time, session count and ambience volumes; active wallpaper, validated filters and shader. Timer/audio playback itself does not auto-resume. Ctrl/Cmd+K selects one command palette for the active desktop/workspace mode, and Escape closes the current palette; keyboard regression tests cover both paths."
+      "publicTools": "Public /tools is an account-free Knowledge Portal and Open Data Lab, not a public calculator. Cooldown display updates once per second to reduce unnecessary full-page renders. The guest view does not render the owner scientific calculator or unit converter; calculator remains private at /admin/calculator and the authenticated owner desktop/Dock/Omni palette. Six on-demand direct-browser feeds provide up to 8 Hugging Face text-generation models, 8 GitHub topic:llm repositories, 8 recent Hacker News AI discussions, 8 HLE leaderboard rows, 8 Europe PMC research metadata records, and 8 GitHub Global Security Advisories. The portal also has a curated reference directory for AI/models/datasets, scientific research, cybersecurity, open-source software, public datasets/statistics, web standards, learning and technology communities. HLE entries preserve score/rank, notes and source verified flag; community/unverified rows are explicitly labelled and not certified. Feed calls use no website backend proxy or API credentials, a 10-second timeout, 180 KiB streamed response ceiling, a 45-second per-feed cooldown and 30-minute browser cache; no feed runs on page open. External metadata is normalized and trusted-source links are constructed from validated identifiers. Benchmark Hub links to Artificial Analysis, LMArena, Stanford HELM and Hugging Face without fabricating scores. Database-backed public GET APIs have per-process global/per-route budgets and always emit no-store across browser/CDN/Vercel because the guest-password gate is mutable. Unlisted-token responses are private/no-store. In-memory rate budgets are not distributed; provider-level WAF rules remain necessary for global DoS resistance.",
+      "ownerSettingsPersistence": "Durable owner preferences survive closing/reopening their app windows: AI provider/model/endpoint, opt-in encrypted API keys and recent bounded chat history; calculator expression/result/angle mode/history; Audio Lab per-layer/master/radio volumes; Focus Studio goal, countdown remaining time, session count and ambience volumes; active wallpaper, validated filters and shader. Repeated successful saves emit no duplicate global status events. Timer/audio playback itself does not auto-resume. Ctrl/Cmd+K selects one command palette for the active desktop/workspace mode, and Escape closes the current palette; keyboard regression tests cover both paths."
     }
   },
   "tables": [
@@ -507,7 +507,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Kiểm tra title, type, URL scheme, Data URL và giới hạn tags phía backend."
+      "shortDescription": "Validate uploaded media and create assets securely. Library list, create response and metadata-only edits return lightweight wallpaper metadata without large Data URLs; full asset bytes are only fetched for one owner-scoped wallpaper ID."
     },
     {
       "relativePath": "src/app/api/admin/wallpapers/[id]/route.ts",
@@ -515,7 +515,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Xác thực URL/type/tags khi cập nhật; API error được giao diện thể hiện thay vì giả thành công."
+      "shortDescription": "Provide owner-scoped single-wallpaper GET for on-demand asset restore; metadata-only PUT and DELETE checks avoid selecting huge Data URLs when editing favorites/metadata or deleting a record."
     },
     {
       "relativePath": "tests/ambient-mixer.test.ts",
@@ -1460,7 +1460,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Add seven preference persistence/normalization regression tests for calculator, Audio Lab and Focus Studio."
+      "shortDescription": "Add seven local preference persistence/normalization tests for calculator, Audio Lab and Focus Studio."
     },
     {
       "relativePath": "src/components/desktop/apps/calculator-app.tsx",
@@ -1500,7 +1500,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Restore and auto-save Focus Studio goals, remaining time, session count and ambience sliders; reopening is paused and cleanup stops audio."
+      "shortDescription": "Restore and auto-save Focus Studio goals, remaining time, session count and ambience sliders; keep one stable countdown interval rather than recreating it each second. Reopening is paused and cleanup stops audio."
     },
     {
       "relativePath": "src/lib/wallpaper/wallpaper-preferences.ts",
@@ -1516,7 +1516,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Use validated durable wallpaper preferences and prevent stale library filter metadata from overwriting the owner's current shader/filter settings."
+      "shortDescription": "Use validated durable wallpaper preferences; library cards load only lightweight metadata and request one uploaded asset by ID on selection, while source previews are lazy and local videos do not autoplay in every card."
     },
     {
       "relativePath": "src/components/ui/wallpaper-engine.tsx",
@@ -1524,7 +1524,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Validate persisted wallpaper state and enum presets before render; retain the selected shader and current filter state when database-backed media is rehydrated."
+      "shortDescription": "Validate saved wallpaper state, fetch only the selected uploaded asset by ID, preserve shader/filter values, cap decorative shader drawing at 30 FPS and pause animation while the tab is hidden."
     },
     {
       "relativePath": "tests/command-palette-keyboard.test.tsx",
@@ -1549,6 +1549,38 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Broadcast local preference persistence success/failure through a scoped browser event so components can show storage errors without synchronous state updates inside effects."
+    },
+    {
+      "relativePath": "src/lib/wallpaper/api-selection.ts",
+      "fileName": "api-selection.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Define a lightweight wallpaper metadata projection that excludes large localDataUrl payloads and exposes only selected metadata fields plus an asset-existence flag."
+    },
+    {
+      "relativePath": "tests/wallpaper-api-selection.test.ts",
+      "fileName": "wallpaper-api-selection.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Add a regression test ensuring wallpaper library metadata queries exclude localDataUrl, the main payload responsible for oversized list responses."
+    },
+    {
+      "relativePath": "src/lib/desktop/window-manager-context.tsx",
+      "fileName": "window-manager-context.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Debounce synchronous desktop window-layout serialization and localStorage writes during dragging/resizing, with a pagehide flush for the final layout."
+    },
+    {
+      "relativePath": "src/components/wallpaper/canvas-shaders.tsx",
+      "fileName": "canvas-shaders.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Cap decorative canvas shaders near 30 FPS, pause animation when the browser tab is hidden, and remove duplicate resize listener registration."
     }
   ]
 }

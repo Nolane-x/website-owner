@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CustomWallpaper, WallpaperMediaType, WallpaperFilters } from '@/lib/types';
 import { ShaderMode } from './canvas-shaders';
 import { loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, saveActiveWallpaperPreference } from '@/lib/wallpaper/wallpaper-preferences';
@@ -39,6 +39,12 @@ export function CustomWallpaperStudio() {
     shader: 'none',
     wallpaperId: null,
   });
+  const currentWallpaperRef = useRef(currentWallpaper);
+  const [applyingWallpaperId, setApplyingWallpaperId] = useState<string | null>(null);
+
+  useEffect(() => {
+    currentWallpaperRef.current = currentWallpaper;
+  }, [currentWallpaper]);
 
   // Upload & URL form
   const [inputTitle, setInputTitle] = useState('');
@@ -88,28 +94,39 @@ export function CustomWallpaperStudio() {
     });
   }, [fetchWallpapers]);
 
-  // Uploaded assets are stored in the database; localStorage keeps only their ID to avoid quota failures.
+  // Resolve just the selected uploaded asset. The library list is intentionally
+  // lightweight and no longer contains every full-size base64 image/video.
   useEffect(() => {
-    if (!currentWallpaper.wallpaperId || currentWallpaper.url || wallpapers.length === 0) return;
-    const savedWallpaper = wallpapers.find((item) => item.id === currentWallpaper.wallpaperId);
-    const resolvedUrl = savedWallpaper?.localDataUrl || savedWallpaper?.sourceUrl || '';
-    if (!savedWallpaper || !resolvedUrl) return;
-    // The active local selection is authoritative for post-processing and shader
-    // preferences. The database copy is only a fallback for older records.
-    // The saved browser preference owns shader and filter state. Database filter
-    // metadata is only used as a fallback for old/missing values, never over a live edit.
-    const restored = normalizeActiveWallpaperPreference({
-      ...currentWallpaper,
-      type: savedWallpaper.type,
-      url: resolvedUrl,
-      filters: currentWallpaper.filters ?? savedWallpaper.filtersJson,
-    });
-    if (!restored) return;
-    void Promise.resolve().then(() => {
-      setCurrentWallpaper(restored);
-      window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: restored }));
-    });
-  }, [currentWallpaper, wallpapers]);
+    const wallpaperId = currentWallpaper.wallpaperId;
+    if (!wallpaperId || currentWallpaper.url) return;
+    let cancelled = false;
+    void fetch('/api/admin/wallpapers/' + encodeURIComponent(wallpaperId), { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok || !payload.wallpaper) {
+          throw new Error(payload.error || 'Không tải được hình nền đang chọn.');
+        }
+        const saved = payload.wallpaper as CustomWallpaper;
+        const resolvedUrl = saved.localDataUrl || saved.sourceUrl || '';
+        if (cancelled || saved.id !== wallpaperId || !resolvedUrl) return;
+        const latest = currentWallpaperRef.current;
+        const restored = normalizeActiveWallpaperPreference({
+          ...latest,
+          type: saved.type,
+          url: resolvedUrl,
+          filters: latest.filters ?? saved.filtersJson,
+        });
+        if (!restored) return;
+        setCurrentWallpaper(restored);
+        window.dispatchEvent(new CustomEvent('webos_wallpaper_change', { detail: restored }));
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error ? error.message : 'Không tải được hình nền đang chọn.');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [currentWallpaper.wallpaperId, currentWallpaper.url]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -232,7 +249,7 @@ export function CustomWallpaperStudio() {
       const data = await res.json();
       if (!res.ok || data.success !== true) throw new Error(data.error || ('Xóa hình nền thất bại (HTTP ' + res.status + ').'));
       setWallpapers((prev) => prev.filter((wp) => wp.id !== id));
-      if (currentWallpaper.url && wallpapers.find((wp) => wp.id === id)?.localDataUrl === currentWallpaper.url) {
+      if (currentWallpaper.wallpaperId === id) {
         setStatusMessage('Đã xóa tệp khỏi thư viện; hình nền hiện tại vẫn có thể hiển thị cho tới khi bạn đổi hoặc tải lại trang.');
       } else {
         setStatusMessage('Đã xóa hình nền khỏi thư viện.');
@@ -242,15 +259,35 @@ export function CustomWallpaperStudio() {
     }
   };
 
-  const applyWallpaper = (wp: CustomWallpaper) => {
-    const url = wp.localDataUrl || wp.sourceUrl || '';
-    saveActiveWallpaper({
-      type: wp.type,
-      url,
-      filters: wp.filtersJson || currentWallpaper.filters,
-      shader: currentWallpaper.shader,
-      wallpaperId: wp.id,
-    }, wp.id);
+  const applyWallpaper = async (wp: CustomWallpaper) => {
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setApplyingWallpaperId(wp.id);
+    try {
+      let asset = wp;
+      // Download the heavy payload only when this exact local file is selected.
+      if (!asset.localDataUrl && asset.hasLocalDataUrl) {
+        const response = await fetch('/api/admin/wallpapers/' + encodeURIComponent(wp.id), { cache: 'no-store' });
+        const payload = await response.json();
+        if (!response.ok || !payload.wallpaper) {
+          throw new Error(payload.error || 'Không tải được nội dung hình nền.');
+        }
+        asset = payload.wallpaper as CustomWallpaper;
+      }
+      const url = asset.localDataUrl || asset.sourceUrl || wp.sourceUrl || '';
+      if (!url) throw new Error('Hình nền không có nội dung tải được hoặc URL nguồn.');
+      saveActiveWallpaper({
+        type: asset.type,
+        url,
+        filters: asset.filtersJson || currentWallpaper.filters,
+        shader: currentWallpaper.shader,
+        wallpaperId: asset.id,
+      }, asset.id);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể áp dụng hình nền.');
+    } finally {
+      setApplyingWallpaperId(null);
+    }
   };
 
   const updateFilters = (changes: Partial<WallpaperFilters>) => {
@@ -343,8 +380,8 @@ export function CustomWallpaperStudio() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {wallpapers.map((wp) => {
-                  const mediaUrl = wp.localDataUrl || wp.sourceUrl || '';
-                  const isCurrent = currentWallpaper.url === mediaUrl;
+                  const mediaUrl = wp.sourceUrl || '';
+                  const isCurrent = currentWallpaper.wallpaperId === wp.id;
 
                   return (
                     <div
@@ -357,22 +394,30 @@ export function CustomWallpaperStudio() {
                     >
                       {/* Media preview */}
                       <div className="h-28 w-full bg-stone-950 overflow-hidden relative">
-                        {wp.type === 'video' ? (
-                          <video
-                            src={mediaUrl}
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            className="w-full h-full object-cover"
-                          />
+                        {mediaUrl ? (
+                          wp.type === 'video' ? (
+                            <video
+                              src={mediaUrl}
+                              muted
+                              playsInline
+                              preload="none"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={mediaUrl}
+                              alt={wp.title}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
+                          )
                         ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={mediaUrl}
-                            alt={wp.title}
-                            className="w-full h-full object-cover"
-                          />
+                          <div className="flex h-full flex-col items-center justify-center gap-1.5 text-stone-500">
+                            {wp.type === 'video' ? <Video className="h-6 w-6" /> : <ImageIcon className="h-6 w-6" />}
+                            <span className="text-[10px]">{wp.hasLocalDataUrl ? 'Tệp tải lên · tải khi chọn' : 'Chưa có bản xem trước'}</span>
+                          </div>
                         )}
 
                         <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
@@ -413,7 +458,7 @@ export function CustomWallpaperStudio() {
                               : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
                           }`}
                         >
-                          {isCurrent ? 'Đang dùng' : 'Áp dụng'}
+                          {applyingWallpaperId === wp.id ? 'Đang tải…' : isCurrent ? 'Đang dùng' : 'Áp dụng'}
                         </button>
                       </div>
                     </div>

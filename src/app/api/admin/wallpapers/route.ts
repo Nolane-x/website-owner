@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { WallpaperMediaType, WallpaperFilters } from '@/lib/types';
+import { wallpaperMetadataSelection } from '@/lib/wallpaper/api-selection';
 
 export async function GET(req: NextRequest) {
   const auth = await requireOwner();
@@ -27,13 +28,19 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(customWallpapers.isFavorite, true));
     }
 
+    // Do not send all uploaded Data URLs when opening the library. Some assets
+    // approach 5 MB each; loading the complete collection used to block the
+    // browser and inflate every response even when only metadata was needed.
     const wallpapers = await db
-      .select()
+      .select(wallpaperMetadataSelection)
       .from(customWallpapers)
       .where(and(...conditions))
       .orderBy(desc(customWallpapers.createdAt));
 
-    return NextResponse.json({ wallpapers });
+    return NextResponse.json(
+      { wallpapers },
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    );
   } catch (error) {
     console.error('Lỗi lấy danh sách hình nền:', error);
     return NextResponse.json({ error: 'Không thể tải danh sách hình nền.' }, { status: 500 });
@@ -126,10 +133,13 @@ export async function POST(req: NextRequest) {
     });
 
     const [created] = await db
-      .select()
+      .select(wallpaperMetadataSelection)
       .from(customWallpapers)
       .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
-    return NextResponse.json({ wallpaper: created }, { status: 201 });
+    return NextResponse.json(
+      { wallpaper: created ?? null },
+      { status: 201, headers: { 'Cache-Control': 'private, no-store' } },
+    );
   } catch (error) {
     console.error('Lỗi lưu hình nền tùy chỉnh:', error);
     return NextResponse.json({ error: 'Không thể lưu hình nền.' }, { status: 500 });

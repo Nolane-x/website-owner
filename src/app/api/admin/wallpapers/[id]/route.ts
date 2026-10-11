@@ -6,6 +6,42 @@ import { eq, and } from 'drizzle-orm';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { WallpaperMediaType, WallpaperFilters } from '@/lib/types';
+import { wallpaperMetadataSelection } from '@/lib/wallpaper/api-selection';
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireOwner();
+  if (!auth.authorized) return auth.response;
+
+  try {
+    const { id } = await params;
+    await initializeDatabase();
+    const db = getDb();
+    const [wallpaper] = await db
+      .select()
+      .from(customWallpapers)
+      .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
+
+    if (!wallpaper) {
+      return NextResponse.json({ error: 'Không tìm thấy hình nền.' }, {
+        status: 404,
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
+    }
+
+    return NextResponse.json({ wallpaper }, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy nội dung hình nền:', error);
+    return NextResponse.json({ error: 'Không thể tải hình nền.' }, {
+      status: 500,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  }
+}
 
 export async function PUT(
   req: NextRequest,
@@ -22,8 +58,12 @@ export async function PUT(
     const db = getDb();
     const body = await req.json();
 
+    // A metadata edit/favorite toggle must not read the image/video Data URL.
     const [existing] = await db
-      .select()
+      .select({
+        id: customWallpapers.id,
+        filtersJson: customWallpapers.filtersJson,
+      })
       .from(customWallpapers)
       .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
 
@@ -102,10 +142,13 @@ export async function PUT(
       .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
 
     const [updated] = await db
-      .select()
+      .select(wallpaperMetadataSelection)
       .from(customWallpapers)
       .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
-    return NextResponse.json({ wallpaper: updated });
+    return NextResponse.json(
+      { wallpaper: updated ?? null },
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    );
   } catch (error) {
     console.error('Lỗi cập nhật hình nền:', error);
     return NextResponse.json({ error: 'Không thể cập nhật hình nền.' }, { status: 500 });
@@ -127,7 +170,7 @@ export async function DELETE(
     const db = getDb();
 
     const [existing] = await db
-      .select()
+      .select({ id: customWallpapers.id })
       .from(customWallpapers)
       .where(and(eq(customWallpapers.id, id), eq(customWallpapers.profileId, auth.profile.id)));
 

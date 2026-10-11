@@ -109,16 +109,37 @@ export function WindowManagerProvider({ children }: { children: React.ReactNode 
     return () => clearTimeout(timer);
   }, []);
 
-  // Save to localStorage whenever windows change
+  // Debounce layout persistence: pointer-move/resize can update window bounds
+  // dozens of times per second. Synchronous JSON.stringify + localStorage on every
+  // pointer event blocks the main thread and makes all controls feel sluggish.
+  // Always flush the latest snapshot on pagehide so the final layout is retained.
+  const latestLayoutRef = React.useRef({ windows, desktopMode });
   useEffect(() => {
+    latestLayoutRef.current = { windows, desktopMode };
+  }, [windows, desktopMode]);
+
+  const persistLayout = useCallback(() => {
     if (!isHydrated) return;
+    const latest = latestLayoutRef.current;
     try {
-      localStorage.setItem(STORAGE_KEY_WINDOWS, JSON.stringify(windows));
-      localStorage.setItem(STORAGE_KEY_MODE, desktopMode);
+      localStorage.setItem(STORAGE_KEY_WINDOWS, JSON.stringify(latest.windows));
+      localStorage.setItem(STORAGE_KEY_MODE, latest.desktopMode);
     } catch (e) {
       console.warn('Lỗi lưu cấu hình desktop vào localStorage:', e);
     }
-  }, [windows, desktopMode, isHydrated]);
+  }, [isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    window.addEventListener('pagehide', persistLayout);
+    return () => window.removeEventListener('pagehide', persistLayout);
+  }, [isHydrated, persistLayout]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    const timer = window.setTimeout(persistLayout, 220);
+    return () => window.clearTimeout(timer);
+  }, [windows, desktopMode, isHydrated, persistLayout]);
 
   const focusWindow = useCallback((id: string) => {
     setWindows((prev) => reorderZIndices(prev, id));

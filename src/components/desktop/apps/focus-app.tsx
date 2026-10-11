@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Target, Play, Pause, RotateCcw, Volume2, Maximize2, Minimize2 } from 'lucide-react';
 import { ambientSynth } from '@/lib/audio/ambient-synth';
 import { loadFocusPreferences, saveFocusPreferences } from '@/lib/audio/focus-preferences';
@@ -21,6 +21,11 @@ export function FocusApp() {
   const [rainVol, setRainVol] = useState(initialPreferences.rainVolume);
   const [wavesVol, setWavesVol] = useState(initialPreferences.wavesVolume);
   const [campfireVol, setCampfireVol] = useState(initialPreferences.campfireVolume);
+  const countdownRef = useRef({ minutes, seconds, mode });
+
+  useEffect(() => {
+    countdownRef.current = { minutes, seconds, mode };
+  }, [minutes, seconds, mode]);
 
   useEffect(() => {
     const handlePersistence = (event: Event) => {
@@ -48,38 +53,35 @@ export function FocusApp() {
   // time are saved locally and restored on the next open without autoplay.
   useEffect(() => () => { ambientSynth.stop(); }, []);
 
+  // Keep a single interval for the whole running session. The previous effect
+  // restarted a timer after every second/state update, adding avoidable work to
+  // the main thread exactly while the user was interacting with the desktop.
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (isActive) {
-      interval = setInterval(() => {
-        if (seconds > 0) {
-          setSeconds(seconds - 1);
-        } else if (minutes > 0) {
-          setMinutes(minutes - 1);
-          setSeconds(59);
+    if (!isActive) return;
+    const interval = window.setInterval(() => {
+      const current = countdownRef.current;
+      if (current.seconds > 0) {
+        setSeconds(current.seconds - 1);
+      } else if (current.minutes > 0) {
+        setMinutes(current.minutes - 1);
+        setSeconds(59);
+      } else {
+        setIsActive(false);
+        ambientSynth.stop();
+        if (current.mode === 'work') {
+          setSessionCount((previous) => previous + 1);
+          setMode('shortBreak');
+          setMinutes(5);
+          setSeconds(0);
         } else {
-          // Khi kết thúc chu kỳ
-          setIsActive(false);
-          ambientSynth.stop();
-          if (mode === 'work') {
-            setSessionCount(prev => prev + 1);
-            setMode('shortBreak');
-            setMinutes(5);
-            setSeconds(0);
-          } else {
-            setMode('work');
-            setMinutes(25);
-            setSeconds(0);
-          }
+          setMode('work');
+          setMinutes(25);
+          setSeconds(0);
         }
-      }, 1000);
-    } else if (interval) {
-      clearInterval(interval);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isActive, minutes, seconds, mode]);
+      }
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [isActive]);
 
   const toggleTimer = () => {
     const nextState = !isActive;

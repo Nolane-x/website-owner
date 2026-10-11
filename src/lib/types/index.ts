@@ -315,6 +315,8 @@ export interface CustomWallpaper {
   title: string;
   sourceUrl?: string | null;
   localDataUrl?: string | null;
+  /** True when the uploaded asset is available by ID but omitted from the lightweight list response. */
+  hasLocalDataUrl?: boolean;
   type: WallpaperMediaType;
   tagsJson: string[];
   filtersJson: WallpaperFilters;
