@@ -40,6 +40,15 @@ const nextConfig: NextConfig = {
         source: '/(.*)',
         headers: securityHeaders,
       },
+      {
+        // Auth endpoints may return account/session data and must never be cached.
+        source: '/api/auth/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, max-age=0' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Vary', value: 'Cookie' },
+        ],
+      },
     ];
   },
 };

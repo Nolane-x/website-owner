@@ -3,6 +3,7 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
 import postgres from 'postgres';
 import { PGlite } from '@electric-sql/pglite';
 import * as schema from './schema';
+import { resolveDatabaseUrl } from './config';
 import path from 'path';
 import fs from 'fs';
 
@@ -21,22 +22,25 @@ export function getDb() {
     return dbInstance;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseConfig = resolveDatabaseUrl();
+  const databaseUrl = databaseConfig.url;
 
-  if (databaseUrl && databaseUrl.trim() !== '') {
-    // Kết nối PostgreSQL thật (Supabase, Neon, AWS RDS, Localhost...)
+  if (databaseUrl) {
+    // Kết nối PostgreSQL thật. prepare:false also supports transaction poolers
+    // commonly used by managed PostgreSQL providers in serverless deployments.
     postgresClient = postgres(databaseUrl, {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
+      prepare: false,
     });
     dbInstance = drizzle(postgresClient, { schema });
     return dbInstance;
   }
 
-  // RULE XXXVI: Production yêu cầu DATABASE_URL. Không âm thầm chuyển sang PGlite.
+  // RULE XXXVI: Production requires a real PostgreSQL URL. Never silently switch to ephemeral PGlite.
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('Production yêu cầu DATABASE_URL.');
+    throw new Error('Production yêu cầu cấu hình PostgreSQL: DATABASE_URL hoặc một biến POSTGRES_URL được hỗ trợ.');
   }
 
   // Chế độ phát triển & test: PGLite (WASM Postgres 16) lưu tại thư mục data/
