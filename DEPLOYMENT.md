@@ -44,6 +44,7 @@ Mở trình duyệt:
    - `NODE_ENV`: `production`
    - `CRON_SECRET`: chuỗi ngẫu nhiên khó đoán, tối thiểu 16 ký tự. Vercel tự gửi biến này dưới dạng `Authorization: Bearer …` khi gọi cron. Không ghi secret thật vào Git hoặc tài liệu.
 5. Bấm **Deploy**. Vercel sẽ tự động build và cung cấp tên miền HTTPS bảo mật.
+   - **Kiểm tra database sau deploy:** mở `/api/health/ready`. `200` với `databaseReachable: true` nghĩa là database trả lời; `503` với `databaseConfigured: false` nghĩa là chưa có biến URL được hỗ trợ; `503` với `databaseConfigured: true` nghĩa là URL đã có nhưng database chưa kết nối được. Endpoint chỉ trả boolean, không tiết lộ connection string hay lỗi nội bộ.
 6. **Workflow scheduler:** `vercel.json` đăng ký `/api/cron/workflows` mỗi ngày lúc 00:00 UTC (07:00 giờ Việt Nam). Endpoint trả về 503 nếu `CRON_SECRET` chưa được cấu hình và 401 nếu bearer secret không khớp. Chỉ workflow báo cáo task quá hạn (chế độ chỉ đọc), đang bật và có bật lịch mới được thực thi; mỗi workflow tối đa một lượt cho mỗi ngày Việt Nam. Độ chính xác thời điểm khởi chạy phụ thuộc gói Vercel. Sau khi thêm biến môi trường hoặc thay cron, triển khai lại Production và kiểm tra Cron Jobs trong Vercel Dashboard.
 6. **Khởi tạo tài khoản Chủ sở hữu lần đầu:**
    Truy cập `https://your-domain.com/admin/bootstrap`.
