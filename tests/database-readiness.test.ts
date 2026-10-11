@@ -58,7 +58,28 @@ describe('production readiness endpoint', () => {
       status: 'not_ready',
       databaseConfigured: true,
       databaseReachable: false,
+      databaseFailure: 'query_failed',
     }));
     expect(body).not.toContain('private-password');
+  });
+
+  it('classifies a host/network failure without exposing raw driver details', async () => {
+    vi.stubEnv('DATABASE_URL', '');
+    vi.stubEnv('POSTGRES_URL', 'postgres://private-user:private-password@db.example/test');
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(Object.assign(
+        new Error('private-password should never be returned'),
+        { code: 'ENOTFOUND' },
+      )),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      status: 'not_ready',
+      databaseConfigured: true,
+      databaseReachable: false,
+      databaseFailure: 'network_unreachable',
+    });
   });
 });

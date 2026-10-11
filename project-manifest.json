@@ -54,7 +54,7 @@
       "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes.",
       "publicTools": "Public /tools is an account-free Knowledge Portal and Open Data Lab, not a public calculator. Cooldown display updates once per second to reduce unnecessary full-page renders. The guest view does not render the owner scientific calculator or unit converter; calculator remains private at /admin/calculator and the authenticated owner desktop/Dock/Omni palette. Six on-demand direct-browser feeds provide up to 8 Hugging Face text-generation models, 8 GitHub topic:llm repositories, 8 recent Hacker News AI discussions, 8 HLE leaderboard rows, 8 Europe PMC research metadata records, and 8 GitHub Global Security Advisories. The portal also has a curated reference directory for AI/models/datasets, scientific research, cybersecurity, open-source software, public datasets/statistics, web standards, learning and technology communities. HLE entries preserve score/rank, notes and source verified flag; community/unverified rows are explicitly labelled and not certified. Feed calls use no website backend proxy or API credentials, a 10-second timeout, 180 KiB streamed response ceiling, a 45-second per-feed cooldown and 30-minute browser cache; no feed runs on page open. External metadata is normalized and trusted-source links are constructed from validated identifiers. Benchmark Hub links to Artificial Analysis, LMArena, Stanford HELM and Hugging Face without fabricating scores. Database-backed public GET APIs have per-process global/per-route budgets and always emit no-store across browser/CDN/Vercel because the guest-password gate is mutable. Unlisted-token responses are private/no-store. In-memory rate budgets are not distributed; provider-level WAF rules remain necessary for global DoS resistance.",
       "ownerSettingsPersistence": "Durable owner preferences survive closing/reopening their app windows: AI provider/model/endpoint, opt-in encrypted API keys and recent bounded chat history; calculator expression/result/angle mode/history; Audio Lab per-layer/master/radio volumes; Focus Studio goal, countdown remaining time, session count and ambience volumes; active wallpaper, validated filters and shader. Repeated successful saves emit no duplicate global status events. Timer/audio playback itself does not auto-resume. Ctrl/Cmd+K selects one command palette for the active desktop/workspace mode, and Escape closes the current palette; keyboard regression tests cover both paths.",
-      "productionReadiness": "GET /api/health/ready reports only databaseConfigured/databaseReachable booleans and never exposes connection strings, secrets or exception messages."
+      "productionReadiness": "GET /api/health/ready reports whether a PostgreSQL URL is configured, whether a read-only SELECT 1 succeeds, and a sanitized failure category. It never returns connection strings, credentials or raw driver errors."
     }
   },
   "tables": [
@@ -212,7 +212,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Document the live public portal, database URL fallback, secret-free readiness endpoint, serializer URL hardening and regression test coverage."
+      "shortDescription": "Track the database fallback, secret-free diagnostic classification and public portal hardening."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -468,7 +468,7 @@
       "mimeType": "text/markdown",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Document the /api/health/ready diagnostic endpoint and its secret-free readiness signals."
+      "shortDescription": "Document safe database readiness failure categories for production troubleshooting."
     },
     {
       "relativePath": "SECURITY.md",
@@ -1651,16 +1651,16 @@
       "fileName": "route.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Add a no-store readiness probe that safely reports database configuration/reachability booleans without exposing connection URLs or errors."
+      "status": "modified",
+      "shortDescription": "Probe configured PostgreSQL connectivity and return only a sanitized failure category; raw connection errors and URLs are never exposed."
     },
     {
       "relativePath": "tests/database-readiness.test.ts",
       "fileName": "database-readiness.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Test missing DB configuration, reachable database and unreachable database responses; assert no secrets are exposed."
+      "status": "modified",
+      "shortDescription": "Test secret-free readiness responses and classify network failures separately from generic query failures."
     }
   ]
 }
