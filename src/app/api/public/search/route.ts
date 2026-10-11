@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems, pages } from '@/lib/db/schema';
-import { eq, and, or, ilike, isNull } from 'drizzle-orm';
+import { and, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 
@@ -39,8 +39,7 @@ export async function GET(req: NextRequest) {
         title: contentItems.title,
         slug: contentItems.slug,
         type: contentItems.type,
-        description: contentItems.description,
-        coverImage: contentItems.coverImage,
+        description: sql<string | null>`left(${contentItems.description}, 240)`,
         category: contentItems.category,
         tags: contentItems.tags,
         publishedAt: contentItems.publishedAt,
@@ -61,8 +60,7 @@ export async function GET(req: NextRequest) {
         id: pages.id,
         title: pages.title,
         slug: pages.slug,
-        description: pages.description,
-        coverImage: pages.coverImage,
+        description: sql<string | null>`left(${pages.description}, 240)`,
         publishedAt: pages.publishedAt,
       })
       .from(pages)

@@ -229,6 +229,16 @@ export function toPublicContent(item: Record<string, unknown> | null | undefined
   };
 }
 
+export function toPublicContentSummary(
+  item: Record<string, unknown> | null | undefined,
+): PublicContentDTO | null {
+  const publicItem = toPublicContent(item);
+  if (!publicItem) return null;
+
+  // List callers only need display metadata. Full text, cover data URLs and TOC
+  // metadata belong to the detail endpoint and must not inflate every list query.
+  return { ...publicItem, content: null, coverImage: null, icon: null, metadata: {} };
+}
 export function toPublicProject(item: Record<string, unknown> | null | undefined): PublicProjectDTO | null {
   if (!item) return null;
 
@@ -258,6 +268,15 @@ export function toPublicProject(item: Record<string, unknown> | null | undefined
   };
 }
 
+export function toPublicProjectSummary(
+  item: Record<string, unknown> | null | undefined,
+): PublicProjectDTO | null {
+  const publicProject = toPublicProject(item);
+  if (!publicProject) return null;
+
+  // Project cards link to the detail page for full body and images.
+  return { ...publicProject, content: null, coverImage: null };
+}
 export function toPublicResource(item: Record<string, unknown> | null | undefined): PublicResourceDTO | null {
   if (!item) return null;
 

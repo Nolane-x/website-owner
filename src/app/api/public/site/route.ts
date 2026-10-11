@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { profiles, settings } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { ensureSeedData } from '@/lib/db/seed';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
@@ -22,8 +22,8 @@ export async function GET(req: Request) {
     const profileList = await db.select({
       id: profiles.id,
       displayName: profiles.displayName,
-      bio: profiles.bio,
-      avatarUrl: profiles.avatarUrl,
+      bio: sql<string | null>`left(${profiles.bio}, 1200)`,
+      avatarUrl: sql<string | null>`CASE WHEN ${profiles.avatarUrl} IS NOT NULL AND length(${profiles.avatarUrl}) <= 4096 AND ${profiles.avatarUrl} NOT LIKE 'data:%' THEN ${profiles.avatarUrl} ELSE NULL END`,
     }).from(profiles).orderBy(profiles.createdAt).limit(1);
 
     const profile = profileList[0] || {
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
 
     // 2. Lấy cài đặt giao diện công khai và cấu hình bảo vệ mật mã khách
     const settingList = profileList[0]?.id
-      ? await db.select().from(settings).where(eq(settings.profileId, profileList[0].id))
+      ? await db.select({ key: settings.key, valueJson: settings.valueJson }).from(settings).where(and(eq(settings.profileId, profileList[0].id), inArray(settings.key, ['theme_public', 'public_navigation', 'public_access'])))
       : [];
     const settingsMap: Record<string, unknown> = {};
     for (const s of settingList) {

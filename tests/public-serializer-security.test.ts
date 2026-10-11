@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   toPublicContent,
+  toPublicContentSummary,
   toPublicProject,
+  toPublicProjectSummary,
   toPublicResource,
   toPublicBlock,
   toPublicSiteSettings,
@@ -51,6 +53,41 @@ describe('public serializer URL trust boundaries', () => {
     expect(content?.metadata.summary).toBe('Summary');
   });
 
+  it('removes heavy fields from content summary DTOs', () => {
+    const summary = toPublicContentSummary({
+      id: 'article-summary',
+      title: 'Article summary',
+      slug: 'article-summary',
+      description: 'Short preview',
+      content: '<p>large article body</p>',
+      coverImage: 'data:image/png;base64,AAAA',
+      icon: 'large-icon-data',
+      metadata: { summary: 'summary text', toc: Array.from({ length: 500 }, (_, index) => index) },
+    });
+
+    expect(summary?.description).toBe('Short preview');
+    expect(summary?.content).toBeNull();
+    expect(summary?.coverImage).toBeNull();
+    expect(summary?.icon).toBeNull();
+    expect(summary?.metadata).toEqual({});
+  });
+
+  it('removes heavy body and cover fields from project summary DTOs but preserves safe links', () => {
+    const summary = toPublicProjectSummary({
+      id: 'project-summary',
+      title: 'Project summary',
+      slug: 'project-summary',
+      description: 'Short preview',
+      content: '<p>large project body</p>',
+      coverImage: 'data:image/png;base64,AAAA',
+      metadata: { repoUrl: 'https://github.com/example/repo', demoUrl: 'https://demo.example/' },
+    });
+
+    expect(summary?.content).toBeNull();
+    expect(summary?.coverImage).toBeNull();
+    expect(summary?.metadata.repoUrl).toBe('https://github.com/example/repo');
+    expect(summary?.metadata.demoUrl).toBe('https://demo.example/');
+  });
   it('sanitizes URLs inside nested public block content and settings', () => {
     const block = toPublicBlock({
       id: 'block-1',

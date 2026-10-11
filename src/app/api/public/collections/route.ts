@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { collections } from '@/lib/db/schema';
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
@@ -23,8 +23,7 @@ export async function GET(req: Request) {
         id: collections.id,
         name: collections.name,
         slug: collections.slug,
-        description: collections.description,
-        coverImage: collections.coverImage,
+        description: sql<string | null>`left(${collections.description}, 320)`,
         icon: collections.icon,
         isFeatured: collections.isFeatured,
         createdAt: collections.createdAt,

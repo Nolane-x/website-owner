@@ -76,8 +76,8 @@ export default function PublicHomePage() {
         setLoading(true);
         const [siteRes, projRes, resRes, contRes] = await Promise.all([
           fetch('/api/public/site'),
-          fetch('/api/public/projects'),
-          fetch('/api/public/resources'),
+          fetch('/api/public/projects?limit=4'),
+          fetch('/api/public/resources?limit=6'),
           fetch('/api/public/content?limit=5'),
         ]);
 

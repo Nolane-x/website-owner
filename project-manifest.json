@@ -996,7 +996,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Add a homepage hero entry point to the public Tools & AI Lab."
+      "shortDescription": "Only request the four projects and six resources actually shown on the homepage, avoiding excessive payload transfer."
     },
     {
       "relativePath": "src/app/(public)/tools/page.tsx",
@@ -1092,7 +1092,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public API request budgets and explicit no-store response headers; expose the current access-protection state without shared-cache normalization."
+      "shortDescription": "Restrict public settings to three allow-listed keys, cap the displayed bio, and exclude oversized or data-URI avatars from public API payloads."
     },
     {
       "relativePath": "src/app/api/public/projects/route.ts",
@@ -1100,7 +1100,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public read rate budget and no-store headers for project listings; preserve public-only query filters and the 100-item cap."
+      "shortDescription": "Use explicit projected metadata and card fields, truncate descriptions in SQL, and enforce bounded result count for public projects."
     },
     {
       "relativePath": "src/app/api/public/collections/route.ts",
@@ -1108,7 +1108,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public read rate budget and no-store headers for collection listings."
+      "shortDescription": "Bound public collection descriptions in SQL and omit unused large cover-image fields from collection list responses."
     },
     {
       "relativePath": "src/app/api/public/content/route.ts",
@@ -1116,7 +1116,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public read rate budgets and no-store headers while retaining public/published/deleted filters and bounded pagination."
+      "shortDescription": "Return bounded public content summaries with SQL-truncated descriptions and without heavy body, cover, or metadata columns."
     },
     {
       "relativePath": "src/app/api/public/content/[slug]/route.ts",
@@ -1140,7 +1140,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply a route-scoped budget and no-store headers to collection detail while preserving public query filters and bounded related items."
+      "shortDescription": "Bound collection and item descriptions and fetch only card-level fields for collection contents instead of long bodies and embedded covers."
     },
     {
       "relativePath": "src/app/api/public/resources/route.ts",
@@ -1148,7 +1148,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply public read rate budget and no-store headers for resource listings; preserve public-only query filters and the 100-item cap."
+      "shortDescription": "Project only link-card metadata, truncate descriptions in SQL, and cap result count to reduce public-list database egress."
     },
     {
       "relativePath": "src/app/api/public/search/route.ts",
@@ -1156,7 +1156,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply a tighter public search budget, cap queries at 80 characters, reject SQL LIKE wildcard characters, and cap result sets at 20 content plus 10 pages."
+      "shortDescription": "Limit search result descriptions in SQL and avoid selecting potentially large cover-image fields that the search modal does not render."
     },
     {
       "relativePath": "src/app/api/public/unlisted/[shareToken]/route.ts",
@@ -1164,7 +1164,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply route-scoped budgets and private/no-store headers to all successful share-token responses; prevent shared caching of token-protected content."
+      "shortDescription": "Use compact list fields for unlisted collection entries while preserving complete content for explicitly shared detail items."
     },
     {
       "relativePath": "src/app/api/auth/login/route.ts",
@@ -1612,15 +1612,15 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Harden public DTO serialization by validating navigation, canonical, project, resource and media URLs recursively within nested blocks/settings; reject executable schemes and protocol-relative destinations."
+      "shortDescription": "Provide list DTOs that remove content bodies, embedded cover images, and unused metadata while retaining allow-listed, sanitized links."
     },
     {
       "relativePath": "tests/public-serializer-security.test.ts",
       "fileName": "public-serializer-security.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Regression-test public serializer URL trust boundaries across projects, resources, canonical metadata, nested block/settings fields and navigation."
+      "status": "modified",
+      "shortDescription": "Verify summary DTOs omit large bodies and embedded images but preserve valid external project links."
     },
     {
       "relativePath": "src/lib/db/config.ts",
@@ -1679,4 +1679,4 @@
       "shortDescription": "Regression tests prove concurrent initialization calls share one task and a failed task can be retried."
     }
   ]
-}\n
+}
