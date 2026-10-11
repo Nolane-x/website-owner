@@ -24,7 +24,7 @@
       "contentRevisions": true,
       "softDeleteTrash": true,
       "aiDataFlow": "Copilot API key is session/component state only; retrieval context is opt-in; external provider requests leave the browser and are subject to provider/network policies",
-      "publicApiCache": "Database-backed public GET APIs explicitly disable browser, intermediary CDN and Vercel CDN caching because the guest-password setting is mutable; this prevents a formerly public shared-cache entry from bypassing a newly enabled access gate until TTL expiry. Unlisted share-token responses are always private/no-store. Public Open Data feeds use bounded per-browser localStorage cache and fetch third-party providers directly without calling website APIs."
+      "publicApiCache": "Database-backed public APIs and public explore-feed responses use private, no-store cache headers so a changed guest-password gate cannot be bypassed via a shared CDN entry. Public explore data uses a fixed allow-list of six upstream APIs, server-side Next.js fetch revalidation for five minutes, bounded JSON payloads, timeout, per-IP rate limiting, guest-password enforcement, and a five-minute bounded browser cache."
     },
     "edgeGateway": {
       "engine": "Cloudflare Worker (Wrangler)",
@@ -152,7 +152,8 @@
       "/api/public/collections/[slug]",
       "/api/public/search",
       "/api/public/unlisted/[shareToken]",
-      "/api/public/verify-password"
+      "/api/public/verify-password",
+      "/api/public/explore"
     ],
     "cron": [
       "/api/cron/workflows"
@@ -203,7 +204,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Track the public HLE leaderboard feed, normalizer and regression tests; document score verification semantics, request limits, owner-only calculator and public API no-store policy."
+      "shortDescription": "Track the public explore portal, its allow-listed API gateway, per-source caching and access guard, in-page details and regression tests."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -995,7 +996,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Expose public Open Data Lab with on-demand Hugging Face models, GitHub LLM repositories, Hacker News AI discussions, and actual HLE leaderboard rows. Fetch is direct-browser only, max 8 rows/feed, 10s timeout, 180 KiB streamed response ceiling, 45s cross-feed cooldown and 30m local cache. The HLE panel preserves score/rank/notes/source verified flag and labels unverified community results; no owner calculator or server API proxy is exposed."
+      "shortDescription": "Automatically load six API-backed public feeds; provide cross-feed search, inline expandable model/repository/story/benchmark/paper/security details, abstract text, cache status and graceful error handling."
     },
     {
       "relativePath": "src/components/layout/public-header.tsx",
@@ -1298,16 +1299,16 @@
       "fileName": "hle-leaderboard.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Normalize untrusted Hugging Face HLE leaderboard JSON: validate rank/model IDs/score, reject control/URL injection, de-duplicate models, bound notes and parameters, preserve verified status, cap output at 8 rows."
+      "status": "modified",
+      "shortDescription": "Normalize the real Hugging Face HLE leaderboard API response by safely resolving model IDs from source.url and reject hostile URLs or malformed scores."
     },
     {
       "relativePath": "tests/hle-leaderboard.test.ts",
       "fileName": "hle-leaderboard.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "14 regression cases verify HLE score/rank/verification parsing, hostile or invalid rows, duplicate detection, output size cap, note truncation and non-array rejection."
+      "status": "modified",
+      "shortDescription": "Add regression coverage for the live HLE API schema and reject untrusted source URLs."
     },
     {
       "relativePath": "src/app/(public)/tools/page.tsx",
@@ -1338,16 +1339,16 @@
       "fileName": "public-feeds.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Validate and normalize Europe PMC research metadata and GitHub security advisories, bound untrusted text, deduplicate identifiers, validate DOI/CVE/severity fields and build links only to the trusted source hosts."
+      "status": "modified",
+      "shortDescription": "Normalize bounded Europe PMC abstracts and GitHub advisory metadata for inline public display."
     },
     {
       "relativePath": "tests/public-open-data-feeds.test.ts",
       "fileName": "public-open-data-feeds.test.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
-      "status": "created",
-      "shortDescription": "Add six regression tests for valid research/advisory records, hostile identifiers, bad DOI/CVE values, deduplication, output caps and malformed response shapes."
+      "status": "modified",
+      "shortDescription": "Verify that Europe PMC abstracts survive normalization for on-page reading."
     },
     {
       "relativePath": "src/components/layout/public-header.tsx",
@@ -1380,8 +1381,7 @@
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Update the project feature manifest and change log for public data feeds, owner-only calculator, durable owner preferences, encrypted opt-in API-key storage and Escape/Ctrl+K regression coverage."
-    }
- ,
+    },
     {
       "relativePath": "src/lib/ai/local-preferences.ts",
       "fileName": "local-preferences.ts",
@@ -1581,6 +1581,22 @@
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Cap decorative canvas shaders near 30 FPS, pause animation when the browser tab is hidden, and remove duplicate resize listener registration."
+    },
+    {
+      "relativePath": "src/app/api/public/explore/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Serve six allow-listed public research feeds through bounded server-side fetch, five-minute upstream cache, timeout, per-IP rate limiting, guest access protection, payload compaction and no-store edge responses."
+    },
+    {
+      "relativePath": "tests/public-explore-api.test.ts",
+      "fileName": "public-explore-api.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test source allow-list and SSRF prevention, guest-password gate, five-minute upstream caching, response payload compaction, no-store headers and upstream failure handling."
     }
   ]
 }

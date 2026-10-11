@@ -14,6 +14,7 @@ describe('public Europe PMC feed normalization', () => {
           pubYear: '2026',
           doi: '10.1000/example.123',
           citedByCount: 12,
+          abstractText: 'This paper studies reliable AI systems.',
           isOpenAccess: 'Y',
         }],
       },
@@ -28,6 +29,7 @@ describe('public Europe PMC feed normalization', () => {
       year: '2026',
       doi: '10.1000/example.123',
       citedByCount: 12,
+      abstract: 'This paper studies reliable AI systems.',
       openAccess: true,
       url: 'https://europepmc.org/article/MED/12345',
     });

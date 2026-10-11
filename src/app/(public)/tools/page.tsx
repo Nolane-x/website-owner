@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowDownToLine,
   ArrowLeft,
   BookOpen,
   ExternalLink,
@@ -16,6 +15,9 @@ import {
   Clock3,
   Info,
   Trophy,
+  Search,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { normalizeHleLeaderboard, type HleLeaderboardEntry } from '@/lib/open-data/hle-leaderboard';
 import {
@@ -25,23 +27,24 @@ import {
   type PublicSecurityAdvisory,
 } from '@/lib/open-data/public-feeds';
 
-type Model = { id: string; downloads?: number; likes?: number; pipeline_tag?: string; lastModified?: string };
-type Repository = { full_name: string; html_url: string; description?: string | null; stargazers_count?: number; language?: string | null; updated_at?: string };
-type Story = { objectID: string; title?: string; story_title?: string; url?: string | null; story_url?: string | null; points?: number; num_comments?: number; created_at?: string };
+type Model = { id: string; downloads?: number; likes?: number; pipeline_tag?: string; lastModified?: string; tags?: string[]; library_name?: string; gated?: string | boolean };
+type Repository = { full_name: string; html_url: string; description?: string | null; stargazers_count?: number; forks_count?: number; open_issues_count?: number; language?: string | null; updated_at?: string; created_at?: string; default_branch?: string; topics?: string[]; license?: { name?: string; spdx_id?: string } | null; archived?: boolean };
+type Story = { objectID: string; title?: string; story_title?: string; url?: string | null; story_url?: string | null; story_text?: string | null; author?: string; points?: number; num_comments?: number; created_at?: string };
 type SourceId = 'models' | 'repos' | 'news' | 'hle' | 'papers' | 'security';
 type FeedState<T> = { items: T[]; savedAt: number | null; status: string };
 type CooldownState = Partial<Record<SourceId, number>>;
 
-const CACHE_MS = 30 * 60 * 1000;
-const COOLDOWN_MS = 45 * 1000;
+const CACHE_MS = 5 * 60 * 1000;
+const REFRESH_CHECK_MS = 30 * 1000;
+const COOLDOWN_MS = 15 * 1000;
 const MAX_RESPONSE_BYTES = 180 * 1024;
 const CACHE_KEYS: Record<SourceId, string> = {
-  models: 'webos:public-feed:v2:models',
-  repos: 'webos:public-feed:v2:repos',
-  news: 'webos:public-feed:v2:news',
+  models: 'webos:public-feed:v3:models',
+  repos: 'webos:public-feed:v3:repos',
+  news: 'webos:public-feed:v3:news',
   hle: 'webos:public-feed:v2:hle',
-  papers: 'webos:public-feed:v1:papers',
-  security: 'webos:public-feed:v1:security-advisories',
+  papers: 'webos:public-feed:v2:papers',
+  security: 'webos:public-feed:v2:security-advisories',
 };
 const LAST_REQUEST_KEY = 'webos:public-feed:v3:last-request:';
 
@@ -136,7 +139,7 @@ const informationCollections = [
 ];
 
 function defaultFeed<T>(): FeedState<T> {
-  return { items: [], savedAt: null, status: 'Chưa tải dữ liệu. Chỉ gọi API khi bạn chủ động bấm nút.' };
+  return { items: [], savedAt: null, status: 'Đang lấy dữ liệu công khai để hiển thị ngay trên trang…' };
 }
 
 function formatNumber(value: number | undefined): string {
@@ -156,8 +159,14 @@ function safeHttpUrl(value: string | null | undefined): string | null {
 
 async function readJsonLimited<T>(response: Response): Promise<T> {
   if (!response.ok) {
+    if ((response.headers.get('content-type') || '').toLowerCase().includes('json')) {
+      const payload = await response.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof payload?.error === 'string' && payload.error.length > 0) {
+        throw new Error(payload.error.slice(0, 260));
+      }
+    }
     if (response.status === 429) throw new Error('Nguồn API đang giới hạn yêu cầu. Hãy đợi rồi thử lại.');
-    throw new Error('Nguồn API trả về HTTP ' + response.status + '.');
+    throw new Error('API trung gian trả về HTTP ' + response.status + '.');
   }
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.toLowerCase().includes('json')) throw new Error('Nguồn API không trả về JSON.');
@@ -211,7 +220,10 @@ function normalizeModels(input: unknown): Model[] {
       downloads: typeof item.downloads === 'number' && Number.isFinite(item.downloads) ? Math.max(0, item.downloads) : undefined,
       likes: typeof item.likes === 'number' && Number.isFinite(item.likes) ? Math.max(0, item.likes) : undefined,
       pipeline_tag: typeof item.pipeline_tag === 'string' ? item.pipeline_tag.slice(0, 80) : undefined,
-      lastModified: typeof item.lastModified === 'string' ? item.lastModified.slice(0, 40) : undefined,
+      lastModified: typeof item.lastModified === 'string' && Number.isFinite(Date.parse(item.lastModified)) ? item.lastModified.slice(0, 40) : undefined,
+      tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 12).map((tag) => tag.slice(0, 60)) : [],
+      library_name: typeof item.library_name === 'string' ? item.library_name.slice(0, 80) : undefined,
+      gated: typeof item.gated === 'string' || typeof item.gated === 'boolean' ? item.gated : undefined,
     }];
   });
 }
@@ -230,8 +242,18 @@ function normalizeRepos(input: unknown): Repository[] {
       html_url: url,
       description: typeof item.description === 'string' ? item.description.slice(0, 420) : null,
       stargazers_count: typeof item.stargazers_count === 'number' && Number.isFinite(item.stargazers_count) ? Math.max(0, item.stargazers_count) : undefined,
+      forks_count: typeof item.forks_count === 'number' && Number.isFinite(item.forks_count) ? Math.max(0, item.forks_count) : undefined,
+      open_issues_count: typeof item.open_issues_count === 'number' && Number.isFinite(item.open_issues_count) ? Math.max(0, item.open_issues_count) : undefined,
       language: typeof item.language === 'string' ? item.language.slice(0, 60) : null,
-      updated_at: typeof item.updated_at === 'string' ? item.updated_at : undefined,
+      updated_at: typeof item.updated_at === 'string' && Number.isFinite(Date.parse(item.updated_at)) ? item.updated_at : undefined,
+      created_at: typeof item.created_at === 'string' && Number.isFinite(Date.parse(item.created_at)) ? item.created_at : undefined,
+      default_branch: typeof item.default_branch === 'string' ? item.default_branch.slice(0, 100) : undefined,
+      topics: Array.isArray(item.topics) ? item.topics.filter((topic): topic is string => typeof topic === 'string').slice(0, 8).map((topic) => topic.slice(0, 50)) : [],
+      license: item.license && typeof item.license === 'object' ? {
+        name: typeof (item.license as Record<string, unknown>).name === 'string' ? ((item.license as Record<string, unknown>).name as string).slice(0, 100) : undefined,
+        spdx_id: typeof (item.license as Record<string, unknown>).spdx_id === 'string' ? ((item.license as Record<string, unknown>).spdx_id as string).slice(0, 60) : undefined,
+      } : null,
+      archived: item.archived === true,
     }];
   });
 }
@@ -249,9 +271,11 @@ function normalizeStories(input: unknown): Story[] {
       objectID: item.objectID.slice(0, 100),
       title: typeof item.title === 'string' ? item.title.slice(0, 300) : typeof item.story_title === 'string' ? item.story_title.slice(0, 300) : undefined,
       url: url || undefined,
+      story_text: typeof item.story_text === 'string' ? item.story_text.replace(/[\\u0000-\\u001f\\u007f]/g, ' ').slice(0, 2400) : undefined,
+      author: typeof item.author === 'string' ? item.author.slice(0, 80) : undefined,
       points: typeof item.points === 'number' && Number.isFinite(item.points) ? Math.max(0, item.points) : undefined,
       num_comments: typeof item.num_comments === 'number' && Number.isFinite(item.num_comments) ? Math.max(0, item.num_comments) : undefined,
-      created_at: typeof item.created_at === 'string' ? item.created_at : undefined,
+      created_at: typeof item.created_at === 'string' && Number.isFinite(Date.parse(item.created_at)) ? item.created_at : undefined,
     }];
   }).filter((story) => Boolean(story.title));
 }
@@ -263,10 +287,13 @@ export default function PublicToolsPage() {
   const [hle, setHle] = useState<FeedState<HleLeaderboardEntry>>(defaultFeed);
   const [papers, setPapers] = useState<FeedState<EuropePmcPaper>>(defaultFeed);
   const [security, setSecurity] = useState<FeedState<PublicSecurityAdvisory>>(defaultFeed);
-  const [loadingSource, setLoadingSource] = useState<SourceId | null>(null);
+  const [loadingSources, setLoadingSources] = useState<SourceId[]>([]);
+  const inFlightRef = useRef<Set<SourceId>>(new Set());
   const [cooldownUntil, setCooldownUntil] = useState<CooldownState>({});
   const [clockNow, setClockNow] = useState(0);
   const [storageReady, setStorageReady] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const cooldownUntilMax = Math.max(0, ...Object.values(cooldownUntil).filter((value): value is number => typeof value === 'number'));
   const cooldownActive = Object.values(cooldownUntil).some((until) => typeof until === 'number' && until > clockNow);
 
@@ -284,7 +311,7 @@ export default function PublicToolsPage() {
           if (typeof payload.savedAt !== 'number' || !Number.isFinite(payload.savedAt) || payload.savedAt > now || !Array.isArray(payload.items) || payload.items.length > 8) continue;
           if (now - payload.savedAt > CACHE_MS) continue;
           const savedAt = payload.savedAt;
-          const cacheStatus = 'Đang hiển thị dữ liệu đã lưu trong trình duyệt; chưa gọi API.';
+          const cacheStatus = 'Đang hiển thị dữ liệu đã lưu; sẽ tự kiểm tra lại sau 5 phút.';
           if (source === 'models') setModels({ items: normalizeModels(payload.items), savedAt, status: cacheStatus });
           else if (source === 'repos') setRepos({ items: normalizeRepos({ items: payload.items }), savedAt, status: cacheStatus });
           else if (source === 'news') setNews({ items: normalizeStories({ hits: payload.items }), savedAt, status: cacheStatus });
@@ -295,7 +322,7 @@ export default function PublicToolsPage() {
               const paper = entry as Partial<EuropePmcPaper>;
               const separator = typeof paper.id === 'string' ? paper.id.indexOf(':') : -1;
               if (separator < 1) return [];
-              return [{ source: paper.id!.slice(0, separator), id: paper.id!.slice(separator + 1), title: paper.title, authorString: paper.authors, journalTitle: paper.journal, pubYear: paper.year, doi: paper.doi, citedByCount: paper.citedByCount, isOpenAccess: paper.openAccess ? 'Y' : 'N' }];
+              return [{ source: paper.id!.slice(0, separator), id: paper.id!.slice(separator + 1), title: paper.title, authorString: paper.authors, journalTitle: paper.journal, pubYear: paper.year, doi: paper.doi, citedByCount: paper.citedByCount, abstractText: paper.abstract, isOpenAccess: paper.openAccess ? 'Y' : 'N' }];
             });
             setPapers({ items: normalizeEuropePmcPapers({ resultList: { result: cached } }), savedAt, status: cacheStatus });
           } else {
@@ -340,7 +367,7 @@ export default function PublicToolsPage() {
   }, [cooldownUntilMax]);
 
   const getFeed = useCallback(async (source: SourceId) => {
-    if (loadingSource) return;
+    if (inFlightRef.current.has(source)) return;
     const now = Date.now();
     const current = source === 'models' ? models : source === 'repos' ? repos : source === 'news' ? news : source === 'hle' ? hle : source === 'papers' ? papers : security;
     const updateStatus = (status: string) => {
@@ -352,7 +379,8 @@ export default function PublicToolsPage() {
       else setSecurity((previous) => ({ ...previous, status }));
     };
     if (current.savedAt && now - current.savedAt < CACHE_MS && current.items.length) {
-      updateStatus('Đang dùng cache cục bộ 30 phút; chưa phát sinh yêu cầu API mới.');
+      const freshStatus = 'Đang hiển thị dữ liệu đã lưu; nguồn sẽ được kiểm tra lại khi cache 5 phút hết hạn.';
+      if (current.status !== freshStatus) updateStatus(freshStatus);
       return;
     }
     const sourceCooldownUntil = cooldownUntil[source] ?? 0;
@@ -364,31 +392,19 @@ export default function PublicToolsPage() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10_000);
     const requestAt = Date.now();
-    setLoadingSource(source);
+    inFlightRef.current.add(source);
+    setLoadingSources(Array.from(inFlightRef.current));
     setClockNow(requestAt);
     setCooldownUntil((previous) => ({ ...previous, [source]: requestAt + COOLDOWN_MS }));
-    updateStatus('Đang tải trực tiếp từ nguồn công khai…');
+    updateStatus('Đang lấy dữ liệu qua API của website…');
     try { window.localStorage.setItem(LAST_REQUEST_KEY + source, String(requestAt)); }
     catch { /* In-memory throttling remains active for this page session. */ }
 
-    const endpoints: Record<SourceId, string> = {
-      models: 'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=downloads&direction=-1&limit=8',
-      repos: 'https://api.github.com/search/repositories?q=topic%3Allm&sort=stars&order=desc&per_page=8',
-      news: 'https://hn.algolia.com/api/v1/search_by_date?query=AI%20model&tags=story&hitsPerPage=8',
-      hle: 'https://huggingface.co/api/datasets/cais/hle/leaderboard',
-      papers: 'https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=TITLE_ABS%3A%22large%20language%20model%22%20OR%20TITLE_ABS%3A%22artificial%20intelligence%22&format=json&resultType=lite&pageSize=8&sort_date=y',
-      security: 'https://api.github.com/advisories?per_page=8&sort=published&direction=desc',
-    };
-
     try {
-      const response = await fetch(endpoints[source], {
+      const response = await fetch('/api/public/explore?source=' + encodeURIComponent(source), {
         method: 'GET', signal: controller.signal,
-        headers: {
-          Accept: source === 'security' ? 'application/vnd.github+json' : 'application/json',
-          ...(source === 'repos' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
-          ...(source === 'security' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
-        },
-        cache: 'no-store', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store', credentials: 'same-origin', redirect: 'error', referrerPolicy: 'no-referrer',
       });
       const payload = await readJsonLimited<unknown>(response);
       const normalized = source === 'models' ? normalizeModels(payload)
@@ -415,16 +431,54 @@ export default function PublicToolsPage() {
         : cause instanceof Error ? cause.message : 'Không thể tải dữ liệu lúc này.');
     } finally {
       window.clearTimeout(timeout);
-      setLoadingSource(null);
+      inFlightRef.current.delete(source);
+      setLoadingSources(Array.from(inFlightRef.current));
     }
-  }, [cooldownUntil, loadingSource, models, news, repos, hle, papers, security]);
+  }, [cooldownUntil, models, news, repos, hle, papers, security]);
+
+  const getFeedRef = useRef(getFeed);
+  useEffect(() => {
+    getFeedRef.current = getFeed;
+  }, [getFeed]);
+
+  // Fetch every public feed automatically after cache hydration. Each source has
+  // independent loading state, while the server route caches upstream responses.
+  useEffect(() => {
+    if (!storageReady) return;
+    for (const source of Object.keys(CACHE_KEYS) as SourceId[]) {
+      void getFeedRef.current(source);
+    }
+  }, [storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    const refreshTimer = window.setInterval(() => {
+      for (const source of Object.keys(CACHE_KEYS) as SourceId[]) {
+        void getFeedRef.current(source);
+      }
+    }, REFRESH_CHECK_MS);
+    return () => window.clearInterval(refreshTimer);
+  }, [storageReady]);
+
+  const currentFeed = (source: SourceId): FeedState<unknown> =>
+    source === 'models' ? models : source === 'repos' ? repos : source === 'news' ? news : source === 'hle' ? hle : source === 'papers' ? papers : security;
 
   const disabled = (source: SourceId): boolean => {
-    if (!storageReady || loadingSource !== null) return true;
-    const current = source === 'models' ? models : source === 'repos' ? repos : source === 'news' ? news : source === 'hle' ? hle : source === 'papers' ? papers : security;
+    const current = currentFeed(source);
     const isFresh = typeof current.savedAt === 'number' && clockNow >= current.savedAt && clockNow - current.savedAt < CACHE_MS;
-    return (cooldownUntil[source] ?? 0) > clockNow && !isFresh;
+    return !storageReady || loadingSources.includes(source) || ((cooldownUntil[source] ?? 0) > clockNow && !isFresh) || (isFresh && current.items.length > 0);
   };
+
+  const searchTerm = searchQuery.trim().toLocaleLowerCase();
+  const matches = (value: string): boolean => !searchTerm || value.toLocaleLowerCase().includes(searchTerm);
+  const visibleModels = models.items.filter((item) => matches([item.id, item.pipeline_tag, ...(item.tags ?? [])].join(' ')));
+  const visibleRepos = repos.items.filter((item) => matches([item.full_name, item.description, item.language, item.license?.name, ...(item.topics ?? [])].filter(Boolean).join(' ')));
+  const visibleNews = news.items.filter((item) => matches([item.title, item.story_text, item.author].filter(Boolean).join(' ')));
+  const visibleHle = hle.items.filter((item) => matches([item.modelId, item.notes].filter(Boolean).join(' ')));
+  const visiblePapers = papers.items.filter((item) => matches([item.title, item.authors, item.journal, item.abstract].filter(Boolean).join(' ')));
+  const visibleSecurity = security.items.filter((item) => matches([item.ghsaId, item.cveId, item.summary, item.description, item.packageName, item.ecosystem].filter(Boolean).join(' ')));
+  const totalRecords = models.items.length + repos.items.length + news.items.length + hle.items.length + papers.items.length + security.items.length;
+  const visibleRecords = visibleModels.length + visibleRepos.length + visibleNews.length + visibleHle.length + visiblePapers.length + visibleSecurity.length;
 
   return (
     <div className="space-y-9 md:space-y-12">
@@ -450,9 +504,32 @@ export default function PublicToolsPage() {
 
       {cooldownActive && (
         <div role="status" className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface-subtle)] px-4 py-3 text-xs text-[var(--text-secondary)]">
-          Để tránh gọi lặp, mỗi nguồn dữ liệu có thời gian chờ riêng 45 giây và cache cục bộ 30 phút. Các nguồn khác vẫn có thể được mở trong lúc chờ.
+          Đang cập nhật hoặc kiểm tra lại nguồn dữ liệu. Các bản ghi đã có vẫn được giữ trên trang trong lúc nguồn bên ngoài phản hồi.
         </div>
       )}
+
+      <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-mono uppercase tracking-wide text-[var(--accent)]"><Search size={14} /> EXPLORE LIVE DATA</div>
+            <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Dữ liệu được trình bày ngay tại đây</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-6 text-[var(--text-secondary)]">Sáu nguồn dữ liệu công khai được nạp tự động, chuẩn hóa và lưu cache ở máy chủ. Bạn có thể tìm kiếm và mở phần chi tiết mà không cần tải tệp hay rời khỏi trang.</p>
+          </div>
+          <div className="rounded-xl border border-[var(--border-color)] px-4 py-3">
+            <div className="text-2xl font-bold tabular-nums text-[var(--text-primary)]">{formatNumber(totalRecords)}</div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Bản ghi đã nạp</div>
+          </div>
+        </div>
+        <label htmlFor="explore-live-search" className="mt-5 block text-xs font-semibold text-[var(--text-secondary)]">Tìm trong mô hình, dự án, bài viết, benchmark, nghiên cứu và cảnh báo</label>
+        <div className="relative mt-2">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input id="explore-live-search" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Ví dụ: Qwen, reasoning, CVE, open access…" className="min-h-11 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-page)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--border-focus)]" />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--text-muted)]">
+          <span aria-live="polite">{searchTerm ? `Tìm thấy ${formatNumber(visibleRecords)} / ${formatNumber(totalRecords)} mục phù hợp` : 'Kết quả được trình bày tại chỗ; chọn “Xem chi tiết” trên từng thẻ để đọc thêm.'}</span>
+          {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="rounded-lg border border-[var(--border-color)] px-3 py-1.5 hover:bg-[var(--bg-surface-subtle)]">Xóa tìm kiếm</button>}
+        </div>
+      </section>
 
       <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <article className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
@@ -461,18 +538,34 @@ export default function PublicToolsPage() {
             <a href="https://huggingface.co/models" target="_blank" rel="noopener noreferrer" aria-label="Mở Hugging Face Hub" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
           </div>
           <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Tối đa 8 mô hình tạo văn bản phổ biến trên Hub. Lượt tải và lượt thích đo mức độ quan tâm, không phải benchmark.</p>
-          <button type="button" onClick={() => getFeed('models')} disabled={disabled('models')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'models' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'models' ? 'Đang tải…' : models.items.length ? 'Xem / cập nhật dữ liệu' : 'Tải dữ liệu từ API'}</button>
+          <button type="button" onClick={() => getFeed('models')} disabled={disabled('models')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSources.includes('models') ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}{loadingSources.includes('models') ? 'Đang lấy dữ liệu…' : models.items.length ? 'Đã hiển thị ngay trên trang' : 'Thử lại nguồn dữ liệu'}</button>
           <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{models.status}</p>
-          {models.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(models.savedAt).toLocaleString('vi-VN')} · cache 30 phút</p>}
+          {models.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(models.savedAt).toLocaleString('vi-VN')} · cache 5 phút</p>}
           <div className="space-y-2">
-            {models.items.map((model) => (
-              <a key={model.id} href={'https://huggingface.co/' + model.id.split('/').map(encodeURIComponent).join('/')} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-[var(--border-color)] p-3 hover:border-[var(--border-focus)] hover:bg-[var(--bg-surface-subtle)]">
-                <strong className="block break-all text-xs text-[var(--text-primary)]">{model.id}</strong>
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]"><span>Tải: {formatNumber(model.downloads)}</span><span>Thích: {formatNumber(model.likes)}</span>{model.pipeline_tag && <span>{model.pipeline_tag}</span>}</div>
-              </a>
-            ))}
+            {visibleModels.map((model) => {
+              const itemKey = 'model:' + model.id;
+              const isExpanded = expandedItem === itemKey;
+              return (
+                <article key={model.id} className="rounded-xl border border-[var(--border-color)] p-3 transition hover:border-[var(--border-focus)]">
+                  <button type="button" onClick={() => setExpandedItem(isExpanded ? null : itemKey)} aria-expanded={isExpanded} className="flex w-full items-start justify-between gap-3 text-left">
+                    <span className="min-w-0"><strong className="block break-all text-xs text-[var(--text-primary)]">{model.id}</strong><span className="mt-1 block text-[10px] text-[var(--text-secondary)]">{model.pipeline_tag || 'Mô hình trên Hugging Face Hub'}{model.library_name ? ' · ' + model.library_name : ''}</span></span>
+                    {isExpanded ? <ChevronUp size={16} className="shrink-0 text-[var(--accent)]" /> : <ChevronDown size={16} className="shrink-0 text-[var(--text-muted)]" />}
+                  </button>
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--text-muted)]"><span>Lượt tải: {formatNumber(model.downloads)}</span><span>Lượt thích: {formatNumber(model.likes)}</span>{model.gated === true || model.gated === 'auto' ? <span>Có giới hạn truy cập</span> : null}</div>
+                  {isExpanded && <div className="mt-3 space-y-2 border-t border-[var(--border-color)] pt-3 text-xs leading-5 text-[var(--text-secondary)]">
+                    <p><strong>Loại tác vụ:</strong> {model.pipeline_tag || 'Chưa có nhãn tác vụ'}</p>
+                    <p><strong>Thư viện:</strong> {model.library_name || 'Không công bố'} · <strong>Cập nhật:</strong> {model.lastModified ? new Date(model.lastModified).toLocaleDateString('vi-VN') : 'Chưa rõ'}</p>
+                    {model.tags?.length ? <div className="flex flex-wrap gap-1.5">{model.tags.slice(0, 8).map((tag) => <span key={tag} className="rounded-md border border-[var(--border-color)] px-2 py-1 text-[10px]">{tag}</span>)}</div> : null}
+                    <p className="text-[10px] text-[var(--text-muted)]">Lượt tải và yêu thích chỉ phản ánh mức độ sử dụng, không phải phép đo chất lượng hay độ chính xác.</p>
+                    <a href={'https://huggingface.co/' + model.id.split('/').map(encodeURIComponent).join('/')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline">Xem model card gốc <ExternalLink size={12} /></a>
+                  </div>}
+                </article>
+              );
+            })}
+            {!models.items.length && <p className="rounded-xl border border-dashed border-[var(--border-color)] p-4 text-xs text-[var(--text-muted)]">{loadingSources.includes('models') ? 'Đang nạp danh sách mô hình…' : models.status}</p>}
+            {models.items.length > 0 && visibleModels.length === 0 && <p className="text-xs text-[var(--text-muted)]">Không có mô hình nào khớp bộ lọc hiện tại.</p>}
           </div>
-          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://huggingface.co/docs/hub/en/api" target="_blank" rel="noopener noreferrer">Hub API</a>. Không dùng token; request được gửi trực tiếp từ trình duyệt khách.</p>
+          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn dữ liệu: Hugging Face Hub API. Website tải dữ liệu công khai qua API trung gian có cache để khách không phải mở API gốc.</p>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
@@ -481,19 +574,35 @@ export default function PublicToolsPage() {
             <a href="https://github.com/topics/llm" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub LLM topic" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
           </div>
           <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Tối đa 8 repository theo chủ đề LLM, sắp xếp theo sao. Số sao không đồng nghĩa với an toàn hoặc chất lượng.</p>
-          <button type="button" onClick={() => getFeed('repos')} disabled={disabled('repos')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'repos' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'repos' ? 'Đang tải…' : repos.items.length ? 'Xem / cập nhật dữ liệu' : 'Tải dữ liệu từ API'}</button>
+          <button type="button" onClick={() => getFeed('repos')} disabled={disabled('repos')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSources.includes('repos') ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}{loadingSources.includes('repos') ? 'Đang lấy dữ liệu…' : repos.items.length ? 'Đã hiển thị ngay trên trang' : 'Thử lại nguồn dữ liệu'}</button>
           <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{repos.status}</p>
-          {repos.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(repos.savedAt).toLocaleString('vi-VN')} · cache 30 phút</p>}
+          {repos.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(repos.savedAt).toLocaleString('vi-VN')} · cache 5 phút</p>}
           <div className="space-y-2">
-            {repos.items.map((repo) => (
-              <a key={repo.full_name} href={repo.html_url} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-[var(--border-color)] p-3 hover:border-[var(--border-focus)] hover:bg-[var(--bg-surface-subtle)]">
-                <strong className="block break-all text-xs text-[var(--text-primary)]">{repo.full_name}</strong>
-                {repo.description && <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-[var(--text-secondary)]">{repo.description}</p>}
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]"><span className="inline-flex items-center gap-1"><Star size={10} /> {formatNumber(repo.stargazers_count)}</span>{repo.language && <span>{repo.language}</span>}{repo.updated_at && <span>Sửa {new Date(repo.updated_at).toLocaleDateString('vi-VN')}</span>}</div>
-              </a>
-            ))}
+            {visibleRepos.map((repo) => {
+              const itemKey = 'repo:' + repo.full_name;
+              const isExpanded = expandedItem === itemKey;
+              return (
+                <article key={repo.full_name} className="rounded-xl border border-[var(--border-color)] p-3 transition hover:border-[var(--border-focus)]">
+                  <button type="button" onClick={() => setExpandedItem(isExpanded ? null : itemKey)} aria-expanded={isExpanded} className="flex w-full items-start justify-between gap-3 text-left">
+                    <span className="min-w-0"><strong className="block break-all text-xs text-[var(--text-primary)]">{repo.full_name}</strong>{repo.description && <span className="mt-1 block line-clamp-2 text-[11px] leading-5 text-[var(--text-secondary)]">{repo.description}</span>}</span>
+                    {isExpanded ? <ChevronUp size={16} className="shrink-0 text-[var(--accent)]" /> : <ChevronDown size={16} className="shrink-0 text-[var(--text-muted)]" />}
+                  </button>
+                  <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]"><span className="inline-flex items-center gap-1"><Star size={10} /> {formatNumber(repo.stargazers_count)} sao</span><span>Fork: {formatNumber(repo.forks_count)}</span>{repo.language && <span>{repo.language}</span>}{repo.license?.spdx_id && repo.license.spdx_id !== 'NOASSERTION' ? <span>Giấy phép: {repo.license.spdx_id}</span> : null}{repo.archived ? <span className="text-amber-700 dark:text-amber-300">Đã lưu trữ</span> : null}</div>
+                  {isExpanded && <div className="mt-3 space-y-2 border-t border-[var(--border-color)] pt-3 text-xs leading-5 text-[var(--text-secondary)]">
+                    <p>{repo.description || 'Dự án chưa cung cấp mô tả.'}</p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-lg bg-[var(--bg-surface-subtle)] p-2"><strong className="block text-base text-[var(--text-primary)]">{formatNumber(repo.open_issues_count)}</strong><span className="text-[10px]">Issues mở</span></div><div className="rounded-lg bg-[var(--bg-surface-subtle)] p-2"><strong className="block text-base text-[var(--text-primary)]">{formatNumber(repo.forks_count)}</strong><span className="text-[10px]">Forks</span></div><div className="rounded-lg bg-[var(--bg-surface-subtle)] p-2"><strong className="block text-base text-[var(--text-primary)]">{repo.default_branch || '—'}</strong><span className="text-[10px]">Nhánh mặc định</span></div></div>
+                    <p><strong>Tạo:</strong> {repo.created_at ? new Date(repo.created_at).toLocaleDateString('vi-VN') : 'Không rõ'} · <strong>Cập nhật gần nhất:</strong> {repo.updated_at ? new Date(repo.updated_at).toLocaleDateString('vi-VN') : 'Không rõ'}</p>
+                    {repo.topics?.length ? <div className="flex flex-wrap gap-1.5">{repo.topics.map((topic) => <span key={topic} className="rounded-md border border-[var(--border-color)] px-2 py-1 text-[10px]">{topic}</span>)}</div> : null}
+                    {repo.license?.name && <p><strong>Giấy phép:</strong> {repo.license.name}</p>}
+                    <a href={repo.html_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline">Mở repository gốc <ExternalLink size={12} /></a>
+                  </div>}
+                </article>
+              );
+            })}
+            {!repos.items.length && <p className="rounded-xl border border-dashed border-[var(--border-color)] p-4 text-xs text-[var(--text-muted)]">{loadingSources.includes('repos') ? 'Đang nạp dự án mã nguồn mở…' : repos.status}</p>}
+            {repos.items.length > 0 && visibleRepos.length === 0 && <p className="text-xs text-[var(--text-muted)]">Không có dự án nào khớp bộ lọc hiện tại.</p>}
           </div>
-          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://docs.github.com/en/rest/search/search" target="_blank" rel="noopener noreferrer">GitHub Search API</a>. Không khóa/token; giới hạn tìm kiếm riêng của GitHub vẫn áp dụng theo IP khách.</p>
+          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn dữ liệu: GitHub Search API. Bản ghi đã được lọc và trình bày trực tiếp; liên kết repo gốc chỉ dành cho ai muốn kiểm tra thêm.</p>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
@@ -502,18 +611,29 @@ export default function PublicToolsPage() {
             <a href="https://news.ycombinator.com/" target="_blank" rel="noopener noreferrer" aria-label="Mở Hacker News" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
           </div>
           <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Các câu chuyện gần đây khớp từ khóa AI model trên Hacker News, tối đa 8 mục. Đây là luồng thảo luận, không phải tin tức đã được biên tập xác minh.</p>
-          <button type="button" onClick={() => getFeed('news')} disabled={disabled('news')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'news' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'news' ? 'Đang tải…' : news.items.length ? 'Xem / cập nhật dữ liệu' : 'Tải dữ liệu từ API'}</button>
+          <button type="button" onClick={() => getFeed('news')} disabled={disabled('news')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSources.includes('news') ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}{loadingSources.includes('news') ? 'Đang lấy dữ liệu…' : news.items.length ? 'Đã hiển thị ngay trên trang' : 'Thử lại nguồn dữ liệu'}</button>
           <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{news.status}</p>
-          {news.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(news.savedAt).toLocaleString('vi-VN')} · cache 30 phút</p>}
+          {news.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(news.savedAt).toLocaleString('vi-VN')} · cache 5 phút</p>}
           <div className="space-y-2">
-            {news.items.map((story) => (
-              <div key={story.objectID} className="rounded-xl border border-[var(--border-color)] p-3">
-                {story.url ? <a href={story.url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold leading-5 text-[var(--text-primary)] hover:text-[var(--accent)]">{story.title}</a> : <p className="text-xs font-semibold leading-5 text-[var(--text-primary)]">{story.title}</p>}
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]"><span>Điểm: {formatNumber(story.points)}</span><span>Bình luận: {formatNumber(story.num_comments)}</span>{story.created_at && <span>{new Date(story.created_at).toLocaleDateString('vi-VN')}</span>}</div>
-              </div>
-            ))}
+            {visibleNews.map((story) => {
+              const itemKey = 'news:' + story.objectID;
+              const isExpanded = expandedItem === itemKey;
+              return <article key={story.objectID} className="rounded-xl border border-[var(--border-color)] p-3">
+                <button type="button" onClick={() => setExpandedItem(isExpanded ? null : itemKey)} aria-expanded={isExpanded} className="flex w-full items-start justify-between gap-3 text-left">
+                  <span className="text-xs font-semibold leading-5 text-[var(--text-primary)]">{story.title}</span>
+                  {isExpanded ? <ChevronUp size={15} className="shrink-0 text-[var(--accent)]" /> : <ChevronDown size={15} className="shrink-0 text-[var(--text-muted)]" />}
+                </button>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]"><span>Điểm: {formatNumber(story.points)}</span><span>Bình luận: {formatNumber(story.num_comments)}</span>{story.author && <span>Tác giả: {story.author}</span>}{story.created_at && <span>{new Date(story.created_at).toLocaleDateString('vi-VN')}</span>}</div>
+                {isExpanded && <div className="mt-3 space-y-2 border-t border-[var(--border-color)] pt-3 text-xs leading-5 text-[var(--text-secondary)]">
+                  {story.story_text ? <p className="whitespace-pre-wrap break-words">{story.story_text}</p> : <p>Bản ghi nguồn hiện chỉ cung cấp tiêu đề và số liệu thảo luận.</p>}
+                  {story.url && <a href={story.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline">Mở bài viết hoặc thảo luận gốc <ExternalLink size={12} /></a>}
+                </div>}
+              </article>;
+            })}
+            {!news.items.length && <p className="rounded-xl border border-dashed border-[var(--border-color)] p-4 text-xs text-[var(--text-muted)]">{loadingSources.includes('news') ? 'Đang nạp bài viết…' : news.status}</p>}
+            {news.items.length > 0 && visibleNews.length === 0 && <p className="text-xs text-[var(--text-muted)]">Không có nội dung nào khớp bộ lọc hiện tại.</p>}
           </div>
-          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://hn.algolia.com/api" target="_blank" rel="noopener noreferrer">Hacker News Search API</a>; không proxy qua máy chủ site.</p>
+          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn dữ liệu: Hacker News Search API qua API trung gian của website.</p>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
@@ -522,14 +642,16 @@ export default function PublicToolsPage() {
             <a href="https://huggingface.co/datasets/cais/hle/leaderboard" target="_blank" rel="noopener noreferrer" aria-label="Mở HLE leaderboard gốc" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
           </div>
           <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Điểm và thứ hạng từ leaderboard công khai của Hugging Face. Tải tối đa 8 dòng; giữ nguyên nhãn xác minh và ghi chú tác vụ, không tự quy đổi điểm thành phần trăm.</p>
-          <button type="button" onClick={() => getFeed('hle')} disabled={disabled('hle')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'hle' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'hle' ? 'Đang tải…' : hle.items.length ? 'Xem / cập nhật leaderboard' : 'Tải điểm benchmark thật'}</button>
+          <button type="button" onClick={() => getFeed('hle')} disabled={disabled('hle')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSources.includes('hle') ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}{loadingSources.includes('hle') ? 'Đang lấy dữ liệu…' : hle.items.length ? 'Đã hiển thị ngay trên trang' : 'Thử lại nguồn dữ liệu'}</button>
           <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{hle.status}</p>
-          {hle.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(hle.savedAt).toLocaleString('vi-VN')} · cache cục bộ 30 phút</p>}
+          {hle.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(hle.savedAt).toLocaleString('vi-VN')} · cache cục bộ 5 phút</p>}
           <div className="space-y-2">
-            {hle.items.map((entry) => (
-              <div key={entry.modelId} className="rounded-xl border border-[var(--border-color)] p-3">
+            {visibleHle.map((entry) => {
+              const itemKey = 'hle:' + entry.modelId;
+              const isExpanded = expandedItem === itemKey;
+              return <div key={entry.modelId} className="rounded-xl border border-[var(--border-color)] p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0"><span className="text-[10px] font-mono text-[var(--accent)]">#{entry.rank}</span><a href={'https://huggingface.co/' + entry.modelId.split('/').map(encodeURIComponent).join('/')} target="_blank" rel="noopener noreferrer" className="mt-1 block break-all text-xs font-semibold text-[var(--text-primary)] hover:text-[var(--accent)]">{entry.modelId}</a></div>
+                  <div className="min-w-0"><span className="text-[10px] font-mono text-[var(--accent)]">Hạng #{entry.rank}</span><p className="mt-1 break-all text-xs font-semibold text-[var(--text-primary)]">{entry.modelId}</p></div>
                   <div className="shrink-0 text-right"><div className="text-xl font-bold tabular-nums text-[var(--text-primary)]">{new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(entry.value)}</div><div className="text-[9px] uppercase tracking-wide text-[var(--text-muted)]">Điểm HLE</div></div>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
@@ -537,8 +659,10 @@ export default function PublicToolsPage() {
                   {entry.numParameters && <span className="rounded-md border border-[var(--border-color)] px-2 py-1 text-[var(--text-muted)]">Tham số: {formatNumber(entry.numParameters)}</span>}
                 </div>
                 {entry.notes && <p className="mt-2 text-[10px] leading-5 text-[var(--text-secondary)]">Ghi chú benchmark: {entry.notes}</p>}
-              </div>
-            ))}
+                <button type="button" onClick={() => setExpandedItem(isExpanded ? null : itemKey)} aria-expanded={isExpanded} className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--accent)] hover:underline">{isExpanded ? 'Ẩn phương pháp' : 'Xem diễn giải'} {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</button>
+                {isExpanded && <div className="mt-2 space-y-1 border-t border-[var(--border-color)] pt-2 text-[10px] leading-5 text-[var(--text-secondary)]"><p>Điểm được giữ nguyên theo dữ liệu leaderboard gốc; không tự quy đổi thành phần trăm.</p><p>Đối chiếu nhãn xác minh và ghi chú trước khi xếp hạng các mô hình.</p><a href={'https://huggingface.co/' + entry.modelId.split('/').map(encodeURIComponent).join('/')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline">Model card gốc <ExternalLink size={12} /></a></div>}
+              </div>;
+            })}
           </div>
           <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://huggingface.co/docs/hub/leaderboard-data-guide" target="_blank" rel="noopener noreferrer">Hugging Face Leaderboard API</a>. Một số điểm do cộng đồng gửi lên; hãy xem nhãn xác minh và ghi chú trước khi so sánh.</p>
         </article>
@@ -549,23 +673,34 @@ export default function PublicToolsPage() {
             <a href="https://europepmc.org/" target="_blank" rel="noopener noreferrer" aria-label="Mở Europe PMC" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
           </div>
           <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Bài báo liên quan đến trí tuệ nhân tạo và mô hình ngôn ngữ từ Europe PMC. Đây là metadata thư mục; quyền đọc toàn văn phụ thuộc từng bài và giấy phép.</p>
-          <button type="button" onClick={() => getFeed('papers')} disabled={disabled('papers')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'papers' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'papers' ? 'Đang tải…' : papers.items.length ? 'Xem dữ liệu đã tải / kiểm tra cache' : 'Tải bài nghiên cứu'}</button>
+          <button type="button" onClick={() => getFeed('papers')} disabled={disabled('papers')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSources.includes('papers') ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}{loadingSources.includes('papers') ? 'Đang lấy dữ liệu…' : papers.items.length ? 'Đã hiển thị ngay trên trang' : 'Thử lại nguồn dữ liệu'}</button>
           <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{papers.status}</p>
-          {papers.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(papers.savedAt).toLocaleString('vi-VN')} · cache 30 phút</p>}
+          {papers.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(papers.savedAt).toLocaleString('vi-VN')} · cache 5 phút</p>}
           <div className="space-y-2">
-            {papers.items.map((paper) => (
-              <div key={paper.id} className="rounded-xl border border-[var(--border-color)] p-3">
-                <a href={paper.url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold leading-5 text-[var(--text-primary)] hover:text-[var(--accent)]">{paper.title}</a>
+            {visiblePapers.map((paper) => {
+              const itemKey = 'paper:' + paper.id;
+              const isExpanded = expandedItem === itemKey;
+              return <article key={paper.id} className="rounded-xl border border-[var(--border-color)] p-3">
+                <button type="button" onClick={() => setExpandedItem(isExpanded ? null : itemKey)} aria-expanded={isExpanded} className="flex w-full items-start justify-between gap-3 text-left">
+                  <span className="text-xs font-semibold leading-5 text-[var(--text-primary)]">{paper.title}</span>
+                  {isExpanded ? <ChevronUp size={15} className="shrink-0 text-[var(--accent)]" /> : <ChevronDown size={15} className="shrink-0 text-[var(--text-muted)]" />}
+                </button>
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]">
                   {paper.year && <span>{paper.year}</span>}{paper.journal && <span>{paper.journal}</span>}{paper.citedByCount !== undefined && <span>Trích dẫn: {formatNumber(paper.citedByCount)}</span>}
                   {paper.openAccess && <span className="rounded-md border border-emerald-500/30 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">Open Access</span>}
                 </div>
                 {paper.authors && <p className="mt-2 text-[10px] leading-5 text-[var(--text-secondary)]">{paper.authors}</p>}
-                {paper.doi && <p className="mt-1 text-[10px] text-[var(--text-muted)]">DOI: <a href={'https://doi.org/' + encodeURIComponent(paper.doi)} target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--accent)]">{paper.doi}</a></p>}
-              </div>
-            ))}
+                {isExpanded && <div className="mt-3 space-y-2 border-t border-[var(--border-color)] pt-3 text-xs leading-5 text-[var(--text-secondary)]">
+                  {paper.abstract ? <p className="whitespace-pre-wrap break-words">{paper.abstract}</p> : <p>Nguồn dữ liệu hiện không cung cấp tóm tắt cho bài này. Thông tin thư mục vẫn hiển thị phía trên.</p>}
+                  {paper.doi && <p>DOI: <a href={'https://doi.org/' + encodeURIComponent(paper.doi)} target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--accent)]">{paper.doi}</a></p>}
+                  <a href={paper.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline">Nguồn nghiên cứu gốc <ExternalLink size={12} /></a>
+                </div>}
+              </article>;
+            })}
+            {!papers.items.length && <p className="rounded-xl border border-dashed border-[var(--border-color)] p-4 text-xs text-[var(--text-muted)]">{loadingSources.includes('papers') ? 'Đang tải metadata và tóm tắt bài báo…' : papers.status}</p>}
+            {papers.items.length > 0 && visiblePapers.length === 0 && <p className="text-xs text-[var(--text-muted)]">Không có bài nghiên cứu nào khớp bộ lọc.</p>}
           </div>
-          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://europepmc.org/RestfulWebService" target="_blank" rel="noopener noreferrer">Europe PMC REST API</a>. Truy vấn chỉ đọc, không cần API key và gửi trực tiếp từ trình duyệt.</p>
+          <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn dữ liệu: Europe PMC REST API. Tóm tắt được hiển thị tại chỗ khi API cung cấp; toàn văn vẫn phụ thuộc giấy phép của bài báo.</p>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 sm:p-5">
@@ -574,21 +709,30 @@ export default function PublicToolsPage() {
             <a href="https://github.com/advisories" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub Security Advisories" className="rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] hover:text-[var(--accent)]"><ExternalLink size={14} /></a>
           </div>
           <p className="mb-4 text-xs leading-5 text-[var(--text-secondary)]">Cảnh báo lỗ hổng công khai đã được GitHub xem xét, hữu ích khi theo dõi thư viện và chuỗi cung ứng phần mềm. Không thay thế quy trình đánh giá rủi ro của dự án.</p>
-          <button type="button" onClick={() => getFeed('security')} disabled={disabled('security')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSource === 'security' ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}{loadingSource === 'security' ? 'Đang tải…' : security.items.length ? 'Xem dữ liệu đã tải / kiểm tra cache' : 'Tải cảnh báo bảo mật'}</button>
+          <button type="button" onClick={() => getFeed('security')} disabled={disabled('security')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">{loadingSources.includes('security') ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}{loadingSources.includes('security') ? 'Đang lấy dữ liệu…' : security.items.length ? 'Đã hiển thị ngay trên trang' : 'Thử lại nguồn dữ liệu'}</button>
           <p className="mt-3 min-h-10 text-[11px] leading-5 text-[var(--text-muted)]" aria-live="polite">{security.status}</p>
-          {security.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(security.savedAt).toLocaleString('vi-VN')} · cache 30 phút</p>}
+          {security.savedAt && <p className="mb-2 text-[10px] text-[var(--text-muted)]">Cập nhật {new Date(security.savedAt).toLocaleString('vi-VN')} · cache 5 phút</p>}
           <div className="space-y-2">
-            {security.items.map((advisory) => (
-              <div key={advisory.ghsaId} className="rounded-xl border border-[var(--border-color)] p-3">
+            {visibleSecurity.map((advisory) => {
+              const itemKey = 'security:' + advisory.ghsaId;
+              const isExpanded = expandedItem === itemKey;
+              return <article key={advisory.ghsaId} className="rounded-xl border border-[var(--border-color)] p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <a href={advisory.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 text-xs font-semibold leading-5 text-[var(--text-primary)] hover:text-[var(--accent)]">{advisory.summary}</a>
+                  <button type="button" onClick={() => setExpandedItem(isExpanded ? null : itemKey)} aria-expanded={isExpanded} className="min-w-0 flex-1 text-left text-xs font-semibold leading-5 text-[var(--text-primary)] hover:text-[var(--accent)]">{advisory.summary}</button>
                   <span className={advisory.severity === 'critical' || advisory.severity === 'high' ? 'rounded-md border border-red-500/30 px-2 py-1 text-[9px] font-semibold uppercase text-red-700 dark:text-red-300' : 'rounded-md border border-[var(--border-color)] px-2 py-1 text-[9px] font-semibold uppercase text-[var(--text-muted)]'}>{advisory.severity || 'unknown'}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]"><span>{advisory.ghsaId}</span>{advisory.cveId && <span>{advisory.cveId}</span>}{advisory.publishedAt && <span>{new Date(advisory.publishedAt).toLocaleDateString('vi-VN')}</span>}</div>
-                {advisory.description && <p className="mt-2 line-clamp-3 text-[10px] leading-5 text-[var(--text-secondary)]">{advisory.description}</p>}
                 {advisory.packageName && <p className="mt-2 text-[10px] text-[var(--text-muted)]">Gói: {advisory.packageName}{advisory.ecosystem ? ' · ' + advisory.ecosystem : ''}{advisory.patchedVersion ? ' · Bản sửa: ' + advisory.patchedVersion : ''}</p>}
-              </div>
-            ))}
+                {isExpanded && <div className="mt-3 space-y-2 border-t border-[var(--border-color)] pt-3 text-xs leading-5 text-[var(--text-secondary)]">
+                  <p className="whitespace-pre-wrap break-words">{advisory.description || 'Nguồn chỉ cung cấp tiêu đề cảnh báo và metadata cho bản ghi này.'}</p>
+                  <p><strong>Mã cảnh báo:</strong> {advisory.ghsaId}{advisory.cveId ? ' · ' + advisory.cveId : ''}</p>
+                  <p><strong>Mức độ:</strong> {advisory.severity || 'unknown'} · Hãy đánh giá trong ngữ cảnh phiên bản và cách sử dụng gói phụ thuộc.</p>
+                  <a href={advisory.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline">Xem cảnh báo gốc <ExternalLink size={12} /></a>
+                </div>}
+              </article>;
+            })}
+            {!security.items.length && <p className="rounded-xl border border-dashed border-[var(--border-color)] p-4 text-xs text-[var(--text-muted)]">{loadingSources.includes('security') ? 'Đang nạp cảnh báo bảo mật…' : security.status}</p>}
+            {security.items.length > 0 && visibleSecurity.length === 0 && <p className="text-xs text-[var(--text-muted)]">Không có cảnh báo nào khớp bộ lọc hiện tại.</p>}
           </div>
           <p className="mt-4 text-[10px] leading-5 text-[var(--text-muted)]">Nguồn: <a className="underline" href="https://docs.github.com/en/rest/security-advisories/global-advisories" target="_blank" rel="noopener noreferrer">GitHub Global Security Advisories API</a>. Chỉ hiển thị thông tin công khai mà nguồn cung cấp.</p>
         </article>
@@ -640,7 +784,7 @@ export default function PublicToolsPage() {
       </section>
 
       <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface-subtle)] p-4 sm:p-6">
-        <div className="flex items-start gap-3"><Info size={18} className="mt-0.5 shrink-0 text-[var(--accent)]" /><div><h2 className="text-sm font-bold">Minh bạch dữ liệu và quyền riêng tư</h2><p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">Trang không gọi feed API khi vừa mở. Sáu nguồn dữ liệu động chỉ chạy khi khách bấm yêu cầu, tối đa 8 mục mỗi nguồn, timeout 10 giây, hủy phản hồi trên 180 KiB và cache cục bộ 30 phút. Cooldown 45 giây áp dụng riêng cho từng nguồn để có thể khám phá nhiều lĩnh vực mà không gọi lặp liên tục. Lời gọi diễn ra trực tiếp từ trình duyệt, không dùng API key, không qua proxy của website và không tiêu tốn lượt gọi backend của website; nhà cung cấp vẫn áp dụng giới hạn riêng.</p><p className="mt-2 text-[10px] leading-5 text-[var(--text-muted)]">Dữ liệu hiển thị là metadata do nguồn bên ngoài cung cấp và có thể thay đổi hoặc có sai sót. Số sao, lượt tải, trích dẫn và mức độ nghiêm trọng không tự chứng minh chất lượng hay mức rủi ro toàn diện. Khi API lỗi, khách vẫn có thể mở trang nguồn chính thức. Danh bạ theo lĩnh vực là các liên kết tham khảo được tuyển chọn; hãy xem giấy phép, ngày cập nhật và phương pháp luận tại nguồn.</p></div></div>
+        <div className="flex items-start gap-3"><Info size={18} className="mt-0.5 shrink-0 text-[var(--accent)]" /><div><h2 className="text-sm font-bold">Minh bạch dữ liệu và quyền riêng tư</h2><p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">Trang tự động tải sáu luồng dữ liệu công khai qua API trung gian của website; mỗi nguồn trả về tối đa 8 mục (HLE được lấy nhiều dòng hơn rồi rút gọn khi chuẩn hóa), có giới hạn kích thước phản hồi, timeout, bộ lọc dữ liệu và cache phía máy chủ khoảng 5 phút. Dữ liệu được hiển thị trực tiếp trong thẻ có thể mở rộng và tìm kiếm tại chỗ. Khi một nhà cung cấp lỗi hoặc giới hạn lượt gọi, giao diện báo trạng thái và vẫn giữ dữ liệu cục bộ gần nhất nếu có.</p><p className="mt-2 text-[10px] leading-5 text-[var(--text-muted)]">Dữ liệu hiển thị là metadata do nguồn bên ngoài cung cấp và có thể thay đổi hoặc có sai sót. Số sao, lượt tải, trích dẫn và mức độ nghiêm trọng không tự chứng minh chất lượng hay mức rủi ro toàn diện. Khi API lỗi, khách vẫn có thể mở trang nguồn chính thức. Danh bạ theo lĩnh vực là các liên kết tham khảo được tuyển chọn; hãy xem giấy phép, ngày cập nhật và phương pháp luận tại nguồn.</p></div></div>
       </section>
     </div>
   );

@@ -6,6 +6,7 @@ export type EuropePmcPaper = {
   year?: string;
   doi?: string;
   citedByCount?: number;
+  abstract?: string;
   openAccess: boolean;
   url: string;
 };
@@ -63,6 +64,7 @@ export function normalizeEuropePmcPapers(input: unknown): EuropePmcPaper[] {
     const authors = boundedText(item.authorString, 180);
     const journal = boundedText(item.journalTitle, 140);
     const citedByCount = finiteNonNegative(item.citedByCount);
+    const abstract = boundedText(item.abstractText, 1_800);
     const openAccess = item.isOpenAccess === 'Y' || item.isOpenAccess === 'y' || item.isOpenAccess === true;
 
     return [{
@@ -73,6 +75,7 @@ export function normalizeEuropePmcPapers(input: unknown): EuropePmcPaper[] {
       ...(year && /^\d{4}$/.test(year) ? { year } : {}),
       ...(safeDoi ? { doi: safeDoi } : {}),
       ...(citedByCount !== undefined ? { citedByCount } : {}),
+      ...(abstract ? { abstract } : {}),
       openAccess,
       url: 'https://europepmc.org/article/' + encodeURIComponent(source) + '/' + encodeURIComponent(id),
     }];

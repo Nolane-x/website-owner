@@ -62,6 +62,33 @@ describe('Hugging Face HLE leaderboard normalization', () => {
     expect(row.notes).toHaveLength(180);
   });
 
+  it('normalizes the actual public API schema by deriving model identity from source.url', () => {
+    const result = normalizeHleLeaderboard([{
+      rank: 1,
+      filename: '.eval_results/DeepSeek-V4.1-Flash.yaml',
+      value: 63.9,
+      verified: false,
+      source: { url: 'https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash', name: 'DeepSeek V4.1 Flash' },
+    }]);
+
+    expect(result).toEqual([{
+      rank: 1,
+      modelId: 'deepseek-ai/DeepSeek-V4.1-Flash',
+      value: 63.9,
+      verified: false,
+    }]);
+  });
+
+  it.each([
+    'https://attacker.example/org/model',
+    'http://huggingface.co/org/model',
+    'https://huggingface.co/org/../evil',
+    'https://huggingface.co/org/model?redirect=evil',
+    'https://user@huggingface.co/org/model',
+  ])('does not trust an unsafe source URL: %s', (url) => {
+    expect(normalizeHleLeaderboard([{ rank: 1, value: 50, source: { url } }])).toEqual([]);
+  });
+
   it('rejects a response that is not an array', () => {
     expect(() => normalizeHleLeaderboard({ results: [] })).toThrow(/bảng xếp hạng hợp lệ/);
   });
