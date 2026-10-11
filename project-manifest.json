@@ -1652,7 +1652,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Classify wrapped PostgreSQL and socket error causes into a fixed secret-free readiness category, including postgres.js timeouts, authentication, TLS and connection capacity."
+      "shortDescription": "Safely traverse bounded ORM/driver/Node AggregateError chains, classify known PostgreSQL/network/TLS failures, and expose only an allow-listed SQLSTATE/driver code when a failure remains unclassified."
     },
     {
       "relativePath": "tests/database-readiness.test.ts",
@@ -1660,7 +1660,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Regression tests verify secret-free readiness output and classification of nested ORM/driver network/authentication errors and postgres.js connection timeouts."
+      "shortDescription": "Regression tests cover nested and aggregate driver failures, safe SQLSTATE disclosure, known failure categories, and the guarantee that raw error text and secrets never enter readiness responses."
     }
   ]
 }

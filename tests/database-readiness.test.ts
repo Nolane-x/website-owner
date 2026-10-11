@@ -45,7 +45,7 @@ describe('production readiness endpoint', () => {
     expect(body).not.toContain('private-password');
   });
 
-  it('keeps unknown driver failures generic and secret-free', async () => {
+  it('keeps unknown driver failures generic and secret-free when no safe code exists', async () => {
     vi.stubEnv('POSTGRES_URL', 'postgres://private-user:private-password@db.example/test');
     vi.mocked(getDb).mockReturnValue({
       execute: vi.fn().mockRejectedValue(new Error('private-password must never be returned')),
@@ -107,6 +107,24 @@ describe('production readiness endpoint', () => {
     expect(body).not.toContain('private-password');
   });
 
+  it('classifies network failures inside Node AggregateError errors arrays', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    const socketError = Object.assign(new Error('private endpoint details'), { code: 'ECONNRESET' });
+    const aggregate = new AggregateError([socketError], 'multiple socket connection attempts failed');
+    const wrappedError = Object.assign(new Error('database query failed'), { originalError: aggregate });
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(wrappedError),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'network_unreachable',
+    });
+    expect(body).not.toContain('private endpoint details');
+    expect(body).not.toContain('private-password');
+  });
+
   it('classifies PostgreSQL authentication errors inside a wrapped cause', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
     const postgresError = Object.assign(new Error('password authentication failed for hidden-user'), {
@@ -124,6 +142,28 @@ describe('production readiness endpoint', () => {
       databaseFailure: 'authentication_or_database_config',
     });
     expect(body).not.toContain('hidden-user');
+    expect(body).not.toContain('private-password');
+  });
+
+  it('returns a safe SQLSTATE code when the failure cannot be categorized', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    const postgresError = Object.assign(
+      new Error('secret query text and server-specific details'),
+      { code: 'XX000' },
+    );
+    const wrappedError = Object.assign(new Error('query execution failed'), { parent: postgresError });
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(wrappedError),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'query_failed',
+      databaseFailureCode: 'XX000',
+    });
+    expect(body).not.toContain('secret query text');
+    expect(body).not.toContain('server-specific details');
     expect(body).not.toContain('private-password');
   });
 
