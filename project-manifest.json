@@ -388,7 +388,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Use a supported PostgreSQL URL alias, disable prepared statements for transaction-pooler compatibility and keep production fail-closed instead of silently switching to ephemeral PGlite."
+      "shortDescription": "Reduce each Vercel serverless instance PostgreSQL pool from 10 to 4 connections and close idle postgres.js connections after 5 seconds while preserving transaction-pooler compatibility."
     },
     {
       "relativePath": "src/lib/db/schema.ts",
@@ -1652,7 +1652,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Safely traverse bounded ORM/driver/Node AggregateError chains, classify known PostgreSQL/network/TLS failures, and expose only an allow-listed SQLSTATE/driver code when a failure remains unclassified."
+      "shortDescription": "Classify only confirmed connection-limit SQLSTATEs as connection capacity and safely expose an allow-listed SQLSTATE for reliable production diagnosis."
     },
     {
       "relativePath": "tests/database-readiness.test.ts",
@@ -1660,7 +1660,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Regression tests cover nested and aggregate driver failures, safe SQLSTATE disclosure, known failure categories, and the guarantee that raw error text and secrets never enter readiness responses."
+      "shortDescription": "Regression tests distinguish PostgreSQL too-many-connections (53300) from other class-53 resource errors and ensure that only SQLSTATEs—not raw error details or credentials—are returned."
     }
   ]
 }

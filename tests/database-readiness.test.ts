@@ -140,8 +140,47 @@ describe('production readiness endpoint', () => {
     const body = await response.text();
     expect(JSON.parse(body)).toMatchObject({
       databaseFailure: 'authentication_or_database_config',
+      databaseFailureCode: '28P01',
     });
     expect(body).not.toContain('hidden-user');
+    expect(body).not.toContain('private-password');
+  });
+
+  it('classifies too-many-connections precisely and reports only its SQLSTATE', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    const databaseError = Object.assign(new Error('too many clients for the database'), {
+      code: '53300',
+    });
+    const wrappedError = Object.assign(new Error('query execution failed'), { parent: databaseError });
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(wrappedError),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    expect(response.status).toBe(503);
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'connection_capacity',
+      databaseFailureCode: '53300',
+    });
+    expect(body).not.toContain('too many clients');
+    expect(body).not.toContain('private-password');
+  });
+
+  it('does not mislabel every SQLSTATE class 53 error as a connection limit', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://private-user:private-password@db.example/test');
+    const databaseError = Object.assign(new Error('private server details'), { code: '53100' });
+    vi.mocked(getDb).mockReturnValue({
+      execute: vi.fn().mockRejectedValue(databaseError),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const response = await GET();
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      databaseFailure: 'query_failed',
+      databaseFailureCode: '53100',
+    });
+    expect(body).not.toContain('private server details');
     expect(body).not.toContain('private-password');
   });
 

@@ -123,7 +123,7 @@ function classifyDatabaseFailure(chain: ErrorLike[]): DatabaseFailureCategory {
     return 'permission_denied';
   }
 
-  if (codes.some((code) => code.startsWith('53')) ||
+  if (['53300', '53400'].some((code) => codes.includes(code)) ||
     /too many clients|remaining connection slots|connection limit exceeded/.test(messages)) {
     return 'connection_capacity';
   }
@@ -165,8 +165,8 @@ function response(
 
 /**
  * Readiness probe for deployment diagnostics. Responses only contain boolean
- * health indicators, a fixed category, and (when otherwise unknown) a safe
- * SQLSTATE/driver code. Never expose URLs, messages, queries or credentials.
+ * health indicators, a fixed category, and an allow-listed SQLSTATE when available.
+ * Never expose URLs, messages, queries or credentials.
  */
 export async function GET(): Promise<Response> {
   const configured = resolveDatabaseUrl().url !== null;
@@ -188,8 +188,9 @@ export async function GET(): Promise<Response> {
   } catch (error) {
     const chain = getErrorChain(error);
     const databaseFailure = classifyDatabaseFailure(chain);
-    const databaseFailureCode = databaseFailure === 'query_failed'
-      ? getSafeDatabaseFailureCode(chain)
+    const safeCode = getSafeDatabaseFailureCode(chain);
+    const databaseFailureCode = safeCode && /^[0-9A-Z]{5}$/.test(safeCode)
+      ? safeCode
       : undefined;
     // Log only allowlisted diagnostic information, never the raw error or URL.
     console.error('Database readiness probe failed', {

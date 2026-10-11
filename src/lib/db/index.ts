@@ -28,9 +28,12 @@ export function getDb() {
   if (databaseUrl) {
     // Kết nối PostgreSQL thật. prepare:false also supports transaction poolers
     // commonly used by managed PostgreSQL providers in serverless deployments.
+    // Keep per-instance pressure bounded on Vercel serverless. A smaller pool
+    // plus a short idle timeout reduces aggregate sessions across scaled-out
+    // function instances without disabling useful in-instance concurrency.
     postgresClient = postgres(databaseUrl, {
-      max: 10,
-      idle_timeout: 20,
+      max: 4,
+      idle_timeout: 5,
       connect_timeout: 10,
       prepare: false,
     });
