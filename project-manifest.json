@@ -10,7 +10,7 @@
     "styling": "Tailwind CSS v4 + Nolane UI (NUI) Editorial Bàn Giấy Design Tokens",
     "orm": "Drizzle ORM",
     "database": "Production requires a real PostgreSQL URL: DATABASE_URL first, then POSTGRES_URL, POSTGRES_PRISMA_URL, DATABASE_URL_UNPOOLED or POSTGRES_URL_NON_POOLING. Production never silently switches to ephemeral PGlite; postgres.js uses prepare:false for transaction-pooler compatibility.",
-    "nodeRuntime": "Node.js 24.x in local/CI/Vercel. isomorphic-dompurify 4.5.0 uses a jsdom 25.0.1 override and Next serverExternalPackages to avoid serverless ESM bundling failures.",
+    "nodeRuntime": "Node.js 24.x in local/CI/Vercel. isomorphic-dompurify and Vitest use the pinned jsdom 25.0.1 dependency; Next externalizes only the sanitizer to avoid the prior jsdom 30 ESM runtime failure.",
     "security": {
       "passwordHashing": "Bcrypt (12 rounds salt)",
       "sessionTokens": "256-bit cryptographically secure, SHA-256 hashed in DB",
@@ -212,7 +212,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Track the database fallback, secret-free diagnostic classification and public portal hardening."
+      "shortDescription": "Document compact list APIs, shared public site data, duplicate-payload removal and the sanitizer runtime fix."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -292,7 +292,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Xác thực input, kiểm tra ownership và xác minh record thật sau khi lưu."
+      "shortDescription": "Return lightweight draft metadata and load full body/outline only for a specific owner-scoped ID."
     },
     {
       "relativePath": "src/components/desktop/apps/ai-app.tsx",
@@ -316,7 +316,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Creator Studio dùng cùng catalog đa provider với AI Copilot, tải model list, cấu hình local/custom endpoint và xóa key khi đổi provider hoặc theo yêu cầu."
+      "shortDescription": "Fetch full draft content only when selected, retain body length in summary rows, and preserve edit/save behavior."
     },
     {
       "relativePath": "src/components/desktop/apps/files-app.tsx",
@@ -356,7 +356,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Nhận sự kiện khóa khẩn cấp từ Privacy Center."
+      "shortDescription": "Load profile avatar once per admin-shell mount, then use lightweight auth responses on route changes while preserving the displayed profile."
     },
     {
       "relativePath": "src/lib/ai/client.ts",
@@ -404,7 +404,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Types cho CalendarEvent và Habit."
+      "shortDescription": "Define the bounded contentPreview field for the compact admin content list."
     },
     {
       "relativePath": "tests/ai-client.test.ts",
@@ -540,7 +540,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Override stale transitive esbuild instances to the supported installed version while retaining the DOMPurify/jsdom runtime compatibility pin."
+      "shortDescription": "Pin jsdom 25.0.1 for test-runner compatibility and keep the sanitizer dependency aligned with the compatible version."
     },
     {
       "relativePath": "package-lock.json",
@@ -548,7 +548,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Resolve the dependency graph with esbuild 0.28.2 deduplicated across Vite and legacy Drizzle loader dependencies."
+      "shortDescription": "Regenerate dependency lockfile for the jsdom 25.0.1 compatible dependency tree."
     },
     {
       "relativePath": "next.config.ts",
@@ -556,7 +556,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply explicit no-store/no-cache and Cookie variation to authentication endpoints to prevent cached login/session responses."
+      "shortDescription": "Externalize isomorphic-dompurify while resolving its pinned CommonJS-compatible jsdom dependency without bundling the old jsdom 30 root package."
     },
     {
       "relativePath": ".github/workflows/ci.yml",
@@ -996,7 +996,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Only request the four projects and six resources actually shown on the homepage, avoiding excessive payload transfer."
+      "shortDescription": "Reuse shared public site profile and remove the duplicate homepage site API request."
     },
     {
       "relativePath": "src/app/(public)/tools/page.tsx",
@@ -1092,7 +1092,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Restrict public settings to three allow-listed keys, cap the displayed bio, and exclude oversized or data-URI avatars from public API payloads."
+      "shortDescription": "Avoid loading unused theme_public JSON on every public site request; load only navigation and access-protection settings."
     },
     {
       "relativePath": "src/app/api/public/projects/route.ts",
@@ -1100,7 +1100,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Use explicit projected metadata and card fields, truncate descriptions in SQL, and enforce bounded result count for public projects."
+      "shortDescription": "Avoid fetching project icons and other non-card fields from PostgreSQL for list views."
     },
     {
       "relativePath": "src/app/api/public/collections/route.ts",
@@ -1124,7 +1124,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply route-scoped request budget and no-store headers to public content detail reads."
+      "shortDescription": "Use explicit public detail projection and allowlisted metadata instead of selecting all content table columns."
     },
     {
       "relativePath": "src/app/api/public/pages/[slug]/route.ts",
@@ -1132,7 +1132,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply route-scoped budget and no-store headers to public page detail; rendered blocks remain bounded."
+      "shortDescription": "Select public page/block fields and serialize the content blocks only once."
     },
     {
       "relativePath": "src/app/api/public/collections/[slug]/route.ts",
@@ -1140,7 +1140,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Bound collection and item descriptions and fetch only card-level fields for collection contents instead of long bodies and embedded covers."
+      "shortDescription": "Return collection item summaries once rather than embedding the same item list in both collection and top-level response."
     },
     {
       "relativePath": "src/app/api/public/resources/route.ts",
@@ -1164,7 +1164,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Use compact list fields for unlisted collection entries while preserving complete content for explicitly shared detail items."
+      "shortDescription": "Use compact projections for unlisted items/pages/collections and avoid duplicated nested/top-level collection item payloads."
     },
     {
       "relativePath": "src/app/api/auth/login/route.ts",
@@ -1677,6 +1677,142 @@
       "version": "5.0.0",
       "status": "created",
       "shortDescription": "Regression tests prove concurrent initialization calls share one task and a failed task can be retried."
+    },
+    {
+      "relativePath": "src/app/(public)/about/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Reuse the public site profile already loaded by PublicShell to avoid duplicate site configuration requests."
+    },
+    {
+      "relativePath": "src/app/admin/content/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Render compact content previews and fetch full records only after the owner opens edit."
+    },
+    {
+      "relativePath": "src/app/admin/projects/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Render compact project rows and load full project content/images only when editing a selected project."
+    },
+    {
+      "relativePath": "src/app/api/admin/collections/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Project list fields and bound description length instead of loading cover images and share tokens for every collection."
+    },
+    {
+      "relativePath": "src/app/api/admin/content/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Project summary fields in SQL, bound preview work to 4 KB, allow safe URL cover references and omit bodies/data-image covers/unfiltered metadata."
+    },
+    {
+      "relativePath": "src/app/api/admin/pages/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Project page list fields and truncate descriptions instead of returning all cover images and share tokens."
+    },
+    {
+      "relativePath": "src/app/api/admin/projects/cockpit/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Remove unused projects query and limit task selection to health-score fields the client uses."
+    },
+    {
+      "relativePath": "src/components/layout/public-shell.tsx",
+      "fileName": "public-shell.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Expose loaded public site data through context to avoid redundant settings requests."
+    },
+    {
+      "relativePath": "tests/admin-content-summary.test.ts",
+      "fileName": "admin-content-summary.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Regression coverage for compact admin content list projections."
+    },
+    {
+      "relativePath": "tests/creator-list-summary.test.ts",
+      "fileName": "creator-list-summary.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Regression coverage ensuring Creator list rows omit full draft bodies while retaining owner-scoped detail loading."
+    },
+    {
+      "relativePath": "src/app/api/admin/settings/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Support comma-separated key-projected settings reads while preserving the full response for the dedicated settings page."
+    },
+    {
+      "relativePath": "tests/admin-settings-projection.test.ts",
+      "fileName": "admin-settings-projection.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Regression coverage for selective settings projection, full settings fallback and empty key filter."
+    },
+    {
+      "relativePath": "src/lib/auth/session.ts",
+      "fileName": "session.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Project session/profile columns to identity and session fields only; avoid re-reading avatar_url and bio on every protected API request."
+    },
+    {
+      "relativePath": "src/lib/auth/guard.ts",
+      "fileName": "guard.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Use the deliberately light authenticated profile/session types returned by session validation."
+    },
+    {
+      "relativePath": "src/app/api/auth/me/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Load avatar and bio only on the initial full profile request; support summary=1 for routine admin-shell auth checks."
+    },
+    {
+      "relativePath": "tests/session-query-projection.test.ts",
+      "fileName": "session-query-projection.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Regression test proving auth session validation does not select avatar, bio or unrelated session columns."
+    },
+    {
+      "relativePath": "tests/public-site-egress.test.ts",
+      "fileName": "public-site-egress.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Regression test proving large unused theme_public configuration is not fetched or returned by the public site endpoint."
     }
   ]
 }

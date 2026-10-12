@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { pages, contentBlocks } from '@/lib/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
@@ -29,7 +29,20 @@ export async function GET() {
     const db = getDb();
 
     const pageList = await db
-      .select()
+      .select({
+        id: pages.id,
+        profileId: pages.profileId,
+        title: pages.title,
+        slug: pages.slug,
+        description: sql<string | null>`left(${pages.description}, 320)`,
+        visibility: pages.visibility,
+        status: pages.status,
+        sortOrder: pages.sortOrder,
+        isFeatured: pages.isFeatured,
+        createdAt: pages.createdAt,
+        updatedAt: pages.updatedAt,
+        publishedAt: pages.publishedAt,
+      })
       .from(pages)
       .where(eq(pages.profileId, auth.profile.id))
       .orderBy(desc(pages.createdAt));

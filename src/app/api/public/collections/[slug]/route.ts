@@ -82,13 +82,14 @@ export async function GET(
       .map((item) => toPublicContentSummary(item as unknown as Record<string, unknown>))
       .filter((item): item is NonNullable<typeof item> => item !== null);
 
+    // Item summaries are emitted once in the top-level "items" array below.
     const publicCollection = toPublicCollection(
       colRaw as unknown as Record<string, unknown>,
-      rawItems as unknown as Array<Record<string, unknown>>,
+      [],
     );
 
     return NextResponse.json({
-      collection: publicCollection,
+      collection: publicCollection ? { ...publicCollection, items: [] } : null,
       items: publicItems,
     }, { headers: getPublicApiCacheHeaders(access) });
   } catch (error) {

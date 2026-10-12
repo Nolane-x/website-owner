@@ -8,6 +8,9 @@ import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { toPublicSiteSettings } from '@/lib/api/public-serializer';
 
+// PublicShell doesn't consume theme data; do not fetch potentially large private/public theme JSON on every visit.
+export const PUBLIC_SITE_SETTING_KEYS = ['public_navigation', 'public_access'] as const;
+
 export async function GET(req: Request) {
   try {
     const rateLimitResponse = checkPublicApiRateLimit(req, 'site', 30);
@@ -35,7 +38,7 @@ export async function GET(req: Request) {
 
     // 2. Lấy cài đặt giao diện công khai và cấu hình bảo vệ mật mã khách
     const settingList = profileList[0]?.id
-      ? await db.select({ key: settings.key, valueJson: settings.valueJson }).from(settings).where(and(eq(settings.profileId, profileList[0].id), inArray(settings.key, ['theme_public', 'public_navigation', 'public_access'])))
+      ? await db.select({ key: settings.key, valueJson: settings.valueJson }).from(settings).where(and(eq(settings.profileId, profileList[0].id), inArray(settings.key, PUBLIC_SITE_SETTING_KEYS)))
       : [];
     const settingsMap: Record<string, unknown> = {};
     for (const s of settingList) {
@@ -58,7 +61,6 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       profile: safeProfile,
-      theme: siteSettings.theme,
       navigation: safeNavigation,
       accessProtection: {
         requirePassword: publicAccess.requirePassword,

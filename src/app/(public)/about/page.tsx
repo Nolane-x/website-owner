@@ -1,27 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { usePublicSiteData } from '@/components/layout/public-shell';
 import Link from 'next/link';
 import { Sparkles, Shield, Code, Cpu, ExternalLink, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-interface PublicProfile {
-  displayName?: string;
-  bio?: string;
-  avatarUrl?: string;
-}
 
 export default function PublicAboutPage() {
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
-
-  useEffect(() => {
-    fetch('/api/public/site')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.profile) setProfile(data.profile);
-      })
-      .catch(console.error);
-  }, []);
+  const siteData = usePublicSiteData();
+  const profile = siteData?.profile ?? null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-12">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { pages, contentBlocks } from '@/lib/db/schema';
-import { eq, and, asc, isNull } from 'drizzle-orm';
+import { eq, and, asc, isNull, sql } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
@@ -25,7 +25,14 @@ export async function GET(
 
     // CHỈ QUERY TRANG CÔNG KHAI, ĐÃ XUẤT BẢN VÀ CHƯA BỊ XÓA (SOFT DELETE)
     const pageResult = await db
-      .select()
+      .select({
+        id: pages.id,
+        title: pages.title,
+        slug: pages.slug,
+        description: sql<string | null>`left(${pages.description}, 320)`,
+        isFeatured: pages.isFeatured,
+        publishedAt: pages.publishedAt,
+      })
       .from(pages)
       .where(
         and(
@@ -44,14 +51,20 @@ export async function GET(
     const pageRaw = pageResult[0];
 
     const rawBlocks = await db
-      .select()
+      .select({
+        id: contentBlocks.id,
+        blockType: contentBlocks.blockType,
+        sortOrder: contentBlocks.sortOrder,
+        contentJson: contentBlocks.contentJson,
+        settingsJson: contentBlocks.settingsJson,
+      })
       .from(contentBlocks)
       .where(eq(contentBlocks.pageId, pageRaw.id))
       .orderBy(asc(contentBlocks.sortOrder))
       .limit(200);
 
     const publicBlocks = rawBlocks.map((b) => toPublicBlock(b as unknown as Record<string, unknown>)).filter(Boolean);
-    const publicPage = toPublicPage(pageRaw as unknown as Record<string, unknown>, rawBlocks as unknown as Array<Record<string, unknown>>);
+    const publicPage = toPublicPage(pageRaw as unknown as Record<string, unknown>);
 
     return NextResponse.json({
       page: publicPage,

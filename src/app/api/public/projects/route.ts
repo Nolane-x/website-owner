@@ -35,7 +35,7 @@ export async function GET(req: Request) {
         title: contentItems.title,
         slug: contentItems.slug,
         description: sql<string | null>`left(${contentItems.description}, 320)`,
-        icon: contentItems.icon,
+
         category: contentItems.category,
         tags: contentItems.tags,
         sortOrder: contentItems.sortOrder,

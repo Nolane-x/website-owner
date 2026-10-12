@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getSessionFromCookies } from './session';
+import { getSessionFromCookies, type AuthenticatedProfile, type AuthenticatedSession } from './session';
 import { getDb, initializeDatabase } from '../db';
-import { profiles, sessions, settings } from '../db/schema';
+import { profiles, settings } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getGuestSessionFromCookies } from './guest-session';
 
 export type RequireOwnerResult =
-  | { authorized: true; profile: typeof profiles.$inferSelect; session: typeof sessions.$inferSelect; response?: never }
+  | { authorized: true; profile: AuthenticatedProfile; session: AuthenticatedSession; response?: never }
   | { authorized: false; response: NextResponse; profile?: never; session?: never };
 
 export async function requireOwner(): Promise<RequireOwnerResult> {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { createContext, useContext, useState, useEffect, Suspense } from 'react';
 import { PublicHeader } from '@/components/layout/public-header';
 import { PublicFooter } from '@/components/layout/public-footer';
 import { PublicSearchModal } from '@/components/ui/public-search-modal';
@@ -21,6 +21,12 @@ interface SiteData {
     passwordHint?: string;
     isUnlocked: boolean;
   };
+}
+
+const PublicSiteContext = createContext<SiteData | null>(null);
+
+export function usePublicSiteData(): SiteData | null {
+  return useContext(PublicSiteContext);
 }
 
 export function PublicShell({
@@ -66,6 +72,7 @@ export function PublicShell({
   }, [fetchSiteData]);
 
   return (
+    <PublicSiteContext.Provider value={siteData}>
     <div className="relative min-h-screen flex flex-col bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors selection:bg-[var(--accent)] selection:text-white overflow-x-hidden">
       <DecorativeMesh />
       {/* Public Header wrapped in Suspense for usePathname hook */}
@@ -113,5 +120,6 @@ export function PublicShell({
         onClose={() => setSearchOpen(false)}
       />
     </div>
+    </PublicSiteContext.Provider>
   );
 }

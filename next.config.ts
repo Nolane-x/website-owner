@@ -23,9 +23,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // jsdom must be loaded by the Node runtime, not bundled into a serverless function.
-  // package.json pins the isomorphic-dompurify jsdom dependency to the Vercel-compatible CJS line.
-  serverExternalPackages: ["isomorphic-dompurify", "jsdom"],
+  // Keep the sanitizer external while resolving its pinned compatible nested jsdom dependency.
+  serverExternalPackages: ["isomorphic-dompurify"],
   turbopack: {
     rules: {
       "*.css": {

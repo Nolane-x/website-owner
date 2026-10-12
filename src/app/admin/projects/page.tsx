@@ -28,6 +28,7 @@ export default function AdminProjectsPage() {
   const [isFeatured, setIsFeatured] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -77,20 +78,31 @@ export default function AdminProjectsPage() {
     setModalOpen(true);
   };
 
-  const openEditModal = (item: ContentItem) => {
-    setEditingItem(item);
-    setTitle(item.title);
-    setDescription(item.description || '');
-    setContent(item.content || '');
-    setCoverImage(item.coverImage || '');
-    setDemoUrl(typeof item.metadata?.demoUrl === 'string' ? item.metadata.demoUrl : '');
-    setGithubUrl(typeof item.metadata?.githubUrl === 'string' ? item.metadata.githubUrl : '');
-    setTags((item.tags || []).join(', '));
-    setVisibility(item.visibility);
-    setStatus(item.status);
-    setIsFeatured(item.isFeatured);
+  const openEditModal = async (summary: ContentItem) => {
+    setEditingItemId(summary.id);
     setError('');
-    setModalOpen(true);
+    try {
+      const response = await fetch('/api/admin/content/' + encodeURIComponent(summary.id), { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data.item) throw new Error(data.error || 'Cannot load full project.');
+      const item = data.item as ContentItem;
+      setEditingItem(item);
+      setTitle(item.title);
+      setDescription(item.description || '');
+      setContent(item.content || '');
+      setCoverImage(item.coverImage || '');
+      setDemoUrl(typeof item.metadata?.demoUrl === 'string' ? item.metadata.demoUrl : '');
+      setGithubUrl(typeof item.metadata?.githubUrl === 'string' ? item.metadata.githubUrl : '');
+      setTags((item.tags || []).join(', '));
+      setVisibility(item.visibility);
+      setStatus(item.status);
+      setIsFeatured(item.isFeatured);
+      setModalOpen(true);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Cannot load full project for editing.');
+    } finally {
+      setEditingItemId(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -226,7 +238,7 @@ export default function AdminProjectsPage() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => openEditModal(proj)}
+                      onClick={() => void openEditModal(proj)} disabled={editingItemId === proj.id}
                       title="Chỉnh sửa"
                     >
                       <Edit size={14} />

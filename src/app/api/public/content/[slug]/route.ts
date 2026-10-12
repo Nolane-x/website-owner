@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
@@ -25,7 +25,28 @@ export async function GET(
 
     // PUB-01 & PUB-11: CHỈ QUERY NỘI DUNG PUBLIC, PUBLISHED VÀ KHÔNG BỊ XÓA (NOT DELETED)
     const items = await db
-      .select()
+      .select({
+        id: contentItems.id,
+        title: contentItems.title,
+        slug: contentItems.slug,
+        type: contentItems.type,
+        description: sql<string | null>`left(${contentItems.description}, 320)`,
+        content: contentItems.content,
+        category: contentItems.category,
+        tags: contentItems.tags,
+        sortOrder: contentItems.sortOrder,
+        isFeatured: contentItems.isFeatured,
+        publishedAt: contentItems.publishedAt,
+        createdAt: contentItems.createdAt,
+        metadata: sql<Record<string, unknown>>`jsonb_strip_nulls(jsonb_build_object(
+          'readingTime', ${contentItems.metadata} -> 'readingTime',
+          'author', ${contentItems.metadata} -> 'author',
+          'license', ${contentItems.metadata} -> 'license',
+          'canonicalUrl', ${contentItems.metadata} -> 'canonicalUrl',
+          'summary', ${contentItems.metadata} -> 'summary',
+          'toc', ${contentItems.metadata} -> 'toc'
+        ))`,
+      })
       .from(contentItems)
       .where(
         and(

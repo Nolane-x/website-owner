@@ -20,8 +20,10 @@ interface ContentItem {
   channel: string;
   body: string;
   outline?: string | null;
+  bodyLength?: number;
   tagsJson: string[];
   scheduledAt?: string | null;
+  updatedAt?: string;
 }
 const STAGES: { key: Stage; label: string }[] = [
   { key: 'idea', label: 'Ý tưởng' },
@@ -166,13 +168,21 @@ export function CreatorStudioApp() {
     try {
       const response = await fetch('/api/admin/creator', { cache: 'no-store' });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Không tải được nội dung Creator Studio.');
+      if (!response.ok) throw new Error(data.error || 'Không tải được Creator Studio.');
       const nextItems = (data.items || []) as ContentItem[];
       setItems(nextItems);
-      setSelectedItem((previous) => nextItems.find((item) => item.id === previous?.id) ?? nextItems[0] ?? null);
+      const selectedSummary = nextItems[0] ?? null;
+      if (selectedSummary) {
+        const detailResponse = await fetch('/api/admin/creator?id=' + encodeURIComponent(selectedSummary.id), { cache: 'no-store' });
+        const detail = await detailResponse.json();
+        if (!detailResponse.ok || !detail.item) throw new Error(detail.error || 'Không tải được bản nháp đã chọn.');
+        setSelectedItem(detail.item as ContentItem);
+      } else {
+        setSelectedItem(null);
+      }
       setDirty(false);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Không tải được Creator Studio.');
+      setError(caught instanceof Error ? caught.message : 'Unable to load Creator Studio.');
     } finally {
       setLoading(false);
     }
@@ -193,15 +203,25 @@ export function CreatorStudioApp() {
     return (payload.item || item) as ContentItem;
   };
 
-  const chooseItem = (item: ContentItem) => {
-    if (dirty && selectedItem && selectedItem.id !== item.id) {
-      const confirmed = window.confirm('Bạn có thay đổi chưa lưu. Bỏ các thay đổi chưa lưu và chuyển sang nội dung khác?');
+  const chooseItem = async (summary: ContentItem) => {
+    if (dirty && selectedItem && selectedItem.id !== summary.id) {
+      const confirmed = window.confirm('Bạn có thay đổi chưa lưu. Bỏ các thay đổi đó và chuyển sang nội dung khác?');
       if (!confirmed) return;
     }
-    setSelectedItem(item);
-    setDirty(false);
+    setLoading(true);
     setError(null);
-    setNotice(null);
+    try {
+      const response = await fetch('/api/admin/creator?id=' + encodeURIComponent(summary.id), { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data.item) throw new Error(data.error || 'Không tải được bản nháp đã chọn.');
+      setSelectedItem(data.item as ContentItem);
+      setDirty(false);
+      setNotice(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không tải được bản nháp đã chọn.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateSelected = (updates: Partial<ContentItem>) => {
@@ -320,7 +340,9 @@ export function CreatorStudioApp() {
       };
       const saved = await persistItem(updated);
       setSelectedItem(saved);
-      setItems((previous) => previous.map((item) => item.id === saved.id ? saved : item));
+      setItems((previous) => previous.map((item) => item.id === saved.id
+        ? { ...item, title: saved.title, stage: saved.stage, channel: saved.channel, body: '', bodyLength: saved.body.length, tagsJson: saved.tagsJson, scheduledAt: saved.scheduledAt, updatedAt: saved.updatedAt }
+        : item));
       setDirty(false);
       setNotice(`Model ${aiModel} đã tạo dàn ý và dàn ý đã được lưu.`);
     } catch (caught) {
@@ -368,7 +390,7 @@ export function CreatorStudioApp() {
               <button key={item.id} onClick={() => chooseItem(item)} className={`w-full text-left p-3 rounded-xl border ${selectedItem?.id === item.id ? 'bg-amber-500/10 border-amber-500/40' : 'bg-stone-900/60 border-stone-800 hover:border-stone-700'}`}>
                 <div className="flex items-center justify-between gap-2"><span className="text-[10px] uppercase font-mono text-amber-300">{item.channel}</span><span className="text-[10px] text-stone-500">{item.stage}</span></div>
                 <div className="mt-1 text-xs font-semibold text-stone-100">{item.title}</div>
-                <div className="mt-1 text-[10px] text-stone-500">{item.body ? `${item.body.length} ký tự` : 'Chưa có nội dung'}</div>
+                <div className="mt-1 text-[10px] text-stone-500">{(item.bodyLength ?? item.body?.length ?? 0) > 0 ? (String(item.bodyLength ?? item.body.length) + ' ký tự') : 'Chưa có nội dung'}</div>
               </button>
             ))}
           </div>

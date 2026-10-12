@@ -45,9 +45,15 @@ export async function createSession(
   return { token, sessionId, expiresAt };
 }
 
+export type AuthenticatedProfile = Pick<typeof profiles.$inferSelect, 'id' | 'username' | 'displayName'>;
+export type AuthenticatedSession = Pick<
+  typeof sessions.$inferSelect,
+  'id' | 'profileId' | 'isTrusted' | 'expiresAt' | 'createdAt' | 'lastActiveAt' | 'isRevoked'
+>;
+
 export async function validateSessionToken(token: string): Promise<{
-  session: typeof sessions.$inferSelect;
-  profile: typeof profiles.$inferSelect;
+  session: AuthenticatedSession;
+  profile: AuthenticatedProfile;
 } | null> {
   if (!token) return null;
   await initializeDatabase();
@@ -56,10 +62,24 @@ export async function validateSessionToken(token: string): Promise<{
   const tokenHash = hashToken(token);
   const now = new Date();
 
+  // Most protected API routes only need profile.id. Never fetch avatar_url/bio
+  // as part of every session validation; avatar_url may contain a large data URL.
   const result = await db
     .select({
-      session: sessions,
-      profile: profiles,
+      session: {
+        id: sessions.id,
+        profileId: sessions.profileId,
+        isTrusted: sessions.isTrusted,
+        expiresAt: sessions.expiresAt,
+        createdAt: sessions.createdAt,
+        lastActiveAt: sessions.lastActiveAt,
+        isRevoked: sessions.isRevoked,
+      },
+      profile: {
+        id: profiles.id,
+        username: profiles.username,
+        displayName: profiles.displayName,
+      },
     })
     .from(sessions)
     .innerJoin(profiles, eq(sessions.profileId, profiles.id))

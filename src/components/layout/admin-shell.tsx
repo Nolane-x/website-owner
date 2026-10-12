@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { AdminSidebar, type NavItem } from '@/components/layout/admin-sidebar';
 import { AdminHeader, type AdminHeaderProfile } from '@/components/layout/admin-header';
@@ -35,6 +35,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const isAuthExemptPage = pathname === '/admin/login' || pathname === '/admin/bootstrap';
   const [loading, setLoading] = useState(!isAuthExemptPage);
   const [profile, setProfile] = useState<AdminHeaderProfile | null>(null);
+  const profileLoadedRef = useRef(false);
   const [navItems, setNavItems] = useState<NavItem[]>([]);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -70,18 +71,20 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     let isMounted = true;
     const checkAuth = async () => {
       try {
-        const res = await fetch('/api/auth/me');
+        const profileUrl = profileLoadedRef.current ? '/api/auth/me?summary=1' : '/api/auth/me';
+        const res = await fetch(profileUrl);
         if (!res.ok) {
           router.push('/admin/login');
           return;
         }
         const data = (await res.json()) as { profile?: AdminHeaderProfile };
         if (isMounted) {
-          setProfile(data.profile || null);
+          setProfile((current) => data.profile ? { ...current, ...data.profile } : null);
+          profileLoadedRef.current = true;
         }
 
         // Tải cấu hình navigation
-        const setRes = await fetch('/api/admin/settings');
+        const setRes = await fetch('/api/admin/settings?keys=nav_config');
         if (setRes.ok && isMounted) {
           const setData = (await setRes.json()) as { settings?: { nav_config?: { items?: NavItem[] } } };
           if (setData.settings?.nav_config?.items) {

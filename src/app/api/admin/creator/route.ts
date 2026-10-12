@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentPipelines } from '@/lib/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -10,19 +10,40 @@ import { assertValidOrigin } from '@/lib/security/origin-guard';
 const ALLOWED_STAGES = ['idea', 'brief', 'research', 'draft', 'review', 'approved', 'published'] as const;
 const ALLOWED_CHANNELS = ['blog', 'video', 'social', 'newsletter'] as const;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
   try {
     await initializeDatabase();
     const db = getDb();
-    const items = await db.select().from(contentPipelines)
+    const itemId = new URL(req.url).searchParams.get('id');
+
+    // Full drafts can be large. Fetch one full record only when it is actively selected.
+    if (itemId) {
+      const [item] = await db.select().from(contentPipelines).where(and(
+        eq(contentPipelines.id, itemId),
+        eq(contentPipelines.profileId, auth.profile.id),
+      )).limit(1);
+      if (!item) return NextResponse.json({ error: 'Không tìm thấy nội dung.' }, { status: 404 });
+      return NextResponse.json({ item });
+    }
+
+    const items = await db.select({
+      id: contentPipelines.id,
+      title: contentPipelines.title,
+      stage: contentPipelines.stage,
+      channel: contentPipelines.channel,
+      bodyLength: sql<number>`length(${contentPipelines.body})`,
+      tagsJson: contentPipelines.tagsJson,
+      scheduledAt: contentPipelines.scheduledAt,
+      updatedAt: contentPipelines.updatedAt,
+    }).from(contentPipelines)
       .where(eq(contentPipelines.profileId, auth.profile.id))
       .orderBy(desc(contentPipelines.updatedAt));
     return NextResponse.json({ items });
   } catch (error) {
-    console.error('Lỗi lấy danh sách Content Pipeline:', error);
-    return NextResponse.json({ error: 'Không thể tải pipeline sáng tạo.' }, { status: 500 });
+    console.error('Creator pipeline list failed:', error);
+    return NextResponse.json({ error: "Không thể tải pipeline sáng tạo." }, { status: 500 });
   }
 }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { settings, profiles } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import crypto from 'crypto';
 import { hashPassword } from '@/lib/auth/password';
 import { logSecurityEvent } from '@/lib/security/audit';
@@ -11,18 +11,28 @@ import { getClientIp } from '@/lib/security/rate-limit';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { revokeAllGuestSessions } from '@/lib/auth/guest-session';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const auth = await requireOwner();
   if (!auth.authorized) return auth.response;
 
   try {
     await initializeDatabase();
     const db = getDb();
+    const keysParam = new URL(req.url).searchParams.get('keys');
+    const requestedKeys = keysParam === null
+      ? null
+      : [...new Set(keysParam.split(',').map((key) => key.trim()).filter((key) => key.length > 0 && key.length <= 100))].slice(0, 20);
 
-    const allSettings = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.profileId, auth.profile.id));
+    // Shared shells may ask for a few settings only. Avoid repeatedly transferring
+    // every JSON setting (some can be large) on each admin-route navigation.
+    const allSettings = requestedKeys === null
+      ? await db.select().from(settings).where(eq(settings.profileId, auth.profile.id))
+      : requestedKeys.length === 0
+        ? []
+        : await db
+          .select({ key: settings.key, valueJson: settings.valueJson })
+          .from(settings)
+          .where(and(eq(settings.profileId, auth.profile.id), inArray(settings.key, requestedKeys)));
 
     const settingsMap: Record<string, unknown> = {};
     for (const s of allSettings) {
@@ -39,9 +49,14 @@ export async function GET() {
       };
     }
 
+    if (requestedKeys !== null) {
+      return NextResponse.json({ settings: settingsMap });
+    }
+
+    const [profile] = await db.select().from(profiles).where(eq(profiles.id, auth.profile.id)).limit(1);
     return NextResponse.json({
       settings: settingsMap,
-      profile: auth.profile,
+      profile: profile ?? auth.profile,
     });
   } catch (error) {
     console.error('Lỗi tải cài đặt:', error);

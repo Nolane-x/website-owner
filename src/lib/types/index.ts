@@ -47,6 +47,8 @@ export interface ContentItem {
   slug: string;
   type: ContentType;
   description?: string | null;
+  /** Bounded preview for list APIs; full content is loaded from the detail endpoint. */
+  contentPreview?: string | null;
   content?: string | null;
   coverImage?: string | null;
   icon?: string | null;

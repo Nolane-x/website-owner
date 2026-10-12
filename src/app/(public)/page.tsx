@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { usePublicSiteData } from '@/components/layout/public-shell';
 import Link from 'next/link';
 import { 
   ArrowRight, 
@@ -56,14 +57,10 @@ interface ContentItem {
   createdAt: string;
 }
 
-interface PublicProfile {
-  displayName?: string;
-  bio?: string;
-  avatarUrl?: string;
-}
 
 export default function PublicHomePage() {
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const siteData = usePublicSiteData();
+  const profile = siteData?.profile ?? null;
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [articles, setArticles] = useState<ContentItem[]>([]);
@@ -74,17 +71,13 @@ export default function PublicHomePage() {
     async function loadData() {
       try {
         setLoading(true);
-        const [siteRes, projRes, resRes, contRes] = await Promise.all([
-          fetch('/api/public/site'),
+        const [projRes, resRes, contRes] = await Promise.all([
           fetch('/api/public/projects?limit=4'),
           fetch('/api/public/resources?limit=6'),
           fetch('/api/public/content?limit=5'),
         ]);
 
-        if (siteRes.ok) {
-          const siteData = await siteRes.json();
-          setProfile(siteData.profile);
-        }
+
         if (projRes.ok) {
           const projData = await projRes.json();
           setProjects((projData.projects || []).slice(0, 4));

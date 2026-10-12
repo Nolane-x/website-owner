@@ -37,6 +37,7 @@ export default function AdminContentPage() {
   const [isPinned, setIsPinned] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const fetchItems = async () => {
     try {
@@ -84,18 +85,29 @@ export default function AdminContentPage() {
     setModalOpen(true);
   };
 
-  const openEditModal = (item: ContentItem) => {
-    setEditingItem(item);
-    setTitle(item.title);
-    setType(item.type);
-    setDescription(item.description || '');
-    setContent(item.content || '');
-    setTags((item.tags || []).join(', '));
-    setVisibility(item.visibility);
-    setStatus(item.status);
-    setIsPinned(item.isPinned);
+  const openEditModal = async (summary: ContentItem) => {
+    setEditingItemId(summary.id);
     setFormError('');
-    setModalOpen(true);
+    try {
+      const response = await fetch('/api/admin/content/' + encodeURIComponent(summary.id), { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data.item) throw new Error(data.error || 'Cannot load full content.');
+      const item = data.item as ContentItem;
+      setEditingItem(item);
+      setTitle(item.title);
+      setType(item.type);
+      setDescription(item.description || '');
+      setContent(item.content || '');
+      setTags((item.tags || []).join(', '));
+      setVisibility(item.visibility);
+      setStatus(item.status);
+      setIsPinned(item.isPinned);
+      setModalOpen(true);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Cannot load full content for editing.');
+    } finally {
+      setEditingItemId(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -285,7 +297,7 @@ export default function AdminContentPage() {
                   </div>
 
                   <p className="text-xs text-[var(--text-secondary)] line-clamp-1">
-                    {item.description || item.content || 'Chưa có mô tả'}
+                    {item.description || item.contentPreview || 'Chưa có mô tả'}
                   </p>
 
                   {item.tags && item.tags.length > 0 && (
@@ -317,7 +329,8 @@ export default function AdminContentPage() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => openEditModal(item)}
+                    onClick={() => void openEditModal(item)}
+                    disabled={editingItemId === item.id}
                     title="Chỉnh sửa"
                   >
                     <Edit size={15} />

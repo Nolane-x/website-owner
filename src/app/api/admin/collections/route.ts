@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { collections, collectionItems, contentItems } from '@/lib/db/schema';
-import { eq, desc, and, inArray } from 'drizzle-orm';
+import { eq, desc, and, inArray, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -26,7 +26,19 @@ export async function GET() {
     const db = getDb();
 
     const collectionList = await db
-      .select()
+      .select({
+        id: collections.id,
+        profileId: collections.profileId,
+        name: collections.name,
+        slug: collections.slug,
+        description: sql<string | null>`left(${collections.description}, 320)`,
+        visibility: collections.visibility,
+        status: collections.status,
+        isFeatured: collections.isFeatured,
+        sortOrder: collections.sortOrder,
+        createdAt: collections.createdAt,
+        updatedAt: collections.updatedAt,
+      })
       .from(collections)
       .where(eq(collections.profileId, auth.profile.id))
       .orderBy(desc(collections.createdAt));

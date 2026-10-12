@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { contentItems } from '@/lib/db/schema';
-import { eq, desc, and, like, or, isNull, isNotNull, type SQL } from 'drizzle-orm';
+import { eq, desc, and, like, or, isNull, isNotNull, sql, type SQL } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizeHtml, sanitizePlain } from '@/lib/security/sanitize';
 import { logSecurityEvent } from '@/lib/security/audit';
@@ -59,8 +59,51 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // List view needs only compact summaries. Full bodies, inline image data,
+    // opaque metadata and share tokens are fetched only from the detail endpoint.
     const items = await db
-      .select()
+      .select({
+        id: contentItems.id,
+        profileId: contentItems.profileId,
+        title: contentItems.title,
+        slug: contentItems.slug,
+        type: contentItems.type,
+        description: sql<string | null>`left(${contentItems.description}, 320)`,
+        contentPreview: sql<string | null>`CASE
+          WHEN ${contentItems.content} IS NULL THEN NULL
+          ELSE left(
+            regexp_replace(
+              regexp_replace(left(${contentItems.content}, 4096), 'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', '[embedded image]', 'g'),
+              '<[^>]+>', ' ', 'g'
+            ),
+            240
+          )
+        END`,
+        coverImage: sql<string | null>`CASE
+          WHEN length(${contentItems.coverImage}) <= 2048
+            AND (
+              ${contentItems.coverImage} LIKE 'https://%'
+              OR ${contentItems.coverImage} LIKE 'http://%'
+              OR (${contentItems.coverImage} LIKE '/%' AND ${contentItems.coverImage} NOT LIKE '//%')
+            )
+          THEN ${contentItems.coverImage}
+          ELSE NULL
+        END`,
+        visibility: contentItems.visibility,
+        status: contentItems.status,
+        tags: contentItems.tags,
+        category: contentItems.category,
+        metadata: sql<Record<string, unknown>>`jsonb_strip_nulls(jsonb_build_object(
+          'demoUrl', ${contentItems.metadata} -> 'demoUrl',
+          'githubUrl', ${contentItems.metadata} -> 'githubUrl'
+        ))`,
+        sortOrder: contentItems.sortOrder,
+        isFeatured: contentItems.isFeatured,
+        isPinned: contentItems.isPinned,
+        createdAt: contentItems.createdAt,
+        updatedAt: contentItems.updatedAt,
+        publishedAt: contentItems.publishedAt,
+      })
       .from(contentItems)
       .where(and(...conditions))
       .orderBy(desc(contentItems.isPinned), desc(contentItems.createdAt));
