@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
   try {
     await initializeDatabase();
     const db = getDb();
-    const keysParam = new URL(req.url).searchParams.get('keys');
+    const searchParams = new URL(req.url).searchParams;
+    const keysParam = searchParams.get('keys');
+    const includeProfile = searchParams.get('includeProfile') === '1';
     const requestedKeys = keysParam === null
       ? null
       : [...new Set(keysParam.split(',').map((key) => key.trim()).filter((key) => key.length > 0 && key.length <= 100))].slice(0, 20);
@@ -39,25 +41,79 @@ export async function GET(req: NextRequest) {
       settingsMap[s.key] = s.valueJson;
     }
 
-    // Không bao giờ gửi password hash của public access ra client!
-    if (settingsMap['public_access']) {
-      const pubAccess = (settingsMap['public_access'] || {}) as Record<string, unknown>;
-      settingsMap['public_access'] = {
-        ...pubAccess,
-        hasPasswordSet: Boolean(pubAccess.passwordHash),
-        passwordHash: undefined,
+    if (includeProfile && requestedKeys !== null) {
+      // The settings form needs only these presentation preferences. Some legacy
+      // theme JSON objects also contain base64 backgrounds, so never transfer those
+      // blobs through the settings screen's initial-load request.
+      const pick = (source: unknown, keys: readonly string[]) => {
+        if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
+        const value = source as Record<string, unknown>;
+        return Object.fromEntries(keys.filter((key) => value[key] !== undefined).map((key) => [key, value[key]]));
       };
+
+      for (const key of ['theme_private', 'theme']) {
+        if (settingsMap[key] !== undefined) {
+          settingsMap[key] = pick(settingsMap[key], [
+            'mode', 'accent', 'accentColor', 'fontFamily', 'fontSans', 'borderRadius', 'radius',
+          ]);
+        }
+      }
+
+      if (settingsMap.dashboard_layout !== undefined) {
+        const dashboard = settingsMap.dashboard_layout as Record<string, unknown>;
+        settingsMap.dashboard_layout = {
+          widgets: pick(dashboard?.widgets, ['stats', 'recentNotes', 'pinnedProjects', 'links', 'securityStatus']),
+        };
+      }
+
+      if (settingsMap.public_access !== undefined) {
+        const publicAccess = settingsMap.public_access as Record<string, unknown>;
+        settingsMap.public_access = {
+          requirePassword: Boolean(publicAccess?.requirePassword),
+          hasPasswordSet: Boolean(publicAccess?.passwordHash),
+          passwordHint: typeof publicAccess?.passwordHint === 'string' ? publicAccess.passwordHint.slice(0, 240) : '',
+          allowCopy: publicAccess?.allowCopy !== false,
+          showSearch: publicAccess?.showSearch !== false,
+          customHeaderTitle: typeof publicAccess?.customHeaderTitle === 'string'
+            ? publicAccess.customHeaderTitle.slice(0, 120)
+            : 'Personal Web OS',
+        };
+      }
+    } else {
+      // Never send the public guest password hash to any settings client.
+      if (settingsMap['public_access']) {
+        const pubAccess = (settingsMap['public_access'] || {}) as Record<string, unknown>;
+        settingsMap['public_access'] = {
+          ...pubAccess,
+          hasPasswordSet: Boolean(pubAccess.passwordHash),
+          passwordHash: undefined,
+        };
+      }
     }
 
-    if (requestedKeys !== null) {
-      return NextResponse.json({ settings: settingsMap });
+    if (requestedKeys !== null && !includeProfile) {
+      return NextResponse.json({ settings: settingsMap }, {
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+      });
     }
 
-    const [profile] = await db.select().from(profiles).where(eq(profiles.id, auth.profile.id)).limit(1);
+    // The settings screen asks only for the handful of keys it displays, plus
+    // the profile fields used by its form; it no longer transfers unrelated JSON settings.
+    const [profile] = await db
+      .select({
+        id: profiles.id,
+        username: profiles.username,
+        displayName: profiles.displayName,
+        bio: profiles.bio,
+        avatarUrl: profiles.avatarUrl,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, auth.profile.id))
+      .limit(1);
     return NextResponse.json({
       settings: settingsMap,
       profile: profile ?? auth.profile,
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store, max-age=0' } });
   } catch (error) {
     console.error('Lỗi tải cài đặt:', error);
     return NextResponse.json({ error: 'Không thể tải cài đặt.' }, { status: 500 });

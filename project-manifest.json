@@ -50,11 +50,11 @@
       "calendarHabits": "Owner-scoped database-backed events and habits with strict ISO/date/timezone and size validation, bounded pagination, and 64 KiB request caps. Habit completion uses per-day desired-state updates inside a row-locked transaction, retries are idempotent, and generic habit patches reject whole-array history replacement to prevent concurrent lost updates. UI supports incremental loading, all-day events, event editing, habit pause/resume and explicit request failures; external calendar sync remains unimplemented.",
       "backups": "JSON export with SHA-256 data integrity manifest and per-module counts across 27 groups including workflow run history; import preview verifies checksum without writes, warns for legacy backups and requires explicit acknowledgement before additive transactional restore. Import body bytes are capped while streaming at 4.5 MiB instead of buffering an unchecked request; checksum authenticity signatures and replacement-style restore remain unsupported.",
       "audioLab": "Procedural multi-layer Web Audio mixer with independent per-layer/master gain and spectrum from AnalyserNode. Per-layer, master and radio volumes are validated and saved locally; closing the app stops audio, while reopening restores volumes without surprise autoplay. External radio remains third-party and failures are surfaced.",
-      "wallpaperStudio": "Wallpaper library list uses a metadata-only query that excludes the multi-megabyte localDataUrl column and returns a local-asset flag. The selected uploaded image/video is loaded through the owner-scoped /api/admin/wallpapers/:id endpoint only when needed; favorite and metadata updates never select or resend the full asset. Active selection, filters and shader persist by ID without changing the chosen settings after reopen.",
+      "wallpaperStudio": "Wallpaper library list uses a metadata-only query that excludes the multi-megabyte localDataUrl column and returns a local-asset flag. The selected uploaded image/video is loaded through the owner-scoped /api/admin/wallpapers/:id endpoint only when needed. The active asset is cached in a single IndexedDB slot and duplicate concurrent loads share one request; Data URLs never enter localStorage. Failed media falls back to a built-in wallpaper, and choosing a built-in preset clears any custom override.",
       "htmlSanitization": "Shared DOMPurify HTML sanitizer is covered by regression tests; jsdom is pinned and externalized for the Node serverless runtime to prevent API route import crashes.",
       "publicTools": "Public /tools is an account-free Knowledge Portal and Open Data Lab, not a public calculator. Cooldown display updates once per second to reduce unnecessary full-page renders. The guest view does not render the owner scientific calculator or unit converter; calculator remains private at /admin/calculator and the authenticated owner desktop/Dock/Omni palette. Six on-demand direct-browser feeds provide up to 8 Hugging Face text-generation models, 8 GitHub topic:llm repositories, 8 recent Hacker News AI discussions, 8 HLE leaderboard rows, 8 Europe PMC research metadata records, and 8 GitHub Global Security Advisories. The portal also has a curated reference directory for AI/models/datasets, scientific research, cybersecurity, open-source software, public datasets/statistics, web standards, learning and technology communities. HLE entries preserve score/rank, notes and source verified flag; community/unverified rows are explicitly labelled and not certified. Feed calls use no website backend proxy or API credentials, a 10-second timeout, 180 KiB streamed response ceiling, a 45-second per-feed cooldown and 30-minute browser cache; no feed runs on page open. External metadata is normalized and trusted-source links are constructed from validated identifiers. Benchmark Hub links to Artificial Analysis, LMArena, Stanford HELM and Hugging Face without fabricating scores. Database-backed public GET APIs have per-process global/per-route budgets and always emit no-store across browser/CDN/Vercel because the guest-password gate is mutable. Unlisted-token responses are private/no-store. In-memory rate budgets are not distributed; provider-level WAF rules remain necessary for global DoS resistance.",
       "ownerSettingsPersistence": "Durable owner preferences survive closing/reopening their app windows: AI provider/model/endpoint, opt-in encrypted API keys and recent bounded chat history; calculator expression/result/angle mode/history; Audio Lab per-layer/master/radio volumes; Focus Studio goal, countdown remaining time, session count and ambience volumes; active wallpaper, validated filters and shader. Repeated successful saves emit no duplicate global status events. Timer/audio playback itself does not auto-resume. Ctrl/Cmd+K selects one command palette for the active desktop/workspace mode, and Escape closes the current palette; keyboard regression tests cover both paths.",
-      "productionReadiness": "GET /api/health/ready reports whether a PostgreSQL URL is configured, whether a read-only SELECT 1 succeeds, and a sanitized failure category. It never returns connection strings, credentials or raw driver errors."
+      "productionReadiness": "GET /api/health/ready reports PostgreSQL configuration, read-only SELECT 1 status and a sanitized failure category. Authentication session checks distinguish confirmed missing/expired sessions (401) from transient service outages (503); the private shell keeps private content locked and offers retry rather than misleadingly redirecting on database outage. The owner dashboard uses SQL aggregation and bounded summaries. The settings screen requests only required keys and fields, omitting legacy embedded background payloads from initial-load responses."
     }
   },
   "tables": [
@@ -104,6 +104,7 @@
     "admin": [
       "/api/admin/content",
       "/api/admin/content/[id]",
+      "/api/admin/dashboard",
       "/api/admin/pages",
       "/api/admin/pages/[id]",
       "/api/admin/pages/[id]/blocks",
@@ -1853,6 +1854,142 @@
       "version": "5.0.0",
       "status": "added",
       "shortDescription": "Regression tests for bounded scratchpad list payload and on-demand full note detail."
+    },
+    {
+      "relativePath": "src/lib/wallpaper/wallpaper-cache.ts",
+      "fileName": "wallpaper-cache.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Cache the active uploaded wallpaper in IndexedDB and coalesce duplicate fetches to reduce repeated database egress."
+    },
+    {
+      "relativePath": "tests/wallpaper-cache.test.ts",
+      "fileName": "wallpaper-cache.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Test duplicate request coalescing, selected-ID validation, failed-response handling and valid external URLs."
+    },
+    {
+      "relativePath": "src/lib/wallpaper/wallpaper-preferences.ts",
+      "fileName": "wallpaper-preferences.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Allow large assets in transient UI state while persisting only compact wallpaper-ID preferences, and safely clear custom selection."
+    },
+    {
+      "relativePath": "src/components/ui/wallpaper-engine.tsx",
+      "fileName": "wallpaper-engine.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Clear custom overrides for built-in presets, restore selected assets through the cache and fall back when custom media fails."
+    },
+    {
+      "relativePath": "src/components/wallpaper/custom-wallpaper-studio.tsx",
+      "fileName": "custom-wallpaper-studio.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Reuse the shared wallpaper resolver and locally cache newly uploaded assets to avoid duplicate multi-megabyte downloads."
+    },
+    {
+      "relativePath": "tests/wallpaper-matrix.test.ts",
+      "fileName": "wallpaper-matrix.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Cover compact preference persistence for large assets and clearing custom selection after choosing a preset."
+    },
+    {
+      "relativePath": "src/app/api/auth/me/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Distinguish a confirmed invalid session (401) from transient database outages (503) without exposing driver errors."
+    },
+    {
+      "relativePath": "src/components/layout/admin-shell.tsx",
+      "fileName": "admin-shell.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Avoid redundant auth/navigation checks on every route change and present safe retry UI during service outages."
+    },
+    {
+      "relativePath": "src/app/api/admin/dashboard/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Aggregate owner dashboard counts in SQL and return bounded recent-item, pinned-project and resource projections."
+    },
+    {
+      "relativePath": "src/app/admin/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Replace three dashboard requests with one bounded endpoint, cancel stale requests, and show retryable errors."
+    },
+    {
+      "relativePath": "tests/admin-dashboard-api.test.ts",
+      "fileName": "admin-dashboard-api.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Verify aggregate counts, soft-delete exclusion, summary-only payloads, URL filtering and owner authorization."
+    },
+    {
+      "relativePath": "src/app/api/admin/settings/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Project settings-screen keys and fields; omit legacy background blobs, password hashes and unrelated JSON from the form response."
+    },
+    {
+      "relativePath": "src/app/admin/settings/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Request only theme, public access and dashboard layout fields needed by settings controls."
+    },
+    {
+      "relativePath": "tests/admin-settings-projection.test.ts",
+      "fileName": "admin-settings-projection.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Verify settings projections exclude base64 backgrounds and unknown JSON while preserving legacy client compatibility."
+    },
+    {
+      "relativePath": "tests/settings-initial-load.test.tsx",
+      "fileName": "settings-initial-load.test.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Ensure initial settings fetch uses a compact explicit allowlist."
+    },
+    {
+      "relativePath": "tests/auth-me-outage.test.ts",
+      "fileName": "auth-me-outage.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Test safe no-store 503 responses for DB outages while preserving 401 semantics for invalid sessions."
+    },
+    {
+      "relativePath": "tests/wallpaper-engine-resilience.test.tsx",
+      "fileName": "wallpaper-engine-resilience.test.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Test that built-in backgrounds remain visible when selected custom media cannot load and choosing a preset removes the custom overlay."
     }
   ]
 }

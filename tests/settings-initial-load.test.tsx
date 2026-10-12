@@ -46,6 +46,6 @@ describe('settings page initial loading', () => {
     render(<SettingsPage />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(fetchMock).toHaveBeenCalledWith('/api/admin/settings');
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/settings?keys=theme_private,theme,public_access,dashboard_layout&includeProfile=1', { cache: 'no-store' });
   });
 });

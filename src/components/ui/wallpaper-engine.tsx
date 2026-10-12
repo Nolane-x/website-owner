@@ -5,7 +5,8 @@ import { Sparkles } from 'lucide-react';
 import { playSound } from '@/lib/audio/sound-fx';
 import { CanvasShaders, ShaderMode } from '@/components/wallpaper/canvas-shaders';
 import { generateCssFilterString } from '@/lib/wallpaper/wallpaper-utils';
-import { loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, normalizeWallpaperFilters } from '@/lib/wallpaper/wallpaper-preferences';
+import { clearActiveWallpaperPreference, loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, normalizeWallpaperFilters } from '@/lib/wallpaper/wallpaper-preferences';
+import { clearCachedActiveWallpaperAsset, resolveActiveWallpaperAsset } from '@/lib/wallpaper/wallpaper-cache';
 import { WallpaperFilters, WallpaperMediaType } from '@/lib/types';
 
 export type WallpaperStyle = 'default' | 'aurora' | 'matrix' | 'starfield' | 'obsidian';
@@ -34,6 +35,7 @@ export function WallpaperEngine() {
   const [activeCustom, setActiveCustom] = useState<ActiveWallpaper5State | null>(() => (
     loadActiveWallpaperPreference()
   ));
+  const [failedWallpaperKey, setFailedWallpaperKey] = useState<string | null>(null);
   const activeCustomRef = useRef(activeCustom);
 
   useEffect(() => {
@@ -43,9 +45,19 @@ export function WallpaperEngine() {
   useEffect(() => {
     const handleStyleChange = (e: Event) => {
       const customEvent = e as CustomEvent<WallpaperStyle>;
-      if (customEvent.detail) {
-        setStyle(customEvent.detail);
-        localStorage.setItem('webos_wallpaper_mode', customEvent.detail);
+      const nextStyle = customEvent.detail;
+      if (!nextStyle || !['default', 'aurora', 'matrix', 'starfield', 'obsidian'].includes(nextStyle)) return;
+
+      setStyle(nextStyle);
+      // A preset selection must remove the custom override; otherwise the preset
+      // state changes but the custom image remains layered above it.
+      setActiveCustom(null);
+      clearActiveWallpaperPreference();
+      void clearCachedActiveWallpaperAsset();
+      try {
+        localStorage.setItem('webos_wallpaper_mode', nextStyle);
+      } catch {
+        // The current tab still applies the requested preset if storage is blocked.
       }
     };
 
@@ -53,7 +65,10 @@ export function WallpaperEngine() {
       const customEvent = e as CustomEvent<ActiveWallpaper5State>;
       if (customEvent.detail) {
         const normalized = normalizeActiveWallpaperPreference(customEvent.detail);
-        if (normalized) setActiveCustom(normalized);
+        if (normalized) {
+          setFailedWallpaperKey(null);
+          setActiveCustom(normalized);
+        }
       }
     };
 
@@ -66,41 +81,43 @@ export function WallpaperEngine() {
   }, []);
 
   // Rehydrate only when the selected asset ID/URL changes, not whenever a
-  // slider adjusts filter values or the shader mode changes.
+  // slider adjusts filter values or the shader mode changes. The shared resolver
+  // coalesces duplicate requests and caches the selected asset in IndexedDB.
   const activeWallpaperId = activeCustom?.wallpaperId;
   const activeWallpaperUrl = activeCustom?.url;
   useEffect(() => {
     const wallpaperId = activeWallpaperId;
     if (!wallpaperId || activeWallpaperUrl) return;
     let cancelled = false;
-    void fetch('/api/admin/wallpapers/' + encodeURIComponent(wallpaperId), { cache: 'no-store' })
-      .then(async (response) => {
-        const payload = await response.json();
-        if (!response.ok || !payload.wallpaper) return;
-        const saved = payload.wallpaper as {
-          id: string; type: WallpaperMediaType; localDataUrl?: string | null; sourceUrl?: string | null; filtersJson?: WallpaperFilters;
-        };
-        const url = saved.localDataUrl || saved.sourceUrl || '';
+    void resolveActiveWallpaperAsset(wallpaperId)
+      .then((saved) => {
         const latest = activeCustomRef.current;
-        if (cancelled || saved.id !== wallpaperId || !url || !latest || latest.wallpaperId !== wallpaperId || latest.url) return;
+        if (cancelled || !latest || latest.wallpaperId !== wallpaperId || latest.url) return;
         // The latest filter/shader state wins even if the user adjusts it while
         // the asset request is in flight.
         const restored: ActiveWallpaper5State = normalizeActiveWallpaperPreference({
           ...latest,
-          type: saved.type,
-          url,
-          filters: normalizeWallpaperFilters(latest.filters ?? saved.filtersJson),
+          type: saved.type ?? latest.type,
+          url: saved.url,
+          filters: normalizeWallpaperFilters(latest.filters ?? saved.filters),
         }) ?? latest;
+        setFailedWallpaperKey(null);
         setActiveCustom(restored);
       })
       .catch(() => {
-        // The desktop keeps its built-in fallback when the saved asset cannot be loaded.
+        // Show the built-in preset instead of leaving an empty/black desktop.
+        // Keep the selected ID so the user can retry after the database recovers.
       });
     return () => { cancelled = true; };
   }, [activeWallpaperId, activeWallpaperUrl]);
 
-  // 1. If 5.0 Custom Wallpaper is configured
-  if (activeCustom && activeCustom.url) {
+  const activeCustomKey = activeCustom
+    ? `${activeCustom.wallpaperId ?? activeCustom.url.slice(0, 120)}:${activeCustom.type}`
+    : '';
+  const showCustomWallpaper = Boolean(activeCustom?.url) && failedWallpaperKey !== activeCustomKey;
+
+  // 1. If 5.0 Custom Wallpaper is configured and its media has not failed.
+  if (activeCustom && showCustomWallpaper) {
     const filterCss = generateCssFilterString(activeCustom.filters || {});
 
     return (
@@ -118,6 +135,7 @@ export function WallpaperEngine() {
               muted
               playsInline
               className="w-full h-full object-cover"
+              onError={() => setFailedWallpaperKey(activeCustomKey)}
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
@@ -125,6 +143,7 @@ export function WallpaperEngine() {
               src={activeCustom.url}
               alt="Desktop Wallpaper"
               className="w-full h-full object-cover"
+              onError={() => setFailedWallpaperKey(activeCustomKey)}
             />
           )}
         </div>
@@ -237,13 +256,24 @@ export function WallpaperSelectorModal({
 }) {
   const [current, setCurrent] = useState<WallpaperStyle>(() => {
     if (typeof window === 'undefined') return 'default';
-    return (localStorage.getItem('webos_wallpaper_mode') as WallpaperStyle) || 'default';
+    try {
+      const saved = localStorage.getItem('webos_wallpaper_mode');
+      return saved && ['default', 'aurora', 'matrix', 'starfield', 'obsidian'].includes(saved)
+        ? saved as WallpaperStyle
+        : 'default';
+    } catch {
+      return 'default';
+    }
   });
 
   const handleSelect = (s: WallpaperStyle) => {
     playSound('snap');
     setCurrent(s);
-    localStorage.setItem('webos_wallpaper_mode', s);
+    try {
+      localStorage.setItem('webos_wallpaper_mode', s);
+    } catch {
+      // Apply immediately even if persistence is disabled in the current browser.
+    }
     window.dispatchEvent(new CustomEvent('webos:set-wallpaper', { detail: s }));
   };
 

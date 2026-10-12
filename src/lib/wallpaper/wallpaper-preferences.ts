@@ -20,7 +20,9 @@ export const DEFAULT_WALLPAPER_FILTERS: WallpaperFilters = {
 
 const SHADER_MODES = new Set<ShaderMode>(['matrix', 'starfield', 'rain', 'waves', 'none']);
 const MEDIA_TYPES = new Set<WallpaperMediaType>(['image', 'video', 'shader']);
-const MAX_URL_LENGTH = 2_000_000;
+// Large uploaded assets may be hydrated from IndexedDB into in-memory UI state.
+// saveActiveWallpaperPreference strips Data URLs before they reach localStorage.
+const MAX_URL_LENGTH = 7 * 1024 * 1024;
 const MAX_ID_LENGTH = 160;
 
 function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -90,6 +92,21 @@ export function loadActiveWallpaperPreference(storage?: Storage | null): ActiveW
     return normalizeActiveWallpaperPreference(JSON.parse(raw));
   } catch {
     return null;
+  }
+}
+
+export function clearActiveWallpaperPreference(storage?: Storage | null): boolean {
+  let target = storage;
+  if (target === undefined) {
+    if (typeof window === 'undefined') return false;
+    try { target = window.localStorage; } catch { return false; }
+  }
+  if (!target) return false;
+  try {
+    target.removeItem('webos_active_wallpaper_v5');
+    return true;
+  } catch {
+    return false;
   }
 }
 

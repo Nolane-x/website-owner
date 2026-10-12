@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CustomWallpaper, WallpaperMediaType, WallpaperFilters } from '@/lib/types';
 import { ShaderMode } from './canvas-shaders';
 import { loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, saveActiveWallpaperPreference } from '@/lib/wallpaper/wallpaper-preferences';
+import { cacheActiveWallpaperAsset, resolveActiveWallpaperAsset } from '@/lib/wallpaper/wallpaper-cache';
 import {
   Image as ImageIcon,
   Video,
@@ -94,27 +95,22 @@ export function CustomWallpaperStudio() {
     });
   }, [fetchWallpapers]);
 
-  // Resolve just the selected uploaded asset. The library list is intentionally
-  // lightweight and no longer contains every full-size base64 image/video.
+  // Resolve only the selected asset. The desktop uses this same single-flight
+  // resolver, so mounting both surfaces never doubles a multi-megabyte transfer.
   useEffect(() => {
     const wallpaperId = currentWallpaper.wallpaperId;
     if (!wallpaperId || currentWallpaper.url) return;
     let cancelled = false;
-    void fetch('/api/admin/wallpapers/' + encodeURIComponent(wallpaperId), { cache: 'no-store' })
-      .then(async (response) => {
-        const payload = await response.json();
-        if (!response.ok || !payload.wallpaper) {
-          throw new Error(payload.error || 'Không tải được hình nền đang chọn.');
-        }
-        const saved = payload.wallpaper as CustomWallpaper;
-        const resolvedUrl = saved.localDataUrl || saved.sourceUrl || '';
-        if (cancelled || saved.id !== wallpaperId || !resolvedUrl) return;
+    void resolveActiveWallpaperAsset(wallpaperId)
+      .then((saved) => {
+        if (cancelled) return;
         const latest = currentWallpaperRef.current;
+        if (latest.wallpaperId !== wallpaperId || latest.url) return;
         const restored = normalizeActiveWallpaperPreference({
           ...latest,
-          type: saved.type,
-          url: resolvedUrl,
-          filters: latest.filters ?? saved.filtersJson,
+          type: saved.type ?? latest.type,
+          url: saved.url,
+          filters: latest.filters ?? saved.filters,
         });
         if (!restored) return;
         setCurrentWallpaper(restored);
@@ -200,6 +196,15 @@ export function CustomWallpaperStudio() {
       if (!res.ok) throw new Error(data.error || ('Không lưu được hình nền (HTTP ' + res.status + ').'));
       if (!data.wallpaper?.id) throw new Error('Server không trả về bản ghi hình nền đã xác minh.');
 
+      // Preserve the current asset locally so a future login does not need to
+      // download the same multi-megabyte Data URL from Neon again.
+      if (localDataUrl) {
+        await cacheActiveWallpaperAsset(data.wallpaper.id, localDataUrl, {
+          type: inputType,
+          filters: currentWallpaper.filters,
+        });
+      }
+
       saveActiveWallpaper({
         type: inputType,
         url: localDataUrl || sourceUrl || '',
@@ -264,25 +269,25 @@ export function CustomWallpaperStudio() {
     setStatusMessage(null);
     setApplyingWallpaperId(wp.id);
     try {
-      let asset = wp;
-      // Download the heavy payload only when this exact local file is selected.
-      if (!asset.localDataUrl && asset.hasLocalDataUrl) {
-        const response = await fetch('/api/admin/wallpapers/' + encodeURIComponent(wp.id), { cache: 'no-store' });
-        const payload = await response.json();
-        if (!response.ok || !payload.wallpaper) {
-          throw new Error(payload.error || 'Không tải được nội dung hình nền.');
-        }
-        asset = payload.wallpaper as CustomWallpaper;
+      let resolvedUrl = wp.localDataUrl || wp.sourceUrl || '';
+      let resolvedType = wp.type;
+      let resolvedFilters = wp.filtersJson;
+      // Fetch heavy content only when the selected library item needs it.
+      // The shared resolver checks IndexedDB first and coalesces in-flight reads.
+      if (!resolvedUrl && wp.hasLocalDataUrl) {
+        const resolved = await resolveActiveWallpaperAsset(wp.id);
+        resolvedUrl = resolved.url;
+        resolvedType = resolved.type ?? resolvedType;
+        resolvedFilters = resolved.filters ?? resolvedFilters;
       }
-      const url = asset.localDataUrl || asset.sourceUrl || wp.sourceUrl || '';
-      if (!url) throw new Error('Hình nền không có nội dung tải được hoặc URL nguồn.');
+      if (!resolvedUrl) throw new Error('Hình nền không có nội dung tải được hoặc URL nguồn.');
       saveActiveWallpaper({
-        type: asset.type,
-        url,
-        filters: asset.filtersJson || currentWallpaper.filters,
+        type: resolvedType,
+        url: resolvedUrl,
+        filters: resolvedFilters || currentWallpaper.filters,
         shader: currentWallpaper.shader,
-        wallpaperId: asset.id,
-      }, asset.id);
+        wallpaperId: wp.id,
+      }, wp.id);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Không thể áp dụng hình nền.');
     } finally {

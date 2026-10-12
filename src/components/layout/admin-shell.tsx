@@ -34,6 +34,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
   const isAuthExemptPage = pathname === '/admin/login' || pathname === '/admin/bootstrap';
   const [loading, setLoading] = useState(!isAuthExemptPage);
+  const [authUnavailable, setAuthUnavailable] = useState(false);
+  const [authRetryNonce, setAuthRetryNonce] = useState(0);
   const [profile, setProfile] = useState<AdminHeaderProfile | null>(null);
   const profileLoadedRef = useRef(false);
   const [navItems, setNavItems] = useState<NavItem[]>([]);
@@ -51,15 +53,17 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const [screensaverOpen, setScreensaverOpen] = useState(false);
 
   useEffect(() => {
-    // Default to dark theme for high comfort & zero glare across Web OS
-    const savedTheme = localStorage.getItem('webos_theme');
-    if (savedTheme === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else {
-      document.documentElement.classList.add('dark');
-      if (!savedTheme) {
-        localStorage.setItem('webos_theme', 'dark');
+    // Default to dark theme even when browser storage is unavailable.
+    try {
+      const savedTheme = localStorage.getItem('webos_theme');
+      if (savedTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+        if (!savedTheme) localStorage.setItem('webos_theme', 'dark');
       }
+    } catch {
+      document.documentElement.classList.add('dark');
     }
   }, []);
 
@@ -72,31 +76,43 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     const checkAuth = async () => {
       try {
         const profileUrl = profileLoadedRef.current ? '/api/auth/me?summary=1' : '/api/auth/me';
-        const res = await fetch(profileUrl);
+        const res = await fetch(profileUrl, { cache: 'no-store', credentials: 'same-origin' });
         if (!res.ok) {
-          router.push('/admin/login');
+          if (res.status === 401 || res.status === 403) {
+            router.replace('/admin/login');
+          } else if (isMounted) {
+            // A server/database outage is not the same as a logged-out session.
+            setAuthUnavailable(true);
+          }
           return;
         }
-        const data = (await res.json()) as { profile?: AdminHeaderProfile };
-        if (isMounted) {
-          setProfile((current) => data.profile ? { ...current, ...data.profile } : null);
-          profileLoadedRef.current = true;
-        }
 
-        // Tải cấu hình navigation
-        const setRes = await fetch('/api/admin/settings?keys=nav_config');
-        if (setRes.ok && isMounted) {
-          const setData = (await setRes.json()) as { settings?: { nav_config?: { items?: NavItem[] } } };
-          if (setData.settings?.nav_config?.items) {
-            setNavItems(setData.settings.nav_config.items);
+        const data = (await res.json()) as { profile?: AdminHeaderProfile };
+        if (!isMounted) return;
+        setProfile((current) => data.profile ? { ...current, ...data.profile } : null);
+        profileLoadedRef.current = true;
+        setAuthUnavailable(false);
+
+        // Load navigation once per authenticated shell, not on every route change.
+        // Navigation failure should not undo a successfully verified owner session.
+        try {
+          const setRes = await fetch('/api/admin/settings?keys=nav_config', {
+            cache: 'no-store',
+            credentials: 'same-origin',
+          });
+          if (setRes.ok && isMounted) {
+            const setData = (await setRes.json()) as { settings?: { nav_config?: { items?: NavItem[] } } };
+            if (setData.settings?.nav_config?.items) {
+              setNavItems(setData.settings.nav_config.items);
+            }
           }
+        } catch {
+          // The sidebar can fall back to its built-in navigation configuration.
         }
       } catch {
-        router.push('/admin/login');
+        if (isMounted) setAuthUnavailable(true);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -104,7 +120,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [pathname, isAuthExemptPage, router]);
+  }, [isAuthExemptPage, router, authRetryNonce]);
 
   // Lắng nghe phím tắt:
   // Panic Lock: Ctrl + Shift + L
@@ -142,6 +158,52 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-[var(--text-secondary)] font-medium">Đang khởi tạo Personal Web OS 5.0...</p>
         </div>
       </div>
+    );
+  }
+
+  if (authUnavailable) {
+    return (
+      <main className="relative grid min-h-screen place-items-center overflow-hidden bg-transparent px-5 py-10 text-stone-100">
+        {/* The wallpaper remains independent of DB-backed private content. IndexedDB can
+            restore the selected upload; otherwise WallpaperEngine renders its built-in fallback. */}
+        <WallpaperEngine />
+        <div aria-hidden="true" className="pointer-events-none absolute -left-32 -top-32 h-[60vh] w-[60vh] rounded-full bg-teal-600/20 blur-[100px]" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-40 -right-20 h-[65vh] w-[65vh] rounded-full bg-indigo-600/20 blur-[120px]" />
+        <section className="relative z-10 w-full max-w-lg space-y-5 rounded-2xl border border-white/10 bg-black/35 p-7 shadow-2xl backdrop-blur-xl" aria-live="polite">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-xl border border-amber-300/20 bg-amber-300/10 text-xl text-amber-200">!</span>
+            <div>
+              <h1 className="text-lg font-semibold">Không thể kết nối để xác minh phiên</h1>
+              <p className="mt-1 text-xs text-stone-400">Personal Web OS</p>
+            </div>
+          </div>
+          <p className="text-sm leading-6 text-stone-300">
+            Máy chủ dữ liệu đang tạm thời không phản hồi. Điều này chưa có nghĩa là bạn đã đăng xuất.
+            Vì quyền đăng nhập chưa thể được xác minh, khu vực riêng tư vẫn được khóa an toàn.
+            Hình nền mặc định được hiển thị độc lập với dữ liệu cá nhân.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthUnavailable(false);
+                setLoading(true);
+                setAuthRetryNonce((value) => value + 1);
+              }}
+              className="rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-300"
+            >
+              Thử kết nối lại
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace('/admin/login')}
+              className="rounded-lg border border-white/15 px-4 py-2.5 text-sm text-stone-200 transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-white/30"
+            >
+              Về trang đăng nhập
+            </button>
+          </div>
+        </section>
+      </main>
     );
   }
 

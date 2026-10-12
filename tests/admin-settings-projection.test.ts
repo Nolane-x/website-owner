@@ -64,14 +64,58 @@ describe('admin settings key projection', () => {
     expect(body).not.toHaveProperty('profile');
   });
 
-  it('keeps the full settings and profile response for the dedicated settings page', async () => {
+  it('keeps the full settings and profile response for legacy clients', async () => {
     const response = await GET(new NextRequest('https://site.example/api/admin/settings'));
     expect(response.status).toBe(200);
-    expect(routeMocks.projection).toBeUndefined();
     const body = await response.json();
     expect(body.settings).toHaveProperty('nav_config');
     expect(body.settings).toHaveProperty('theme_private');
     expect(body.profile).toHaveProperty('username', 'owner');
+  });
+
+  it('returns compact fields and profile data for the settings screen without large legacy backgrounds', async () => {
+    routeMocks.rows = [
+      {
+        key: 'theme_private',
+        valueJson: {
+          mode: 'dark',
+          accent: '#e66828',
+          fontFamily: 'serif',
+          backgroundImage: 'data:image/jpeg;base64,' + 'X'.repeat(200_000),
+        },
+      },
+      {
+        key: 'public_access',
+        valueJson: {
+          requirePassword: true,
+          passwordHash: 'must-not-leak',
+          passwordHint: 'ask the owner',
+          allowCopy: false,
+          showSearch: true,
+          customHeaderTitle: 'My site',
+          unrelatedLargeField: 'X'.repeat(100_000),
+        },
+      },
+      { key: 'dashboard_layout', valueJson: { widgets: { stats: true, unknownWidget: 'large-value' } } },
+    ];
+
+    const response = await GET(new NextRequest(
+      'https://site.example/api/admin/settings?keys=theme_private,public_access,dashboard_layout&includeProfile=1',
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.profile.username).toBe('owner');
+    expect(body.settings.theme_private).toEqual({ mode: 'dark', accent: '#e66828', fontFamily: 'serif' });
+    expect(body.settings.theme_private).not.toHaveProperty('backgroundImage');
+    expect(body.settings.public_access).toEqual({
+      requirePassword: true,
+      hasPasswordSet: true,
+      passwordHint: 'ask the owner',
+      allowCopy: false,
+      showSearch: true,
+      customHeaderTitle: 'My site',
+    });
+    expect(body.settings.dashboard_layout).toEqual({ widgets: { stats: true } });
   });
 
   it('does not accidentally fall back to all settings for an empty key filter', async () => {

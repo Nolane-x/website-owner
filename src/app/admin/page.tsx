@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   FileText,
@@ -16,120 +16,71 @@ import {
 import { Button } from '@/components/ui/button';
 import { VisibilityBadge, StatusBadge } from '@/components/ui/badge';
 import { ScratchpadDesk } from '@/components/ui/scratchpad-desk';
-import { ContentItem, Profile } from '@/lib/types';
+import { ContentItem } from '@/lib/types';
+
+const EMPTY_STATS = {
+  total: 0,
+  published: 0,
+  drafts: 0,
+  projects: 0,
+  resources: 0,
+  pages: 0,
+};
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    total: 0,
-    published: 0,
-    drafts: 0,
-    projects: 0,
-    resources: 0,
-    pages: 0,
-  });
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [recentItems, setRecentItems] = useState<ContentItem[]>([]);
   const [pinnedProjects, setPinnedProjects] = useState<ContentItem[]>([]);
   const [recentResources, setRecentResources] = useState<ContentItem[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<{ displayName?: string } | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+
     try {
       setLoading(true);
-      const [itemsRes, meRes, pagesRes] = await Promise.all([
-        fetch('/api/admin/content'),
-        fetch('/api/auth/me'),
-        fetch('/api/admin/pages'),
-      ]);
-
-      if (itemsRes.ok && meRes.ok) {
-        const itemsData = await itemsRes.json();
-        const meData = await meRes.json();
-        const pagesData = pagesRes.ok ? await pagesRes.json() : { pages: [] };
-
-        const all: ContentItem[] = itemsData.items || [];
-        setProfile(meData.profile);
-
-        const publishedCount = all.filter((i) => i.status === 'PUBLISHED').length;
-        const draftCount = all.filter((i) => i.status === 'DRAFT').length;
-        const projCount = all.filter((i) => i.type === 'project').length;
-        const resCount = all.filter((i) => i.type === 'resource' || i.type === 'link').length;
-        const pCount = pagesData.pages?.length || 0;
-
-        setStats({
-          total: all.length,
-          published: publishedCount,
-          drafts: draftCount,
-          projects: projCount,
-          resources: resCount,
-          pages: pCount,
-        });
-
-        setRecentItems(all.slice(0, 5));
-        setPinnedProjects(all.filter((i) => i.type === 'project' && (i.isPinned || i.isFeatured)).slice(0, 4));
-        setRecentResources(all.filter((i) => i.type === 'resource' || i.type === 'link').slice(0, 4));
+      setDashboardError(null);
+      const response = await fetch('/api/admin/dashboard', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        signal: controller.signal,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Không thể tải dữ liệu bảng điều khiển.');
       }
-    } catch (err) {
-      console.error('Lỗi tải dữ liệu bảng điều khiển:', err);
+
+      setStats(data.stats ?? EMPTY_STATS);
+      setProfile(data.profile ?? null);
+      setRecentItems(data.recentItems ?? []);
+      setPinnedProjects(data.pinnedProjects ?? []);
+      setRecentResources(data.recentResources ?? []);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      setDashboardError(error instanceof Error ? error.message : 'Không thể tải dữ liệu bảng điều khiển.');
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let ignore = false;
-    async function loadInitialData() {
-      try {
-        const [itemsRes, meRes, pagesRes] = await Promise.all([
-          fetch('/api/admin/content'),
-          fetch('/api/auth/me'),
-          fetch('/api/admin/pages'),
-        ]);
-
-        if (itemsRes.ok && meRes.ok && !ignore) {
-          const itemsData = await itemsRes.json();
-          const meData = await meRes.json();
-          const pagesData = pagesRes.ok ? await pagesRes.json() : { pages: [] };
-
-          const all: ContentItem[] = itemsData.items || [];
-          setProfile(meData.profile);
-
-          const publishedCount = all.filter((i) => i.status === 'PUBLISHED').length;
-          const draftCount = all.filter((i) => i.status === 'DRAFT').length;
-          const projCount = all.filter((i) => i.type === 'project').length;
-          const resCount = all.filter((i) => i.type === 'resource' || i.type === 'link').length;
-          const pCount = pagesData.pages?.length || 0;
-
-          setStats({
-            total: all.length,
-            published: publishedCount,
-            drafts: draftCount,
-            projects: projCount,
-            resources: resCount,
-            pages: pCount,
-          });
-
-          setRecentItems(all.slice(0, 5));
-          setPinnedProjects(all.filter((i) => i.type === 'project' && (i.isPinned || i.isFeatured)).slice(0, 4));
-          setRecentResources(all.filter((i) => i.type === 'resource' || i.type === 'link').slice(0, 4));
-        }
-      } catch (err) {
-        console.error('Lỗi tải dữ liệu bảng điều khiển:', err);
-      } finally {
-        if (!ignore) setLoading(false);
-      }
-    }
-    loadInitialData();
-
-    const handleRefresh = () => {
-      fetchDashboardData();
-    };
+    const handleRefresh = () => { void fetchDashboardData(); };
     window.addEventListener('webos:refresh-content', handleRefresh);
+    // Deferring avoids synchronously scheduling React state updates inside the effect.
+    void Promise.resolve().then(() => fetchDashboardData());
     return () => {
-      ignore = true;
       window.removeEventListener('webos:refresh-content', handleRefresh);
+      requestRef.current?.abort();
     };
-  }, []);
+  }, [fetchDashboardData]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -169,6 +120,15 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {dashboardError && (
+        <div role="alert" className="flex flex-col gap-3 rounded-xl border border-red-500/25 bg-red-500/5 p-4 text-sm text-[var(--text-primary)] sm:flex-row sm:items-center sm:justify-between">
+          <p>{dashboardError}</p>
+          <Button size="sm" variant="outline" onClick={() => { void fetchDashboardData(); }}>
+            Thử tải lại
+          </Button>
+        </div>
+      )}
 
       {/* Quick Statistics Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

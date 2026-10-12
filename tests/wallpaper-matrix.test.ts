@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, saveActiveWallpaperPreference } from '../src/lib/wallpaper/wallpaper-preferences';
+import { clearActiveWallpaperPreference, loadActiveWallpaperPreference, normalizeActiveWallpaperPreference, saveActiveWallpaperPreference } from '../src/lib/wallpaper/wallpaper-preferences';
 import {
   generateCssFilterString,
   getShaderDimensions,
@@ -82,5 +82,52 @@ describe('Wallpaper persistence and shader preferences', () => {
       shader: 'none',
       filters: { dim: 100, blur: 0, contrast: 120, saturation: 300, vignette: false, scanlines: true },
     });
+  });
+
+  it('rehydrates large uploaded assets in memory while keeping localStorage compact', () => {
+    const records = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => records.get(key) ?? null,
+      setItem: (key: string, value: string) => { records.set(key, value); },
+      removeItem: (key: string) => { records.delete(key); },
+      clear: () => records.clear(),
+      key: (index: number) => [...records.keys()][index] ?? null,
+      get length() { return records.size; },
+    } as Storage;
+    const largeDataUrl = 'data:image/png;base64,' + 'A'.repeat(2_100_000);
+    const selected = {
+      type: 'image' as const,
+      url: largeDataUrl,
+      wallpaperId: 'wp-large',
+      shader: 'none' as const,
+      filters: { dim: 20, blur: 0, contrast: 100, saturation: 100, vignette: false, scanlines: false },
+    };
+
+    expect(normalizeActiveWallpaperPreference(selected)?.url).toHaveLength(largeDataUrl.length);
+    expect(saveActiveWallpaperPreference(selected, storage)).toBe(true);
+    expect(JSON.parse(storage.getItem('webos_active_wallpaper_v5') || '{}').url).toBe('');
+  });
+
+  it('clears the persisted custom wallpaper when the user switches to a built-in preset', () => {
+    const records = new Map<string, string>([
+      ['webos_active_wallpaper_v5', JSON.stringify({
+        type: 'image',
+        url: '',
+        wallpaperId: 'wp-saved',
+        shader: 'waves',
+        filters: { dim: 20 },
+      })],
+    ]);
+    const storage = {
+      getItem: (key: string) => records.get(key) ?? null,
+      setItem: (key: string, value: string) => { records.set(key, value); },
+      removeItem: (key: string) => { records.delete(key); },
+      clear: () => records.clear(),
+      key: (index: number) => [...records.keys()][index] ?? null,
+      get length() { return records.size; },
+    } as Storage;
+
+    expect(clearActiveWallpaperPreference(storage)).toBe(true);
+    expect(loadActiveWallpaperPreference(storage)).toBeNull();
   });
 });

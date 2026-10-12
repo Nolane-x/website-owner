@@ -58,7 +58,7 @@ export default function SettingsPage() {
   const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/settings');
+      const res = await fetch('/api/admin/settings?keys=theme_private,theme,public_access,dashboard_layout&includeProfile=1', { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
         if (data.profile) {
