@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings as SettingsIcon, 
   User, 
@@ -55,7 +55,7 @@ export default function SettingsPage() {
   const [importJsonText, setImportJsonText] = useState('');
   const [importing, setImporting] = useState(false);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/admin/settings');
@@ -100,62 +100,11 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let ignore = false;
-    async function loadInitialSettings() {
-      try {
-        const res = await fetch('/api/admin/settings');
-        const data = await res.json();
-        if (res.ok && !ignore) {
-          if (data.profile) {
-            setDisplayName(data.profile.displayName || '');
-            setBio(data.profile.bio || '');
-            setAvatarUrl(data.profile.avatarUrl || '');
-          }
-
-          const s = data.settings || {};
-          const themeConfig = s.theme_private || s.theme || {};
-          if (themeConfig) {
-            setThemeMode(themeConfig.mode || 'dark');
-            setAccentColor(themeConfig.accent || themeConfig.accentColor || '#E66828');
-            setFontFamily(themeConfig.fontFamily || themeConfig.fontSans || 'serif');
-            setBorderRadius(themeConfig.borderRadius || themeConfig.radius || '0.625rem');
-          }
-
-          if (s.public_access) {
-            setRequireGuestPassword(Boolean(s.public_access.requirePassword));
-            setHasPasswordSet(Boolean(s.public_access.hasPasswordSet));
-            setGuestPasswordHint(s.public_access.passwordHint || '');
-            setAllowPublicCopy(s.public_access.allowCopy ?? true);
-            setShowPublicSearch(s.public_access.showSearch ?? true);
-            setSiteTitle(s.public_access.customHeaderTitle || 'Personal Web OS');
-          }
-
-          if (s.dashboard_layout) {
-            const w = s.dashboard_layout.widgets || {};
-            setWidgetStats(w.stats ?? true);
-            setWidgetRecentNotes(w.recentNotes ?? true);
-            setWidgetPinnedProjects(w.pinnedProjects ?? true);
-            setWidgetLinks(w.links ?? true);
-            setWidgetSecurityStatus(w.securityStatus ?? true);
-          }
-        }
-      } catch (e) {
-        console.error(e);
-        if (!ignore) {
-          setNotification({ type: 'error', text: 'Không thể tải thông tin cài đặt.' });
-        }
-      } finally {
-        if (!ignore) setLoading(false);
-      }
-    }
-    loadInitialSettings();
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    void Promise.resolve().then(() => fetchSettings());
+  }, [fetchSettings]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();

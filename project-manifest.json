@@ -1813,6 +1813,22 @@
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Regression test proving large unused theme_public configuration is not fetched or returned by the public site endpoint."
+    },
+    {
+      "relativePath": "src/app/admin/settings/page.tsx",
+      "fileName": "page.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Use one shared settings fetch callback on initial mount instead of duplicate concurrent requests; reuse the same loader after saving public settings."
+    },
+    {
+      "relativePath": "tests/settings-initial-load.test.tsx",
+      "fileName": "settings-initial-load.test.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Regression test proving the settings page downloads the full settings response only once on initial mount."
     }
   ]
 }
