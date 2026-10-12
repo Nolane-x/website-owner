@@ -19,32 +19,62 @@ export function NotesApp() {
   const [notes, setNotes] = useState<Scratchpad[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeNote, setActiveNote] = useState<Scratchpad | null>(null);
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [loadingActiveNote, setLoadingActiveNote] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const revisionRef = useRef(0);
+  const activeSelectionRef = useRef(0);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
+  const loadNote = useCallback(async (id: string) => {
+    const selection = ++activeSelectionRef.current;
+    setLoadingActiveNote(true);
+    setActiveNote(null);
+    try {
+      const response = await fetch('/api/admin/scratchpads/' + encodeURIComponent(id), { cache: 'no-store' });
+      const payload = await response.json().catch(() => ({})) as { scratchpad?: Scratchpad; error?: string };
+      if (!response.ok || !payload.scratchpad) throw new Error(payload.error || ('Unable to load note (HTTP ' + response.status + ').'));
+      if (selection === activeSelectionRef.current) {
+        setActiveNote(payload.scratchpad);
+        setErrorMessage(null);
+      }
+    } catch (caught) {
+      if (selection === activeSelectionRef.current) setErrorMessage(caught instanceof Error ? caught.message : 'Unable to load note.');
+    } finally {
+      if (selection === activeSelectionRef.current) setLoadingActiveNote(false);
+    }
+  }, []);
   const fetchNotes = useCallback(async () => {
     setLoading(true);
     setListError(null);
+    setErrorMessage(null);
     try {
       const response = await fetch('/api/admin/scratchpads', { cache: 'no-store' });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Không tải được ghi chú.');
+      if (!response.ok) throw new Error(payload.error || 'Unable to load notes.');
       const loaded = Array.isArray(payload.scratchpads) ? payload.scratchpads as Scratchpad[] : [];
       setNotes(loaded);
-      setActiveNote((current) => loaded.find((note) => note.id === current?.id) ?? loaded[0] ?? null);
       setSaveState('idle');
-      setErrorMessage(null);
+      const first = loaded[0];
+      if (first) {
+        setActiveNoteId(first.id);
+        await loadNote(first.id);
+      } else {
+        activeSelectionRef.current += 1;
+        setActiveNoteId(null);
+        setActiveNote(null);
+        setLoadingActiveNote(false);
+      }
     } catch (caught) {
-      setListError(caught instanceof Error ? caught.message : 'Không tải được ghi chú.');
+      setListError(caught instanceof Error ? caught.message : 'Unable to load notes.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadNote]);
 
   useEffect(() => {
     void Promise.resolve().then(() => { void fetchNotes(); });
@@ -52,12 +82,16 @@ export function NotesApp() {
 
   const updateNote = (id: string, updates: Partial<Scratchpad>) => {
     revisionRef.current += 1;
-    setNotes((previous) => previous.map((note) => note.id === id ? { ...note, ...updates } : note));
+    const { content, ...metadataUpdates } = updates;
+    setNotes((previous) => previous.map((note) => note.id === id ? {
+      ...note,
+      ...metadataUpdates,
+      ...(content !== undefined ? { content: content.slice(0, 180) } : {}),
+    } : note));
     setActiveNote((previous) => previous?.id === id ? { ...previous, ...updates } : previous);
     setSaveState('dirty');
     setErrorMessage(null);
   };
-
   // Debounced autosave. Writes are serialized so an older request cannot finish after a newer write.
   useEffect(() => {
     if (!activeNote || saveState !== 'dirty') return;
@@ -79,8 +113,8 @@ export function NotesApp() {
         const payload = await response.json().catch(() => ({})) as { scratchpad?: Scratchpad; error?: string };
         if (!response.ok) throw new Error(payload.error || `Lưu thất bại (HTTP ${response.status}).`);
         if (revision === revisionRef.current) {
-          const saved = payload.scratchpad ?? noteSnapshot;
-          setNotes((previous) => previous.map((note) => note.id === saved.id ? saved : note));
+          const saved = { ...noteSnapshot, ...(payload.scratchpad ?? {}) } as Scratchpad;
+          setNotes((previous) => previous.map((note) => note.id === saved.id ? { ...saved, content: saved.content.slice(0, 180) } : note));
           setActiveNote((previous) => previous?.id === saved.id ? saved : previous);
           setSaveState('saved');
           setErrorMessage(null);
@@ -111,8 +145,11 @@ export function NotesApp() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Không tạo được ghi chú.');
       const created = payload.scratchpad as Scratchpad;
-      setNotes((previous) => [created, ...previous]);
+      setNotes((previous) => [{ ...created, content: created.content.slice(0, 180) }, ...previous]);
       revisionRef.current += 1;
+      activeSelectionRef.current += 1;
+      setActiveNoteId(created.id);
+      setLoadingActiveNote(false);
       setActiveNote(created);
       setSaveState('saved');
       setErrorMessage(null);
@@ -126,7 +163,8 @@ export function NotesApp() {
   const handleDelete = async (id: string) => {
     const note = notes.find((item) => item.id === id);
     if (!window.confirm(`Xóa ghi chú “${note?.title || 'Không tiêu đề'}”? Thao tác này không thể hoàn tác tại đây.`)) return;
-    if (activeNote?.id === id) {
+    const wasActive = activeNoteId === id;
+    if (wasActive) {
       // Invalidate and cancel any pending debounce before deleting this note.
       revisionRef.current += 1;
       setSaveState('idle');
@@ -140,14 +178,19 @@ export function NotesApp() {
       if (!response.ok) throw new Error(payload.error || `Xóa thất bại (HTTP ${response.status}).`);
       const remaining = notes.filter((item) => item.id !== id);
       setNotes(remaining);
-      if (activeNote?.id === id) {
+      if (wasActive) {
         revisionRef.current += 1;
-        setActiveNote(remaining[0] ?? null);
+        activeSelectionRef.current += 1;
+        setActiveNote(null);
         setSaveState('idle');
+        const next = remaining[0] ?? null;
+        setActiveNoteId(next?.id ?? null);
+        if (next) void loadNote(next.id);
+        else setLoadingActiveNote(false);
       }
     } catch (caught) {
       setErrorMessage(caught instanceof Error ? caught.message : 'Không xóa được ghi chú.');
-      if (activeNote?.id === id) setSaveState('dirty');
+      if (wasActive) setSaveState('dirty');
     } finally {
       setDeletingId(null);
     }
@@ -177,16 +220,17 @@ export function NotesApp() {
             : notes.map((note) => {
               const colorDef = COLORS.find((color) => color.id === note.color) || COLORS[0];
               return <button key={note.id} onClick={() => {
-                if (activeNote?.id === note.id) return;
+                if (activeNoteId === note.id) return;
                 if (saveState === 'dirty' || saveState === 'saving' || saveState === 'error') {
                   const confirmed = window.confirm('Ghi chú hiện tại có thay đổi chưa được xác nhận là đã lưu. Chuyển đi có thể bỏ thay đổi chưa lưu. Tiếp tục?');
                   if (!confirmed) return;
                 }
                 revisionRef.current += 1;
-                setActiveNote(note);
+                setActiveNoteId(note.id);
                 setSaveState('idle');
                 setErrorMessage(null);
-              }} className={`w-full text-left p-2 rounded-lg border transition flex items-start justify-between gap-2 ${colorDef.bg} ${colorDef.border} ${activeNote?.id === note.id ? 'ring-1 ring-white/30' : 'opacity-85 hover:opacity-100'}`}>
+                void loadNote(note.id);
+              }} className={`w-full text-left p-2 rounded-lg border transition flex items-start justify-between gap-2 ${colorDef.bg} ${colorDef.border} ${activeNoteId === note.id ? 'ring-1 ring-white/30' : 'opacity-85 hover:opacity-100'}`}>
                 <div className="truncate flex-1 min-w-0">
                   <p className={`font-semibold truncate ${colorDef.text}`}>{note.title || 'Không tiêu đề'}</p>
                   <p className="text-[10px] text-stone-400 truncate mt-0.5">{note.content || 'Trống…'}</p>
@@ -218,7 +262,7 @@ export function NotesApp() {
             <textarea value={activeNote.content || ''} onChange={(event) => updateNote(activeNote.id, { content: event.target.value })} placeholder="Viết ghi chú tại đây…" className="flex-1 min-h-[120px] bg-transparent resize-none focus:outline-hidden text-stone-200 leading-relaxed text-sm select-text" />
             <div className="pt-2 text-[10px] text-stone-600">Nếu server trả lỗi, trạng thái sẽ chuyển sang “Lưu thất bại”; nội dung đang sửa vẫn còn trên màn hình để bạn thử lưu lại bằng cách chỉnh sửa thêm.</div>
           </div>
-        ) : <div className="flex-1 flex flex-col items-center justify-center text-stone-500"><p>{loading ? 'Đang tải…' : 'Chọn một ghi chú hoặc tạo mới để bắt đầu viết.'}</p></div>}
+        ) : <div className="flex-1 flex flex-col items-center justify-center text-stone-500"><p>{loading ? 'Loading notes...' : loadingActiveNote ? 'Opening note...' : 'Select a note or create one to begin.'}</p></div>}
       </main>
     </div>
   );

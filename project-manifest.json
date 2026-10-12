@@ -332,7 +332,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Autosave debounce, tuần tự hóa write, báo lỗi HTTP và cảnh báo khi bỏ thay đổi chưa xác nhận."
+      "shortDescription": "Fetch full note details by ID on selection; retain bounded sidebar previews and keep autosave state complete without refetching all bodies."
     },
     {
       "relativePath": "src/components/desktop/apps/privacy-app.tsx",
@@ -1829,6 +1829,30 @@
       "version": "5.0.0",
       "status": "added",
       "shortDescription": "Regression test proving the settings page downloads the full settings response only once on initial mount."
+    },
+    {
+      "relativePath": "src/app/api/admin/scratchpads/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Return sidebar metadata and a SQL-bounded 180-character note preview instead of transferring every full scratchpad body."
+    },
+    {
+      "relativePath": "src/app/api/admin/scratchpads/[id]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Load full note content only for the selected owner-scoped ID and return compact metadata/preview after autosave."
+    },
+    {
+      "relativePath": "tests/scratchpad-payload.test.ts",
+      "fileName": "scratchpad-payload.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Regression tests for bounded scratchpad list payload and on-demand full note detail."
     }
   ]
 }

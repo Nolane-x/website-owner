@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { scratchpads } from '@/lib/db/schema';
-import { eq, desc, asc } from 'drizzle-orm';
+import { eq, desc, asc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
@@ -16,8 +16,19 @@ export async function GET() {
     await initializeDatabase();
     const db = getDb();
 
+    // Note lists show a short preview. Never transfer every full note body merely
+    // to render the sidebar; the selected note is loaded through the ID detail route.
     const items = await db
-      .select()
+      .select({
+        id: scratchpads.id,
+        title: scratchpads.title,
+        content: sql<string>`left(${scratchpads.content}, 180)`,
+        color: scratchpads.color,
+        isPinned: scratchpads.isPinned,
+        sortOrder: scratchpads.sortOrder,
+        createdAt: scratchpads.createdAt,
+        updatedAt: scratchpads.updatedAt,
+      })
       .from(scratchpads)
       .where(eq(scratchpads.profileId, auth.profile.id))
       .orderBy(desc(scratchpads.isPinned), asc(scratchpads.sortOrder), desc(scratchpads.createdAt));

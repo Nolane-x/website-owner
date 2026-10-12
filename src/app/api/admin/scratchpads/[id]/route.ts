@@ -2,11 +2,38 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { getDb, initializeDatabase } from '@/lib/db';
 import { scratchpads } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { sanitizePlain } from '@/lib/security/sanitize';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { ScratchpadColor } from '@/lib/types';
 
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireOwner();
+  if (!auth.authorized) return auth.response;
+
+  try {
+    const { id } = await params;
+    await initializeDatabase();
+    const db = getDb();
+    const [scratchpad] = await db
+      .select()
+      .from(scratchpads)
+      .where(and(eq(scratchpads.id, id), eq(scratchpads.profileId, auth.profile.id)))
+      .limit(1);
+
+    if (!scratchpad) {
+      return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ scratchpad });
+  } catch (error) {
+    console.error('Failed to load scratchpad details:', error);
+    return NextResponse.json({ error: 'Unable to load note.' }, { status: 500 });
+  }
+}
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,9 +50,10 @@ export async function PUT(
     const body = await req.json();
 
     const [existing] = await db
-      .select()
+      .select({ id: scratchpads.id })
       .from(scratchpads)
-      .where(and(eq(scratchpads.id, id), eq(scratchpads.profileId, auth.profile.id)));
+      .where(and(eq(scratchpads.id, id), eq(scratchpads.profileId, auth.profile.id)))
+      .limit(1);
 
     if (!existing) {
       return NextResponse.json({ error: 'Không tìm thấy ghi chú nháp.' }, { status: 404 });
@@ -47,9 +75,23 @@ export async function PUT(
       .where(and(eq(scratchpads.id, id), eq(scratchpads.profileId, auth.profile.id)));
 
     const [updated] = await db
-      .select()
+      .select({
+        id: scratchpads.id,
+        title: scratchpads.title,
+        contentPreview: sql<string>`left(${scratchpads.content}, 180)`,
+        color: scratchpads.color,
+        isPinned: scratchpads.isPinned,
+        sortOrder: scratchpads.sortOrder,
+        createdAt: scratchpads.createdAt,
+        updatedAt: scratchpads.updatedAt,
+      })
       .from(scratchpads)
-      .where(and(eq(scratchpads.id, id), eq(scratchpads.profileId, auth.profile.id)));
+      .where(and(eq(scratchpads.id, id), eq(scratchpads.profileId, auth.profile.id)))
+      .limit(1);
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Note not found.' }, { status: 404 });
+    }
 
     return NextResponse.json({ scratchpad: updated });
   } catch (error) {
