@@ -53,25 +53,47 @@ jobs:
           const braces = lock.packages?.['node_modules/braces'];
           const eslintConfig = lock.packages?.['node_modules/eslint-config-next'];
 
+          const reviewedDevOnlyChain = {
+            'braces': { parent: null, direct: false },
+            'micromatch': { parent: 'braces', direct: false },
+            'fast-glob': { parent: 'micromatch', direct: false },
+            '@next/eslint-plugin-next': { parent: 'fast-glob', direct: false },
+            'eslint-config-next': { parent: '@next/eslint-plugin-next', direct: true },
+          };
+
           function allowUnpatchedDevOnlyBraces(name, vulnerability) {
-            const advisoryUrls = (vulnerability.via || [])
-              .filter((entry) => entry && typeof entry === 'object' && typeof entry.url === 'string')
-              .map((entry) => entry.url);
-            const onlyExpectedAdvisory = advisoryUrls.length === 1 && advisoryUrls[0] === expectedAdvisory;
-            const noDirectOrRuntimeExposure = vulnerability.isDirect === false &&
-              Array.isArray(vulnerability.nodes) &&
+            const expected = reviewedDevOnlyChain[name];
+            const lockPackage = lock.packages?.[`node_modules/${name}`];
+            if (!expected || !lockPackage || lockPackage.dev !== true) return false;
+
+            const via = vulnerability.via || [];
+            const advisoryEntries = via.filter((entry) =>
+              entry && typeof entry === 'object' && typeof entry.url === 'string'
+            );
+            const dependencyEntries = via.filter((entry) => typeof entry === 'string');
+            const exactAdvisory = name === 'braces'
+              ? advisoryEntries.length === 1 &&
+                advisoryEntries[0].url === expectedAdvisory &&
+                dependencyEntries.length === 0
+              : advisoryEntries.length === 0 &&
+                dependencyEntries.length === 1 &&
+                dependencyEntries[0] === expected.parent;
+
+            const expectedNode = `node_modules/${name}`;
+            const nodesMatch = Array.isArray(vulnerability.nodes) &&
               vulnerability.nodes.length > 0 &&
-              vulnerability.nodes.every((node) => node === 'node_modules/braces') &&
-              braces?.dev === true &&
-              eslintConfig?.dev === true;
-            const onlyUnfixedHighFinding = vulnerability.severity === 'high' &&
-              vulnerability.fixAvailable &&
+              vulnerability.nodes.every((node) => node === expectedNode);
+            const onlyBreakingDowngrade = vulnerability.fixAvailable &&
               typeof vulnerability.fixAvailable === 'object' &&
+              vulnerability.fixAvailable.name === 'eslint-config-next' &&
+              vulnerability.fixAvailable.version === '14.2.35' &&
               vulnerability.fixAvailable.isSemVerMajor === true;
-            return name === 'braces' &&
-              onlyExpectedAdvisory &&
-              noDirectOrRuntimeExposure &&
-              onlyUnfixedHighFinding;
+
+            return vulnerability.severity === 'high' &&
+              vulnerability.isDirect === expected.direct &&
+              nodesMatch &&
+              exactAdvisory &&
+              onlyBreakingDowngrade;
           }
 
           const unapproved = entries.filter(([name, vulnerability]) =>
@@ -87,6 +109,7 @@ jobs:
                 isDirect: vulnerability.isDirect,
                 nodes: vulnerability.nodes,
                 fixAvailable: vulnerability.fixAvailable,
+                via: vulnerability.via,
                 advisories: (vulnerability.via || []).filter((entry) => entry && typeof entry === 'object')
                   .map((entry) => ({ title: entry.title, url: entry.url, range: entry.range })),
               }));
