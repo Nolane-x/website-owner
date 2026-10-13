@@ -28,27 +28,46 @@ export async function requireOwner(): Promise<RequireOwnerResult> {
   };
 }
 
-export async function checkPublicAccessProtection(): Promise<{
+export interface PreloadedPublicAccess {
+  ownerProfileId: string | null;
+  settingValue?: unknown;
+}
+
+export async function checkPublicAccessProtection(preloaded?: PreloadedPublicAccess): Promise<{
   requirePassword: boolean;
   passwordHint?: string;
   hasValidGuestSession: boolean;
 }> {
-  await initializeDatabase();
-  const db = getDb();
+  let ownerId: string | null | undefined;
+  let settingValue: unknown;
+  let hasSetting = false;
 
-  const ownerProfiles = await db.select({ id: profiles.id }).from(profiles).orderBy(profiles.createdAt).limit(1);
-  const ownerId = ownerProfiles[0]?.id;
-  if (!ownerId) {
-    return { requirePassword: false, hasValidGuestSession: true };
+  if (preloaded) {
+    // Reuse fields the caller has already fetched; avoid duplicate owner/settings reads.
+    ownerId = preloaded.ownerProfileId;
+    settingValue = preloaded.settingValue;
+    hasSetting = preloaded.settingValue !== undefined;
+  } else {
+    await initializeDatabase();
+    const db = getDb();
+
+    const ownerProfiles = await db.select({ id: profiles.id }).from(profiles).orderBy(profiles.createdAt).limit(1);
+    ownerId = ownerProfiles[0]?.id ?? null;
+    if (!ownerId) {
+      return { requirePassword: false, hasValidGuestSession: true };
+    }
+
+    const publicSettings = await db
+      .select({ valueJson: settings.valueJson })
+      .from(settings)
+      .where(and(eq(settings.key, 'public_access'), eq(settings.profileId, ownerId)))
+      .limit(1);
+
+    hasSetting = publicSettings.length > 0;
+    settingValue = publicSettings[0]?.valueJson;
   }
 
-  const publicSettings = await db
-    .select()
-    .from(settings)
-    .where(and(eq(settings.key, 'public_access'), eq(settings.profileId, ownerId)))
-    .limit(1);
-
-  if (publicSettings.length === 0) {
+  if (!ownerId || !hasSetting) {
     return { requirePassword: false, hasValidGuestSession: true };
   }
 
@@ -57,7 +76,7 @@ export async function checkPublicAccessProtection(): Promise<{
     passwordHash?: string;
     passwordHint?: string;
   }
-  const config = (publicSettings[0].valueJson || {}) as PublicAccessConfig;
+  const config = (settingValue || {}) as PublicAccessConfig;
   if (!config.requirePassword || !config.passwordHash) {
     return { requirePassword: false, hasValidGuestSession: true };
   }
