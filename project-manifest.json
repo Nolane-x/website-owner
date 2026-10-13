@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record the owner-bootstrap concurrency fix and its regression test."
+      "shortDescription": "Record the bootstrap concurrency lock and regression test in the project change manifest."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -1382,14 +1382,6 @@
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Rename the homepage visitor call-to-action to Khám phá tri thức & AI Lab."
-    },
-    {
-      "relativePath": "project-manifest.json",
-      "fileName": "project-manifest.json",
-      "mimeType": "application/json",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Update the project feature manifest and change log for public data feeds, owner-only calculator, durable owner preferences, encrypted opt-in API-key storage and Escape/Ctrl+K regression coverage."
     },
     {
       "relativePath": "src/lib/ai/local-preferences.ts",
