@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: elttam/semgrep-rules
-          ref: master
+          ref: main
           path: .audit-rules/elttam
           persist-credentials: false
 
@@ -77,6 +77,8 @@ jobs:
               printf 'OK\t%s\n' "$config" >> /tmp/semgrep-audit/config-status.tsv
             else
               printf 'FAILED(%s)\t%s\n' "$rc" "$config" >> /tmp/semgrep-audit/config-status.tsv
+              printf '%s\n' "--- Configuration failure: $config (exit $rc) ---" >> /tmp/semgrep-audit/config-errors.txt
+              tail -n 8 "$err" >> /tmp/semgrep-audit/config-errors.txt
             fi
           done
 
@@ -129,7 +131,10 @@ jobs:
           if failed:
               lines += ["", "### Rule configurations that did not complete", ""]
               lines += [f"- `{line}`" for line in failed]
-              lines += ["", "Check the job logs for the configuration loader's diagnostics. A failed config is not counted as a successful scan."]
+              diagnostics = directory / "config-errors.txt"
+              if diagnostics.exists():
+                  lines += ["", "#### Loader diagnostics", "", "```text", diagnostics.read_text()[-12000:].rstrip(), "```"]
+              lines += ["", "A failed config is not counted as a successful scan. Review the loader diagnostics and repair the ruleset path or configuration."]
           output.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("\n".join(lines))
           if not ok:
