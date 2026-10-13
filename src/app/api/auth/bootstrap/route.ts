@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getDb, initializeDatabase } from '@/lib/db';
@@ -142,7 +143,11 @@ export async function POST(req: NextRequest) {
 
     // P0.1: Thực hiện toàn bộ khởi tạo trong Database Transaction nguyên tử
     await db.transaction(async (tx) => {
-      // Khóa và kiểm tra lại bên trong transaction chống tranh chấp đồng thời
+      // Serialize first-run bootstrap attempts across independent serverless instances.
+      // A read-before-write check alone is racy under PostgreSQL READ COMMITTED.
+      // The exclusive table lock makes the following owner check observe any
+      // bootstrap transaction that committed while this request was waiting.
+      await tx.execute(sql`LOCK TABLE profiles IN EXCLUSIVE MODE`);
       const existingInTx = await tx.select().from(profiles).limit(1);
       if (existingInTx.length > 0) {
         throw new Error('BOOTSTRAP_ALREADY_COMPLETED');
