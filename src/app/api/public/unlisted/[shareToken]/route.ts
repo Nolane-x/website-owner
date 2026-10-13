@@ -5,6 +5,13 @@ import { eq, and, isNull, asc, sql } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicContent, toPublicPage, toPublicBlock, toPublicCollection } from '@/lib/api/public-serializer';
+import {
+  exceedsByteLimit,
+  MAX_PUBLIC_CONTENT_BYTES,
+  MAX_PUBLIC_PAGE_BLOCK_BYTES,
+  MAX_PUBLIC_METADATA_SUMMARY_BYTES,
+  MAX_PUBLIC_METADATA_TOC_BYTES,
+} from '@/lib/security/public-egress-limits';
 
 export async function GET(
   req: NextRequest,
@@ -35,7 +42,8 @@ export async function GET(
         slug: contentItems.slug,
         type: contentItems.type,
         description: sql<string | null>`left(${contentItems.description}, 320)`,
-        content: contentItems.content,
+        content: sql<string | null>`CASE WHEN OCTET_LENGTH(COALESCE(${contentItems.content}, '')) <= ${MAX_PUBLIC_CONTENT_BYTES} THEN ${contentItems.content} ELSE NULL END`,
+        contentBytes: sql<number>`OCTET_LENGTH(COALESCE(${contentItems.content}, ''))`,
         category: contentItems.category,
         tags: contentItems.tags,
         sortOrder: contentItems.sortOrder,
@@ -47,8 +55,8 @@ export async function GET(
           'author', ${contentItems.metadata} -> 'author',
           'license', ${contentItems.metadata} -> 'license',
           'canonicalUrl', ${contentItems.metadata} -> 'canonicalUrl',
-          'summary', ${contentItems.metadata} -> 'summary',
-          'toc', ${contentItems.metadata} -> 'toc'
+          'summary', CASE WHEN OCTET_LENGTH(COALESCE((${contentItems.metadata} -> 'summary')::text, '')) <= ${MAX_PUBLIC_METADATA_SUMMARY_BYTES} THEN ${contentItems.metadata} -> 'summary' ELSE NULL END,
+          'toc', CASE WHEN OCTET_LENGTH(COALESCE((${contentItems.metadata} -> 'toc')::text, '')) <= ${MAX_PUBLIC_METADATA_TOC_BYTES} THEN ${contentItems.metadata} -> 'toc' ELSE NULL END
         ))`,
       })
       .from(contentItems)
@@ -63,6 +71,18 @@ export async function GET(
       .limit(1);
 
     if (items.length > 0) {
+      if (exceedsByteLimit(items[0].contentBytes, MAX_PUBLIC_CONTENT_BYTES)) {
+        return NextResponse.json(
+          {
+            error: 'Nội dung chia sẻ vượt giới hạn dung lượng. Hãy rút gọn nội dung hoặc chuyển hình ảnh lớn sang URL lưu trữ bên ngoài.',
+            code: 'PUBLIC_CONTENT_TOO_LARGE',
+          },
+          {
+            status: 413,
+            headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+          },
+        );
+      }
       const publicItem = toPublicContent(items[0] as unknown as Record<string, unknown>);
       return NextResponse.json({ item: publicItem, itemType: 'content' }, { headers: { 'Cache-Control': 'private, no-store, max-age=0' } });
     }
@@ -91,18 +111,35 @@ export async function GET(
 
     if (pageItems.length > 0) {
       const rawPage = pageItems[0];
+      const perBlockBytes = sql<number>`OCTET_LENGTH(${contentBlocks.contentJson}::text) + OCTET_LENGTH(${contentBlocks.settingsJson}::text)`;
+      const cumulativeBlockBytes = sql<number>`SUM(${perBlockBytes}) OVER (ORDER BY ${contentBlocks.sortOrder}, ${contentBlocks.id} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`;
+      const totalBlockBytes = sql<number>`SUM(${perBlockBytes}) OVER ()`;
       const rawBlocks = await db
         .select({
           id: contentBlocks.id,
           blockType: contentBlocks.blockType,
           sortOrder: contentBlocks.sortOrder,
-          contentJson: contentBlocks.contentJson,
-          settingsJson: contentBlocks.settingsJson,
+          totalBlockBytes,
+          contentJson: sql<Record<string, unknown>>`CASE WHEN ${cumulativeBlockBytes} <= ${MAX_PUBLIC_PAGE_BLOCK_BYTES} THEN ${contentBlocks.contentJson} ELSE '{}'::jsonb END`,
+          settingsJson: sql<Record<string, unknown>>`CASE WHEN ${cumulativeBlockBytes} <= ${MAX_PUBLIC_PAGE_BLOCK_BYTES} THEN ${contentBlocks.settingsJson} ELSE '{}'::jsonb END`,
         })
         .from(contentBlocks)
         .where(eq(contentBlocks.pageId, rawPage.id))
-        .orderBy(asc(contentBlocks.sortOrder))
+        .orderBy(asc(contentBlocks.sortOrder), asc(contentBlocks.id))
         .limit(200);
+
+      if (rawBlocks.length > 0 && exceedsByteLimit(rawBlocks[0].totalBlockBytes, MAX_PUBLIC_PAGE_BLOCK_BYTES)) {
+        return NextResponse.json(
+          {
+            error: 'Trang công khai vượt giới hạn dung lượng. Hãy rút gọn khối nội dung hoặc chuyển hình ảnh lớn sang URL lưu trữ bên ngoài.',
+            code: 'PUBLIC_PAGE_TOO_LARGE',
+          },
+          {
+            status: 413,
+            headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+          },
+        );
+      }
 
       const publicBlocks = rawBlocks.map((b) => toPublicBlock(b as unknown as Record<string, unknown>)).filter(Boolean);
       const publicPage = toPublicPage(rawPage as unknown as Record<string, unknown>);
