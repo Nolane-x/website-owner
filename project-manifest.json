@@ -1893,7 +1893,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Reuse the shared wallpaper resolver and locally cache newly uploaded assets to avoid duplicate multi-megabyte downloads."
+      "shortDescription": "Reuse the shared wallpaper resolver, prefer saved local uploads over remote fallback URLs when applying a library item, and cache newly uploaded assets to avoid duplicate multi-megabyte downloads."
     },
     {
       "relativePath": "tests/wallpaper-matrix.test.ts",
@@ -1990,6 +1990,14 @@
       "version": "5.0.0",
       "status": "added",
       "shortDescription": "Test that built-in backgrounds remain visible when selected custom media cannot load and choosing a preset removes the custom overlay."
+    },
+    {
+      "relativePath": "tests/custom-wallpaper-studio.test.tsx",
+      "fileName": "custom-wallpaper-studio.test.tsx",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Regression-test that a saved local wallpaper upload takes precedence over a remote fallback URL when applying a library item."
     }
   ]
 }
