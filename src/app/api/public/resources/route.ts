@@ -6,7 +6,7 @@ import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicResource } from '@/lib/api/public-serializer';
-import { MAX_PUBLIC_TAGS_BYTES } from '@/lib/security/public-egress-limits';
+import { MAX_PUBLIC_TAGS_BYTES, MAX_PUBLIC_RESOURCE_METADATA_BYTES, MAX_PUBLIC_PROVIDER_BYTES } from '@/lib/security/public-egress-limits';
 
 function boundedLimit(raw: string | null, fallback = 50): number {
   if (raw === null || raw.trim() === '') return fallback;
@@ -48,10 +48,10 @@ export async function GET(req: Request) {
         tags: sql<string[]>`CASE WHEN OCTET_LENGTH(${contentItems.tags}::text) <= ${MAX_PUBLIC_TAGS_BYTES} THEN ${contentItems.tags} ELSE '[]'::jsonb END`,
         publishedAt: contentItems.publishedAt,
         metadata: sql<Record<string, unknown>>`jsonb_strip_nulls(jsonb_build_object(
-          'url', ${contentItems.metadata} -> 'url',
-          'provider', ${contentItems.metadata} -> 'provider',
-          'downloadAllowed', ${contentItems.metadata} -> 'downloadAllowed',
-          'openInNewTab', ${contentItems.metadata} -> 'openInNewTab'
+          'url', CASE WHEN OCTET_LENGTH(COALESCE((${contentItems.metadata} -> 'url')::text, '')) <= ${MAX_PUBLIC_RESOURCE_METADATA_BYTES} THEN ${contentItems.metadata} -> 'url' ELSE NULL END,
+          'provider', CASE WHEN OCTET_LENGTH(COALESCE((${contentItems.metadata} -> 'provider')::text, '')) <= ${MAX_PUBLIC_PROVIDER_BYTES} THEN ${contentItems.metadata} -> 'provider' ELSE NULL END,
+          'downloadAllowed', CASE WHEN OCTET_LENGTH(COALESCE((${contentItems.metadata} -> 'downloadAllowed')::text, '')) <= 16 THEN ${contentItems.metadata} -> 'downloadAllowed' ELSE 'false'::jsonb END,
+          'openInNewTab', CASE WHEN OCTET_LENGTH(COALESCE((${contentItems.metadata} -> 'openInNewTab')::text, '')) <= 16 THEN ${contentItems.metadata} -> 'openInNewTab' ELSE 'false'::jsonb END
         ))`,
       })
       .from(contentItems)
