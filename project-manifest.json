@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record consistent fail-closed auth outage handling, bootstrap race protection, CSP hardening, public query optimization, and security CI controls."
+      "shortDescription": "Record bounded public data egress, consistent auth outage responses, bootstrap race prevention, CSP hardening, and static security audit controls."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -1125,7 +1125,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Use explicit public detail projection and allowlisted metadata instead of selecting all content table columns."
+      "shortDescription": "Project oversized public article bodies out of PostgreSQL responses and cap nested summary/table-of-contents metadata before network transfer."
     },
     {
       "relativePath": "src/app/api/public/pages/[slug]/route.ts",
@@ -1133,7 +1133,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Select public page/block fields and serialize the content blocks only once."
+      "shortDescription": "Use SQL windowed byte budgets so oversized block JSON is replaced with empty objects before it can cross the database network; return a clear 413 instead of exporting oversized pages."
     },
     {
       "relativePath": "src/app/api/public/collections/[slug]/route.ts",
@@ -1165,7 +1165,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Use compact projections for unlisted items/pages/collections and avoid duplicated nested/top-level collection item payloads."
+      "shortDescription": "Apply body and aggregate Canvas-page egress budgets to unlisted share links as well as public pages."
     },
     {
       "relativePath": "src/app/api/auth/login/route.ts",
@@ -2046,6 +2046,22 @@
       "version": "5.0.0",
       "status": "added",
       "shortDescription": "Test that DB/session-store failures on protected routes return a consistent sanitized 503 and invalid sessions retain 401 semantics."
+    },
+    {
+      "relativePath": "src/lib/security/public-egress-limits.ts",
+      "fileName": "public-egress-limits.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Centralize conservative public detail response limits and fail-closed numeric limit validation."
+    },
+    {
+      "relativePath": "tests/public-egress-limits.test.ts",
+      "fileName": "public-egress-limits.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Test public content/page/metadata byte budgets and fail-closed handling at and beyond exact boundaries."
     }
   ]
 }
