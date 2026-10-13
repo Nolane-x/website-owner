@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionFromCookies, type AuthenticatedProfile, type AuthenticatedSession } from './session';
 import { getDb, initializeDatabase } from '../db';
 import { profiles, settings } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { getGuestSessionFromCookies } from './guest-session';
 import { MAX_PUBLIC_ACCESS_CONFIG_BYTES } from '../security/public-egress-limits';
 
