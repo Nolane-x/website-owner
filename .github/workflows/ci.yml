@@ -35,6 +35,9 @@ jobs:
       - name: Audit Production Dependencies
         run: npm audit --omit=dev --audit-level=moderate
 
+      - name: Audit All Dependencies
+        run: npm audit --audit-level=moderate
+
       - name: Run ESLint
         run: npm run lint
 
