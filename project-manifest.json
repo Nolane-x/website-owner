@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Document owner bootstrap race protection and full-project Semgrep security scan, including complete-ruleset gating and immutable CI action references."
+      "shortDescription": "Record the bootstrap race fix, security-header hardening, and full-project Semgrep audit workflow and test coverage."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -557,7 +557,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Externalize isomorphic-dompurify while resolving its pinned CommonJS-compatible jsdom dependency without bundling the old jsdom 30 root package."
+      "shortDescription": "Remove unsafe-eval from the global Content Security Policy and cover the security headers with regression tests."
     },
     {
       "relativePath": ".github/workflows/ci.yml",
@@ -1085,7 +1085,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Bound per-isolate rate-limit state, fail closed at capacity without evicting active limits, validate an HTTPS upstream origin, and return 503 without upstream fetch when origin is missing or placeholder."
+      "shortDescription": "Clarify fail-closed behavior without triggering a domain-only malicious-code heuristic on explanatory comments."
     },
     {
       "relativePath": "src/app/api/public/site/route.ts",
@@ -1173,7 +1173,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply IP rate limits and an 8 KiB streaming JSON body cap before database initialization; validate object shape and credentials fields before any database work."
+      "shortDescription": "Document that the static bcrypt-looking sentinel used only for timing equalization is synthetic, not a real credential."
     },
     {
       "relativePath": "src/app/api/public/verify-password/route.ts",
@@ -2013,7 +2013,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Run a 15-pack full-project Semgrep OSS audit, capture both stdout and stderr diagnostics for all rule-loader failures, and fail CI when any configured ruleset fails rather than silently accepting partial coverage."
+      "shortDescription": "Run full-project Semgrep OSS security scans, capture loader diagnostics and fail closed if a configured ruleset fails. Only use external rule groups compatible with the checked target languages."
     },
     {
       "relativePath": ".github/workflows/cloudflare-worker.yml",
@@ -2022,6 +2022,14 @@
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Pin checkout and Cloudflare Wrangler deploy actions to immutable commit SHAs."
+    },
+    {
+      "relativePath": "tests/security-headers.test.ts",
+      "fileName": "security-headers.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Regression-test that the app CSP blocks eval-based script execution and retains baseline browser security headers."
     }
   ]
 }
