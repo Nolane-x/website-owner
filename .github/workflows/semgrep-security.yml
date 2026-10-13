@@ -55,7 +55,6 @@ jobs:
             p/react
             p/nextjs
             p/nodejs
-            p/yaml
             p/github-actions
             p/trailofbits
             .audit-rules/elttam/rules
@@ -67,11 +66,11 @@ jobs:
             name="${config//\//_}"
             name="${name//./_}"
             out="/tmp/semgrep-audit/${name}.json"
-            err="/tmp/semgrep-audit/${name}.stderr"
+            err="/tmp/semgrep-audit/${name}.log"
             semgrep scan --metrics=off --quiet --config "$config" --json -o "$out" . \
               --exclude node_modules --exclude .next --exclude coverage --exclude dist \
               --exclude .audit-rules --exclude static_analysis_semgrep_1 \
-              >/dev/null 2>"$err"
+              >"$err" 2>&1
             rc=$?
             if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
               printf 'OK\t%s\n' "$config" >> /tmp/semgrep-audit/config-status.tsv
@@ -137,6 +136,6 @@ jobs:
               lines += ["", "A failed config is not counted as a successful scan. Review the loader diagnostics and repair the ruleset path or configuration."]
           output.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("\n".join(lines))
-          if not ok:
-              raise SystemExit("No Semgrep ruleset completed successfully.")
+          if not ok or failed:
+              raise SystemExit("Semgrep audit incomplete: one or more configured rulesets failed to load or scan.")
           PY
