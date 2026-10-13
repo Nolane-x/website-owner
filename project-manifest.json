@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Document compact list APIs, shared public site data, duplicate-payload removal and the sanitizer runtime fix."
+      "shortDescription": "Record the owner-bootstrap concurrency fix and its regression test."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -1998,6 +1998,22 @@
       "version": "5.0.0",
       "status": "added",
       "shortDescription": "Regression-test that a saved local wallpaper upload takes precedence over a remote fallback URL when applying a library item."
+    },
+    {
+      "relativePath": "src/app/api/auth/bootstrap/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Take an exclusive profiles table lock inside the bootstrap transaction before the owner check, preventing concurrent first-run requests from creating multiple owner profiles."
+    },
+    {
+      "relativePath": "tests/auth-bootstrap-lock.test.ts",
+      "fileName": "auth-bootstrap-lock.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Regression-test that owner bootstrap acquires the database lock before rechecking whether an owner already exists."
     }
   ]
 }
