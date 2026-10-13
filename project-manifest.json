@@ -2064,12 +2064,20 @@
       "version": "5.0.0"
     },
     {
+      "relativePath": "SECURITY_AUDIT_TRIAGE.md",
+      "fileName": "SECURITY_AUDIT_TRIAGE.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Document the three Semgrep warnings that were reviewed, why two are rule false positives and one is mitigated by DOMPurify, and the exact dev-only npm advisory exception."
+    },
+    {
       "relativePath": "project-manifest.json",
       "fileName": "project-manifest.json",
       "mimeType": "application/json",
+      "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record bounded database egress for public detail/list endpoints alongside authentication outage handling, bootstrap concurrency control, CSP and static-security checks.",
-      "version": "5.0.0"
+      "shortDescription": "Track public egress byte budgets, consistent auth outage behavior, bootstrap serialization, CI security audits, and static warning triage documentation."
     }
   ]
 }
