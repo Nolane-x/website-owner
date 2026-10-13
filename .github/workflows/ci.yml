@@ -38,17 +38,21 @@ jobs:
       - name: Audit All Dependencies (Unpatched Advisory Review)
         shell: bash
         run: |
-          if npm audit --json > /tmp/npm-audit.json; then
-            audit_status=0
-          else
-            audit_status=$?
-          fi
+          npm audit --json > /tmp/npm-audit.json || true
 
           node <<'NODE'
           const fs = require('node:fs');
           const audit = JSON.parse(fs.readFileSync('/tmp/npm-audit.json', 'utf8'));
           const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-          const entries = Object.entries(audit.vulnerabilities || {});
+          if (!Number.isInteger(audit.auditReportVersion) ||
+              !audit.metadata ||
+              !audit.vulnerabilities ||
+              typeof audit.vulnerabilities !== 'object' ||
+              audit.error) {
+            console.error('npm audit did not return a complete, valid audit report; refusing to treat this as a clean dependency scan.');
+            process.exit(1);
+          }
+          const entries = Object.entries(audit.vulnerabilities);
           const expectedAdvisory = 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm';
           const braces = lock.packages?.['node_modules/braces'];
           const eslintConfig = lock.packages?.['node_modules/eslint-config-next'];
