@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record bootstrap locking, CSP hardening, full dependency review, and Semgrep audit coverage."
+      "shortDescription": "Document dependency audit exception handling, immutable action pins, CSP hardening, and bootstrap serialization."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -2021,7 +2021,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Pin checkout and Cloudflare Wrangler deploy actions to immutable commit SHAs."
+      "shortDescription": "Pin checkout and Cloudflare Wrangler deploy action to immutable current releases; Wrangler v3 CLI remains explicitly selected for compatibility."
     },
     {
       "relativePath": "tests/security-headers.test.ts",
