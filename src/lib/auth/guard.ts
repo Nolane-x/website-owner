@@ -10,13 +10,36 @@ export type RequireOwnerResult =
   | { authorized: false; response: NextResponse; profile?: never; session?: never };
 
 export async function requireOwner(): Promise<RequireOwnerResult> {
-  const sessionData = await getSessionFromCookies();
+  let sessionData: Awaited<ReturnType<typeof getSessionFromCookies>>;
+  try {
+    sessionData = await getSessionFromCookies();
+  } catch {
+    // Protected API routes often call this guard before their own try/catch.
+    // Keep transient database/session-store failures fail-closed and consistent.
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        {
+          error: 'Dịch vụ xác thực tạm thời không khả dụng. Vui lòng thử lại sau.',
+          code: 'AUTH_SERVICE_UNAVAILABLE',
+        },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        },
+      ),
+    };
+  }
+
   if (!sessionData) {
     return {
       authorized: false,
       response: NextResponse.json(
         { error: 'Yêu cầu đăng nhập. Phiên làm việc không hợp lệ hoặc đã hết hạn.' },
-        { status: 401 }
+        {
+          status: 401,
+          headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        },
       ),
     };
   }
