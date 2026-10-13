@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record bootstrap race protection, dependency audit exception handling, CSP hardening, and public access guard query optimization."
+      "shortDescription": "Record database query optimization, bootstrap race protection, CSP hardening, and reproducible dependency/static-analysis checks."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -565,7 +565,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Gate production and full dependency audits. Allow only the reviewed GHSA-vfj7-8cjw-p6xm chain proven dev-only in package-lock.json, and only while npm's proposed fix is a breaking eslint-config-next downgrade."
+      "shortDescription": "Keep production dependency audit as a hard gate, review only the unpatched dev-only braces advisory chain, and fail closed if npm audit returns a missing or malformed report."
     },
     {
       "relativePath": "tests/sanitize-runtime.test.ts",
@@ -2013,7 +2013,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Run full-project Semgrep OSS security scans, capture loader diagnostics and fail closed if a configured ruleset fails. Only use external rule groups compatible with the checked target languages."
+      "shortDescription": "Run 14 full-project Semgrep OSS rulesets, with external elttam and Apiiro rule repositories pinned to immutable commit SHAs. Fail CI on any incomplete rule configuration."
     },
     {
       "relativePath": ".github/workflows/cloudflare-worker.yml",
