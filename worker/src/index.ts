@@ -127,7 +127,7 @@ const worker = {
     }
 
     // 3. Fail closed when the gateway has not been deliberately configured.
-    // Never fall back to forwarding to the incoming workers.dev URL (recursion)
+    // Never fall back to forwarding to the platform-provided development hostname (recursion)
     // or the placeholder domain (unintended third-party traffic).
     const origin = getConfiguredOrigin(env);
     if (!origin) {
