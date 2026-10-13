@@ -14,6 +14,9 @@ import {
   MAX_PUBLIC_TECH_STACK_BYTES,
   MAX_PUBLIC_NAVIGATION_BYTES,
   MAX_PUBLIC_ACCESS_CONFIG_BYTES,
+  MAX_PUBLIC_PROVIDER_BYTES,
+  MAX_PUBLIC_STATUS_BYTES,
+  MAX_PUBLIC_YEAR_BYTES,
 } from '@/lib/security/public-egress-limits';
 
 describe('public database egress budgets', () => {
@@ -31,6 +34,9 @@ describe('public database egress budgets', () => {
     expect(MAX_PUBLIC_TECH_STACK_BYTES).toBe(8 * 1024);
     expect(MAX_PUBLIC_NAVIGATION_BYTES).toBe(64 * 1024);
     expect(MAX_PUBLIC_ACCESS_CONFIG_BYTES).toBe(16 * 1024);
+    expect(MAX_PUBLIC_PROVIDER_BYTES).toBe(256);
+    expect(MAX_PUBLIC_STATUS_BYTES).toBe(128);
+    expect(MAX_PUBLIC_YEAR_BYTES).toBe(16);
   });
 
   it('accepts values at the exact bound and rejects values beyond it', () => {
