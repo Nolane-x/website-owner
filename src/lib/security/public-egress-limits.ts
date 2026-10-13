@@ -15,6 +15,9 @@ export const MAX_PUBLIC_RESOURCE_METADATA_BYTES = 4096;
 export const MAX_PUBLIC_TECH_STACK_BYTES = 8 * 1024;
 export const MAX_PUBLIC_NAVIGATION_BYTES = 64 * 1024;
 export const MAX_PUBLIC_ACCESS_CONFIG_BYTES = 16 * 1024;
+export const MAX_PUBLIC_PROVIDER_BYTES = 256;
+export const MAX_PUBLIC_STATUS_BYTES = 128;
+export const MAX_PUBLIC_YEAR_BYTES = 16;
 
 export function exceedsByteLimit(value: unknown, limit: number): boolean {
   const bytes = typeof value === 'number'
