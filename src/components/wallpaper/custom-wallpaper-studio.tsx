@@ -269,17 +269,19 @@ export function CustomWallpaperStudio() {
     setStatusMessage(null);
     setApplyingWallpaperId(wp.id);
     try {
-      let resolvedUrl = wp.localDataUrl || wp.sourceUrl || '';
+      // A saved upload is the canonical asset when both a local file and a
+      // remote fallback URL exist. The list API omits the large Data URL, so
+      // resolve it by ID before considering sourceUrl.
+      let resolvedUrl = wp.localDataUrl || '';
       let resolvedType = wp.type;
       let resolvedFilters = wp.filtersJson;
-      // Fetch heavy content only when the selected library item needs it.
-      // The shared resolver checks IndexedDB first and coalesces in-flight reads.
       if (!resolvedUrl && wp.hasLocalDataUrl) {
         const resolved = await resolveActiveWallpaperAsset(wp.id);
         resolvedUrl = resolved.url;
         resolvedType = resolved.type ?? resolvedType;
         resolvedFilters = resolved.filters ?? resolvedFilters;
       }
+      if (!resolvedUrl) resolvedUrl = wp.sourceUrl || '';
       if (!resolvedUrl) throw new Error('Hình nền không có nội dung tải được hoặc URL nguồn.');
       saveActiveWallpaper({
         type: resolvedType,
@@ -385,7 +387,8 @@ export function CustomWallpaperStudio() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {wallpapers.map((wp) => {
-                  const mediaUrl = wp.sourceUrl || '';
+                  // Avoid previewing the remote fallback when a saved local upload is canonical.
+                  const mediaUrl = wp.hasLocalDataUrl ? '' : wp.sourceUrl || '';
                   const isCurrent = currentWallpaper.wallpaperId === wp.id;
 
                   return (
