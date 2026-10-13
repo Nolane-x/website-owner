@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record the bootstrap concurrency fix, regression test, and full-project Semgrep audit workflow."
+      "shortDescription": "Record the bootstrap race fix, regression test, and full-project Semgrep audit workflow."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -2013,7 +2013,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Run full-project Semgrep OSS scans for security, secrets, OWASP, CWE, SQL injection, JS/TS/framework and GitHub Actions rules plus Trail of Bits, elttam audit rules and Apiiro malicious-code rules; write a source-snippet-free report to the Actions summary."
+      "shortDescription": "Run full-project Semgrep OSS scans with security/secrets/OWASP/CWE/SQL-injection, JavaScript/TypeScript/React/Next.js/Node/YAML/GitHub Actions and Trail of Bits rules, plus elttam audit rules and Apiiro malicious-code rules. Publish source-snippet-free locations and per-ruleset loader diagnostics."
     }
   ]
 }
