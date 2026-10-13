@@ -6,6 +6,7 @@ import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicProjectSummary } from '@/lib/api/public-serializer';
+import { MAX_PUBLIC_TAGS_BYTES } from '@/lib/security/public-egress-limits';
 
 function boundedLimit(raw: string | null, fallback = 50): number {
   if (raw === null || raw.trim() === '') return fallback;
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
         description: sql<string | null>`left(${contentItems.description}, 320)`,
 
         category: contentItems.category,
-        tags: contentItems.tags,
+        tags: sql<string[]>`CASE WHEN OCTET_LENGTH(${contentItems.tags}::text) <= ${MAX_PUBLIC_TAGS_BYTES} THEN ${contentItems.tags} ELSE '[]'::jsonb END`,
         sortOrder: contentItems.sortOrder,
         isFeatured: contentItems.isFeatured,
         publishedAt: contentItems.publishedAt,
