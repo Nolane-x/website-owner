@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record database query optimization, bootstrap race protection, CSP hardening, and reproducible dependency/static-analysis checks."
+      "shortDescription": "Record consistent fail-closed auth outage handling, bootstrap race protection, CSP hardening, public query optimization, and security CI controls."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -1781,7 +1781,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Allow routes that already queried owner/public_access to reuse that data, preserving password/session semantics while avoiding duplicate database reads."
+      "shortDescription": "Return a fail-closed 503 with sanitized no-store response when owner session verification throws, while confirmed missing/expired sessions remain 401."
     },
     {
       "relativePath": "src/app/api/auth/me/route.ts",
@@ -2038,6 +2038,14 @@
       "version": "5.0.0",
       "status": "added",
       "shortDescription": "Verify preloaded access checks skip duplicate database reads, still enforce guest/owner sessions when protected, and preserve the fallback query path."
+    },
+    {
+      "relativePath": "tests/require-owner-outage.test.ts",
+      "fileName": "require-owner-outage.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Test that DB/session-store failures on protected routes return a consistent sanitized 503 and invalid sessions retain 401 semantics."
     }
   ]
 }
