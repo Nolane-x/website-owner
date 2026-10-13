@@ -208,14 +208,6 @@
   },
   "changeManifest": [
     {
-      "relativePath": "project-manifest.json",
-      "fileName": "project-manifest.json",
-      "mimeType": "application/json",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Document public content/Canvas egress budgets, safe authorization outages, bootstrap concurrency fix, CSP hardening, and reproducible CI security audits."
-    },
-    {
       "relativePath": "src/app/api/admin/export/route.ts",
       "fileName": "route.ts",
       "mimeType": "text/typescript",
@@ -1088,84 +1080,12 @@
       "shortDescription": "Clarify fail-closed behavior without triggering a domain-only malicious-code heuristic on explanatory comments."
     },
     {
-      "relativePath": "src/app/api/public/site/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Pass its existing owner profile and public_access setting into the access check, removing redundant profile/settings queries on each public-site request."
-    },
-    {
-      "relativePath": "src/app/api/public/projects/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Avoid fetching project icons and other non-card fields from PostgreSQL for list views."
-    },
-    {
       "relativePath": "src/app/api/public/collections/route.ts",
       "fileName": "route.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Bound public collection descriptions in SQL and omit unused large cover-image fields from collection list responses."
-    },
-    {
-      "relativePath": "src/app/api/public/content/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Return bounded public content summaries with SQL-truncated descriptions and without heavy body, cover, or metadata columns."
-    },
-    {
-      "relativePath": "src/app/api/public/content/[slug]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Project oversized public article bodies out of PostgreSQL responses and cap nested summary/table-of-contents metadata before network transfer."
-    },
-    {
-      "relativePath": "src/app/api/public/pages/[slug]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Use SQL windowed byte budgets so oversized block JSON is replaced with empty objects before it can cross the database network; return a clear 413 instead of exporting oversized pages."
-    },
-    {
-      "relativePath": "src/app/api/public/collections/[slug]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Return collection item summaries once rather than embedding the same item list in both collection and top-level response."
-    },
-    {
-      "relativePath": "src/app/api/public/resources/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Project only link-card metadata, truncate descriptions in SQL, and cap result count to reduce public-list database egress."
-    },
-    {
-      "relativePath": "src/app/api/public/search/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Limit search result descriptions in SQL and avoid selecting potentially large cover-image fields that the search modal does not render."
-    },
-    {
-      "relativePath": "src/app/api/public/unlisted/[shareToken]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Apply body and aggregate Canvas-page egress budgets to unlisted share links as well as public pages."
     },
     {
       "relativePath": "src/app/api/auth/login/route.ts",
@@ -1776,14 +1696,6 @@
       "shortDescription": "Project session/profile columns to identity and session fields only; avoid re-reading avatar_url and bio on every protected API request."
     },
     {
-      "relativePath": "src/lib/auth/guard.ts",
-      "fileName": "guard.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Return a fail-closed 503 with sanitized no-store response when owner session verification throws, while confirmed missing/expired sessions remain 401."
-    },
-    {
       "relativePath": "src/app/api/auth/me/route.ts",
       "fileName": "route.ts",
       "mimeType": "text/typescript",
@@ -2051,25 +1963,113 @@
       "relativePath": "src/lib/security/public-egress-limits.ts",
       "fileName": "public-egress-limits.ts",
       "mimeType": "text/typescript",
-      "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Centralize conservative public detail response limits and fail-closed numeric limit validation."
+      "shortDescription": "Centralize DB-before-network byte budgets for public content, Canvas blocks, tags, metadata, navigation, and access config; invalid size values fail closed.",
+      "version": "5.0.0"
     },
     {
       "relativePath": "tests/public-egress-limits.test.ts",
       "fileName": "public-egress-limits.test.ts",
       "mimeType": "text/typescript",
-      "version": "5.0.0",
       "status": "created",
-      "shortDescription": "Test public content/page/metadata byte budgets and fail-closed handling at and beyond exact boundaries."
+      "shortDescription": "Cover exact-boundary and fail-closed behavior for public content, block JSON, tags, metadata, navigation and access-setting byte limits.",
+      "version": "5.0.0"
     },
     {
       "relativePath": "tests/public-detail-egress.test.ts",
       "fileName": "public-detail-egress.test.ts",
       "mimeType": "text/typescript",
-      "version": "5.0.0",
       "status": "added",
-      "shortDescription": "Verify oversized public and unlisted article/page responses fail with bounded 413 errors before serializing detail payloads."
+      "shortDescription": "Verify public and unlisted article/page detail routes return private no-store 413 responses before serializing oversized content.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/content/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Cap article body bytes, tags and each allowed metadata field within SQL before database-to-application transfer; return 413 when detail content exceeds its published budget.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/unlisted/[shareToken]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Apply SQL byte budgets to unlisted article body, metadata, page blocks and collection tags so token-based sharing cannot bypass public egress limits.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/pages/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Use SQL window byte budgets to avoid transferring oversized Canvas block JSON and return a bounded 413 when aggregate page content exceeds 1 MiB.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/content/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound tag JSON at the SQL projection for compact public content lists.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/resources/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound public resource URL/provider/boolean metadata and tag JSON in SQL before network transfer.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/projects/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound repository/demo URLs, technology-stack JSON, status/year metadata and tag payloads at the SQL projection.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/collections/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound tag JSON for each published collection card before sending rows from Neon.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/search/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound tag JSON in public search results so unusual metadata arrays cannot multiply query egress.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/site/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Cap navigation JSON and profile display name in SQL; if the access-control setting exceeds its byte budget, substitute a fail-closed password-required configuration.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/lib/auth/guard.ts",
+      "fileName": "guard.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Return sanitized no-store 503 for transient owner-session failures and cap public_access JSON before transfer; oversized access config fails closed.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "project-manifest.json",
+      "fileName": "project-manifest.json",
+      "mimeType": "application/json",
+      "status": "modified",
+      "shortDescription": "Record bounded database egress for public detail/list endpoints alongside authentication outage handling, bootstrap concurrency control, CSP and static-security checks.",
+      "version": "5.0.0"
     }
   ]
 }
