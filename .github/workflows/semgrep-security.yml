@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: elttam/semgrep-rules
-          ref: main
+          ref: 244268562cc92d33f54b8a60a187df5520f91b26
           path: .audit-rules/elttam
           persist-credentials: false
 
@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: apiiro/malicious-code-ruleset
-          ref: main
+          ref: a21246b666f34db899f0e33add7237ed70fab790
           path: .audit-rules/apiiro
           persist-credentials: false
 
