@@ -57,7 +57,6 @@ jobs:
             p/nodejs
             p/github-actions
             p/trailofbits
-            .audit-rules/elttam/rules
             .audit-rules/elttam/rules-audit
             .audit-rules/apiiro
           )
