@@ -35,6 +35,99 @@ jobs:
       - name: Audit Production Dependencies
         run: npm audit --omit=dev --audit-level=moderate
 
+      - name: Audit All Dependencies (Unpatched Advisory Review)
+        shell: bash
+        run: |
+          npm audit --json > /tmp/npm-audit.json || true
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/npm-audit.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          if (!Number.isInteger(audit.auditReportVersion) ||
+              !audit.metadata ||
+              !audit.vulnerabilities ||
+              typeof audit.vulnerabilities !== 'object' ||
+              audit.error) {
+            console.error('npm audit did not return a complete, valid audit report; refusing to treat this as a clean dependency scan.');
+            process.exit(1);
+          }
+          const entries = Object.entries(audit.vulnerabilities);
+          const expectedAdvisory = 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm';
+          const braces = lock.packages?.['node_modules/braces'];
+          const eslintConfig = lock.packages?.['node_modules/eslint-config-next'];
+
+          const reviewedDevOnlyChain = {
+            'braces': { parent: null, direct: false },
+            'micromatch': { parent: 'braces', direct: false },
+            'fast-glob': { parent: 'micromatch', direct: false },
+            '@next/eslint-plugin-next': { parent: 'fast-glob', direct: false },
+            'eslint-config-next': { parent: '@next/eslint-plugin-next', direct: true },
+          };
+
+          function allowUnpatchedDevOnlyBraces(name, vulnerability) {
+            const expected = reviewedDevOnlyChain[name];
+            const lockPackage = lock.packages?.[`node_modules/${name}`];
+            if (!expected || !lockPackage || lockPackage.dev !== true) return false;
+
+            const via = vulnerability.via || [];
+            const advisoryEntries = via.filter((entry) =>
+              entry && typeof entry === 'object' && typeof entry.url === 'string'
+            );
+            const dependencyEntries = via.filter((entry) => typeof entry === 'string');
+            const exactAdvisory = name === 'braces'
+              ? advisoryEntries.length === 1 &&
+                advisoryEntries[0].url === expectedAdvisory &&
+                dependencyEntries.length === 0
+              : advisoryEntries.length === 0 &&
+                dependencyEntries.length === 1 &&
+                dependencyEntries[0] === expected.parent;
+
+            const expectedNode = `node_modules/${name}`;
+            const nodesMatch = Array.isArray(vulnerability.nodes) &&
+              vulnerability.nodes.length > 0 &&
+              vulnerability.nodes.every((node) => node === expectedNode);
+            const onlyBreakingDowngrade = vulnerability.fixAvailable &&
+              typeof vulnerability.fixAvailable === 'object' &&
+              vulnerability.fixAvailable.name === 'eslint-config-next' &&
+              vulnerability.fixAvailable.version === '14.2.35' &&
+              vulnerability.fixAvailable.isSemVerMajor === true;
+
+            return vulnerability.severity === 'high' &&
+              vulnerability.isDirect === expected.direct &&
+              nodesMatch &&
+              exactAdvisory &&
+              onlyBreakingDowngrade;
+          }
+
+          const unapproved = entries.filter(([name, vulnerability]) =>
+            !allowUnpatchedDevOnlyBraces(name, vulnerability)
+          );
+
+          if (unapproved.length > 0) {
+            console.error('Full dependency audit found vulnerabilities outside the reviewed dev-only exception:');
+            for (const [name, vulnerability] of unapproved) {
+              console.error(JSON.stringify({
+                name,
+                severity: vulnerability.severity,
+                isDirect: vulnerability.isDirect,
+                nodes: vulnerability.nodes,
+                fixAvailable: vulnerability.fixAvailable,
+                via: vulnerability.via,
+                advisories: (vulnerability.via || []).filter((entry) => entry && typeof entry === 'object')
+                  .map((entry) => ({ title: entry.title, url: entry.url, range: entry.range })),
+              }));
+            }
+            process.exit(1);
+          }
+
+          if (entries.length === 0) {
+            console.log('Full dependency audit: no reported vulnerabilities.');
+          } else {
+            console.warn('REVIEWED EXCEPTION: braces is a dev-only transitive dependency of eslint-config-next; GHSA-vfj7-8cjw-p6xm has no compatible patched release, and npm proposes only a breaking major downgrade. Production dependencies are separately gated by npm audit --omit=dev. Re-check this exception when the advisory or upstream package changes.');
+          }
+          NODE
+
       - name: Run ESLint
         run: npm run lint
 

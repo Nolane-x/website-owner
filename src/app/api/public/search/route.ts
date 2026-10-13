@@ -4,6 +4,7 @@ import { contentItems, pages } from '@/lib/db/schema';
 import { and, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
+import { MAX_PUBLIC_TAGS_BYTES } from '@/lib/security/public-egress-limits';
 
 export async function GET(req: NextRequest) {
   const rateLimitResponse = checkPublicApiRateLimit(req, 'search', 20);
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
         type: contentItems.type,
         description: sql<string | null>`left(${contentItems.description}, 240)`,
         category: contentItems.category,
-        tags: contentItems.tags,
+        tags: sql<string[]>`CASE WHEN OCTET_LENGTH(${contentItems.tags}::text) <= ${MAX_PUBLIC_TAGS_BYTES} THEN ${contentItems.tags} ELSE '[]'::jsonb END`,
         publishedAt: contentItems.publishedAt,
       })
       .from(contentItems)

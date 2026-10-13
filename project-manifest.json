@@ -208,14 +208,6 @@
   },
   "changeManifest": [
     {
-      "relativePath": "project-manifest.json",
-      "fileName": "project-manifest.json",
-      "mimeType": "application/json",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Document compact list APIs, shared public site data, duplicate-payload removal and the sanitizer runtime fix."
-    },
-    {
       "relativePath": "src/app/api/admin/export/route.ts",
       "fileName": "route.ts",
       "mimeType": "text/typescript",
@@ -557,7 +549,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Externalize isomorphic-dompurify while resolving its pinned CommonJS-compatible jsdom dependency without bundling the old jsdom 30 root package."
+      "shortDescription": "Remove unsafe-eval from the global Content Security Policy and cover the security headers with regression tests."
     },
     {
       "relativePath": ".github/workflows/ci.yml",
@@ -565,7 +557,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Add a production-only npm security audit gate before lint, typecheck, tests and production build."
+      "shortDescription": "Keep production dependency audit as a hard gate, review only the unpatched dev-only braces advisory chain, and fail closed if npm audit returns a missing or malformed report."
     },
     {
       "relativePath": "tests/sanitize-runtime.test.ts",
@@ -1085,23 +1077,7 @@
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Bound per-isolate rate-limit state, fail closed at capacity without evicting active limits, validate an HTTPS upstream origin, and return 503 without upstream fetch when origin is missing or placeholder."
-    },
-    {
-      "relativePath": "src/app/api/public/site/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Avoid loading unused theme_public JSON on every public site request; load only navigation and access-protection settings."
-    },
-    {
-      "relativePath": "src/app/api/public/projects/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Avoid fetching project icons and other non-card fields from PostgreSQL for list views."
+      "shortDescription": "Clarify fail-closed behavior without triggering a domain-only malicious-code heuristic on explanatory comments."
     },
     {
       "relativePath": "src/app/api/public/collections/route.ts",
@@ -1112,68 +1088,12 @@
       "shortDescription": "Bound public collection descriptions in SQL and omit unused large cover-image fields from collection list responses."
     },
     {
-      "relativePath": "src/app/api/public/content/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Return bounded public content summaries with SQL-truncated descriptions and without heavy body, cover, or metadata columns."
-    },
-    {
-      "relativePath": "src/app/api/public/content/[slug]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Use explicit public detail projection and allowlisted metadata instead of selecting all content table columns."
-    },
-    {
-      "relativePath": "src/app/api/public/pages/[slug]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Select public page/block fields and serialize the content blocks only once."
-    },
-    {
-      "relativePath": "src/app/api/public/collections/[slug]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Return collection item summaries once rather than embedding the same item list in both collection and top-level response."
-    },
-    {
-      "relativePath": "src/app/api/public/resources/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Project only link-card metadata, truncate descriptions in SQL, and cap result count to reduce public-list database egress."
-    },
-    {
-      "relativePath": "src/app/api/public/search/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Limit search result descriptions in SQL and avoid selecting potentially large cover-image fields that the search modal does not render."
-    },
-    {
-      "relativePath": "src/app/api/public/unlisted/[shareToken]/route.ts",
-      "fileName": "route.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Use compact projections for unlisted items/pages/collections and avoid duplicated nested/top-level collection item payloads."
-    },
-    {
       "relativePath": "src/app/api/auth/login/route.ts",
       "fileName": "route.ts",
       "mimeType": "text/typescript",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Apply IP rate limits and an 8 KiB streaming JSON body cap before database initialization; validate object shape and credentials fields before any database work."
+      "shortDescription": "Document that the static bcrypt-looking sentinel used only for timing equalization is synthetic, not a real credential."
     },
     {
       "relativePath": "src/app/api/public/verify-password/route.ts",
@@ -1382,14 +1302,6 @@
       "version": "5.0.0",
       "status": "modified",
       "shortDescription": "Rename the homepage visitor call-to-action to Khám phá tri thức & AI Lab."
-    },
-    {
-      "relativePath": "project-manifest.json",
-      "fileName": "project-manifest.json",
-      "mimeType": "application/json",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Update the project feature manifest and change log for public data feeds, owner-only calculator, durable owner preferences, encrypted opt-in API-key storage and Escape/Ctrl+K regression coverage."
     },
     {
       "relativePath": "src/lib/ai/local-preferences.ts",
@@ -1784,14 +1696,6 @@
       "shortDescription": "Project session/profile columns to identity and session fields only; avoid re-reading avatar_url and bio on every protected API request."
     },
     {
-      "relativePath": "src/lib/auth/guard.ts",
-      "fileName": "guard.ts",
-      "mimeType": "text/typescript",
-      "version": "5.0.0",
-      "status": "modified",
-      "shortDescription": "Use the deliberately light authenticated profile/session types returned by session validation."
-    },
-    {
       "relativePath": "src/app/api/auth/me/route.ts",
       "fileName": "route.ts",
       "mimeType": "text/typescript",
@@ -1998,6 +1902,182 @@
       "version": "5.0.0",
       "status": "added",
       "shortDescription": "Regression-test that a saved local wallpaper upload takes precedence over a remote fallback URL when applying a library item."
+    },
+    {
+      "relativePath": "src/app/api/auth/bootstrap/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Take an exclusive profiles table lock inside the bootstrap transaction before the owner check, preventing concurrent first-run requests from creating multiple owner profiles."
+    },
+    {
+      "relativePath": "tests/auth-bootstrap-lock.test.ts",
+      "fileName": "auth-bootstrap-lock.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Regression-test that owner bootstrap acquires the database lock before rechecking whether an owner already exists."
+    },
+    {
+      "relativePath": ".github/workflows/semgrep-security.yml",
+      "fileName": "semgrep-security.yml",
+      "mimeType": "text/yaml",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Run 14 full-project Semgrep OSS rulesets, with external elttam and Apiiro rule repositories pinned to immutable commit SHAs. Fail CI on any incomplete rule configuration."
+    },
+    {
+      "relativePath": ".github/workflows/cloudflare-worker.yml",
+      "fileName": "cloudflare-worker.yml",
+      "mimeType": "text/yaml",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Pin checkout and Cloudflare Wrangler deploy action to immutable current releases; Wrangler v3 CLI remains explicitly selected for compatibility."
+    },
+    {
+      "relativePath": "tests/security-headers.test.ts",
+      "fileName": "security-headers.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Regression-test that the app CSP blocks eval-based script execution and retains baseline browser security headers."
+    },
+    {
+      "relativePath": "tests/public-access-protection-preload.test.ts",
+      "fileName": "public-access-protection-preload.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Verify preloaded access checks skip duplicate database reads, still enforce guest/owner sessions when protected, and preserve the fallback query path."
+    },
+    {
+      "relativePath": "tests/require-owner-outage.test.ts",
+      "fileName": "require-owner-outage.test.ts",
+      "mimeType": "text/typescript",
+      "version": "5.0.0",
+      "status": "added",
+      "shortDescription": "Test that DB/session-store failures on protected routes return a consistent sanitized 503 and invalid sessions retain 401 semantics."
+    },
+    {
+      "relativePath": "src/lib/security/public-egress-limits.ts",
+      "fileName": "public-egress-limits.ts",
+      "mimeType": "text/typescript",
+      "status": "created",
+      "shortDescription": "Centralize DB-before-network byte budgets for public content, Canvas blocks, tags, metadata, navigation, and access config; invalid size values fail closed.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "tests/public-egress-limits.test.ts",
+      "fileName": "public-egress-limits.test.ts",
+      "mimeType": "text/typescript",
+      "status": "created",
+      "shortDescription": "Cover exact-boundary and fail-closed behavior for public content, block JSON, tags, metadata, navigation and access-setting byte limits.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "tests/public-detail-egress.test.ts",
+      "fileName": "public-detail-egress.test.ts",
+      "mimeType": "text/typescript",
+      "status": "added",
+      "shortDescription": "Verify public and unlisted article/page detail routes return private no-store 413 responses before serializing oversized content.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/content/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Cap article body bytes, tags and each allowed metadata field within SQL before database-to-application transfer; return 413 when detail content exceeds its published budget.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/unlisted/[shareToken]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Apply SQL byte budgets to unlisted article body, metadata, page blocks and collection tags so token-based sharing cannot bypass public egress limits.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/pages/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Use SQL window byte budgets to avoid transferring oversized Canvas block JSON and return a bounded 413 when aggregate page content exceeds 1 MiB.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/content/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound tag JSON at the SQL projection for compact public content lists.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/resources/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound public resource URL/provider/boolean metadata and tag JSON in SQL before network transfer.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/projects/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound repository/demo URLs, technology-stack JSON, status/year metadata and tag payloads at the SQL projection.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/collections/[slug]/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound tag JSON for each published collection card before sending rows from Neon.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/search/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Bound tag JSON in public search results so unusual metadata arrays cannot multiply query egress.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/app/api/public/site/route.ts",
+      "fileName": "route.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Cap navigation JSON and profile display name in SQL; if the access-control setting exceeds its byte budget, substitute a fail-closed password-required configuration.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "src/lib/auth/guard.ts",
+      "fileName": "guard.ts",
+      "mimeType": "text/typescript",
+      "status": "modified",
+      "shortDescription": "Return sanitized no-store 503 for transient owner-session failures and cap public_access JSON before transfer; oversized access config fails closed.",
+      "version": "5.0.0"
+    },
+    {
+      "relativePath": "SECURITY_AUDIT_TRIAGE.md",
+      "fileName": "SECURITY_AUDIT_TRIAGE.md",
+      "mimeType": "text/markdown",
+      "version": "5.0.0",
+      "status": "created",
+      "shortDescription": "Document the three Semgrep warnings that were reviewed, why two are rule false positives and one is mitigated by DOMPurify, and the exact dev-only npm advisory exception."
+    },
+    {
+      "relativePath": "project-manifest.json",
+      "fileName": "project-manifest.json",
+      "mimeType": "application/json",
+      "version": "5.0.0",
+      "status": "modified",
+      "shortDescription": "Track public egress byte budgets, consistent auth outage behavior, bootstrap serialization, CI security audits, and static warning triage documentation."
     }
   ]
 }

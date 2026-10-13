@@ -6,6 +6,7 @@ import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicPage, toPublicBlock } from '@/lib/api/public-serializer';
+import { exceedsByteLimit, MAX_PUBLIC_PAGE_BLOCK_BYTES } from '@/lib/security/public-egress-limits';
 
 export async function GET(
   req: NextRequest,
@@ -50,18 +51,35 @@ export async function GET(
 
     const pageRaw = pageResult[0];
 
+    const perBlockBytes = sql<number>`OCTET_LENGTH(${contentBlocks.contentJson}::text) + OCTET_LENGTH(${contentBlocks.settingsJson}::text)`;
+    const cumulativeBlockBytes = sql<number>`SUM(${perBlockBytes}) OVER (ORDER BY ${contentBlocks.sortOrder}, ${contentBlocks.id} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`;
+    const totalBlockBytes = sql<number>`SUM(${perBlockBytes}) OVER ()`;
     const rawBlocks = await db
       .select({
         id: contentBlocks.id,
         blockType: contentBlocks.blockType,
         sortOrder: contentBlocks.sortOrder,
-        contentJson: contentBlocks.contentJson,
-        settingsJson: contentBlocks.settingsJson,
+        totalBlockBytes,
+        contentJson: sql<Record<string, unknown>>`CASE WHEN ${cumulativeBlockBytes} <= ${MAX_PUBLIC_PAGE_BLOCK_BYTES} THEN ${contentBlocks.contentJson} ELSE '{}'::jsonb END`,
+        settingsJson: sql<Record<string, unknown>>`CASE WHEN ${cumulativeBlockBytes} <= ${MAX_PUBLIC_PAGE_BLOCK_BYTES} THEN ${contentBlocks.settingsJson} ELSE '{}'::jsonb END`,
       })
       .from(contentBlocks)
       .where(eq(contentBlocks.pageId, pageRaw.id))
-      .orderBy(asc(contentBlocks.sortOrder))
+      .orderBy(asc(contentBlocks.sortOrder), asc(contentBlocks.id))
       .limit(200);
+
+    if (rawBlocks.length > 0 && exceedsByteLimit(rawBlocks[0].totalBlockBytes, MAX_PUBLIC_PAGE_BLOCK_BYTES)) {
+      return NextResponse.json(
+        {
+        error: 'Trang công khai vượt giới hạn dung lượng. Hãy rút gọn khối nội dung hoặc chuyển hình ảnh lớn sang URL lưu trữ bên ngoài.',
+        code: 'PUBLIC_PAGE_TOO_LARGE',
+        },
+        {
+        status: 413,
+        headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        },
+      );
+    }
 
     const publicBlocks = rawBlocks.map((b) => toPublicBlock(b as unknown as Record<string, unknown>)).filter(Boolean);
     const publicPage = toPublicPage(pageRaw as unknown as Record<string, unknown>);

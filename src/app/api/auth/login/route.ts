@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
     if (userResult.length === 0) {
       // SEC-26: Constant-time dummy verify chống tấn công độ trễ đoán username
-      const DUMMY_HASH = '$2a$12$000000000000000000000uJ4v4cZzN7e01hV2v7X0oO1K7d1pX2gS';
+      const DUMMY_HASH = '$2a$12$000000000000000000000uJ4v4cZzN7e01hV2v7X0oO1K7d1pX2gS'; // nosemgrep: generic.secrets.security.detected-bcrypt-hash.detected-bcrypt-hash -- synthetic dummy credential used only for timing equalization; not an account hash or usable secret
       await verifyPassword(password, DUMMY_HASH);
       // SEC-12: Giới hạn độ dài username khi ghi audit
       await logSecurityEvent('unknown', SECURITY_EVENT_TYPES.LOGIN_FAILED, { username: String(username).trim().slice(0, 32), reason: 'Thông tin đăng nhập không chính xác' }, ip, userAgent);

@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Deploy Worker via Wrangler Action
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@a17640ae5ec0d99c8c75e908aa69f5519037cd4e # v4.1.3, immutable commit
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

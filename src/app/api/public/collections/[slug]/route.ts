@@ -6,6 +6,7 @@ import { checkPublicAccessProtection } from '@/lib/auth/guard';
 import { getPublicApiCacheHeaders } from '@/lib/security/public-api-cache';
 import { checkPublicApiRateLimit } from '@/lib/security/public-api-guard';
 import { toPublicCollection, toPublicContentSummary } from '@/lib/api/public-serializer';
+import { MAX_PUBLIC_TAGS_BYTES } from '@/lib/security/public-egress-limits';
 
 export async function GET(
   req: NextRequest,
@@ -56,7 +57,7 @@ export async function GET(
         slug: contentItems.slug,
         type: contentItems.type,
         description: sql<string | null>`left(${contentItems.description}, 240)`,
-        tags: contentItems.tags,
+        tags: sql<string[]>`CASE WHEN OCTET_LENGTH(${contentItems.tags}::text) <= ${MAX_PUBLIC_TAGS_BYTES} THEN ${contentItems.tags} ELSE '[]'::jsonb END`,
         category: contentItems.category,
         sortOrder: contentItems.sortOrder,
         isFeatured: contentItems.isFeatured,

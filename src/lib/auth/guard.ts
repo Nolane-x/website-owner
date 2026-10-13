@@ -2,21 +2,45 @@ import { NextResponse } from 'next/server';
 import { getSessionFromCookies, type AuthenticatedProfile, type AuthenticatedSession } from './session';
 import { getDb, initializeDatabase } from '../db';
 import { profiles, settings } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { getGuestSessionFromCookies } from './guest-session';
+import { MAX_PUBLIC_ACCESS_CONFIG_BYTES } from '../security/public-egress-limits';
 
 export type RequireOwnerResult =
   | { authorized: true; profile: AuthenticatedProfile; session: AuthenticatedSession; response?: never }
   | { authorized: false; response: NextResponse; profile?: never; session?: never };
 
 export async function requireOwner(): Promise<RequireOwnerResult> {
-  const sessionData = await getSessionFromCookies();
+  let sessionData: Awaited<ReturnType<typeof getSessionFromCookies>>;
+  try {
+    sessionData = await getSessionFromCookies();
+  } catch {
+    // Protected API routes often call this guard before their own try/catch.
+    // Keep transient database/session-store failures fail-closed and consistent.
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        {
+          error: 'Dịch vụ xác thực tạm thời không khả dụng. Vui lòng thử lại sau.',
+          code: 'AUTH_SERVICE_UNAVAILABLE',
+        },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        },
+      ),
+    };
+  }
+
   if (!sessionData) {
     return {
       authorized: false,
       response: NextResponse.json(
         { error: 'Yêu cầu đăng nhập. Phiên làm việc không hợp lệ hoặc đã hết hạn.' },
-        { status: 401 }
+        {
+          status: 401,
+          headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+        },
       ),
     };
   }
@@ -28,27 +52,58 @@ export async function requireOwner(): Promise<RequireOwnerResult> {
   };
 }
 
-export async function checkPublicAccessProtection(): Promise<{
+export interface PreloadedPublicAccess {
+  ownerProfileId: string | null;
+  settingValue?: unknown;
+}
+
+export async function checkPublicAccessProtection(preloaded?: PreloadedPublicAccess): Promise<{
   requirePassword: boolean;
   passwordHint?: string;
   hasValidGuestSession: boolean;
 }> {
-  await initializeDatabase();
-  const db = getDb();
+  let ownerId: string | null | undefined;
+  let settingValue: unknown;
+  let hasSetting = false;
 
-  const ownerProfiles = await db.select({ id: profiles.id }).from(profiles).orderBy(profiles.createdAt).limit(1);
-  const ownerId = ownerProfiles[0]?.id;
-  if (!ownerId) {
-    return { requirePassword: false, hasValidGuestSession: true };
+  if (preloaded) {
+    // Reuse fields the caller has already fetched; avoid duplicate owner/settings reads.
+    ownerId = preloaded.ownerProfileId;
+    settingValue = preloaded.settingValue;
+    hasSetting = preloaded.settingValue !== undefined;
+  } else {
+    await initializeDatabase();
+    const db = getDb();
+
+    const ownerProfiles = await db.select({ id: profiles.id }).from(profiles).orderBy(profiles.createdAt).limit(1);
+    ownerId = ownerProfiles[0]?.id ?? null;
+    if (!ownerId) {
+      return { requirePassword: false, hasValidGuestSession: true };
+    }
+
+    const publicSettings = await db
+      .select({
+        valueJson: sql<Record<string, unknown>>`CASE
+          WHEN OCTET_LENGTH(${settings.valueJson}::text) <= ${MAX_PUBLIC_ACCESS_CONFIG_BYTES}
+            THEN ${settings.valueJson}
+          ELSE jsonb_build_object(
+            'requirePassword', TRUE,
+            'passwordHash', 'PUBLIC_ACCESS_CONFIG_TOO_LARGE',
+            'passwordHint', 'Cấu hình truy cập vượt giới hạn; cần kiểm tra trong quản trị.',
+            'allowCopy', FALSE,
+            'showSearch', FALSE
+          )
+        END`,
+      })
+      .from(settings)
+      .where(and(eq(settings.key, 'public_access'), eq(settings.profileId, ownerId)))
+      .limit(1);
+
+    hasSetting = publicSettings.length > 0;
+    settingValue = publicSettings[0]?.valueJson;
   }
 
-  const publicSettings = await db
-    .select()
-    .from(settings)
-    .where(and(eq(settings.key, 'public_access'), eq(settings.profileId, ownerId)))
-    .limit(1);
-
-  if (publicSettings.length === 0) {
+  if (!ownerId || !hasSetting) {
     return { requirePassword: false, hasValidGuestSession: true };
   }
 
@@ -57,7 +112,7 @@ export async function checkPublicAccessProtection(): Promise<{
     passwordHash?: string;
     passwordHint?: string;
   }
-  const config = (publicSettings[0].valueJson || {}) as PublicAccessConfig;
+  const config = (settingValue || {}) as PublicAccessConfig;
   if (!config.requirePassword || !config.passwordHash) {
     return { requirePassword: false, hasValidGuestSession: true };
   }
