@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record the bootstrap race fix, security-header hardening, and full-project Semgrep audit workflow and test coverage."
+      "shortDescription": "Record CI dependency audits, CSP hardening, bootstrap race prevention, and Semgrep OSS scanning."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -565,7 +565,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Add a production-only npm security audit gate before lint, typecheck, tests and production build."
+      "shortDescription": "Run both production-only and full dependency audits in CI so vulnerable build/test dependencies are not ignored."
     },
     {
       "relativePath": "tests/sanitize-runtime.test.ts",
