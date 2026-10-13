@@ -1,0 +1,137 @@
+name: Semgrep OSS Security Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Full-project static security scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: semgrep/semgrep:1.163.0
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout third-party audit rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: elttam/semgrep-rules
+          ref: master
+          path: .audit-rules/elttam
+          persist-credentials: false
+
+      - name: Checkout malicious-code rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: apiiro/malicious-code-ruleset
+          ref: main
+          path: .audit-rules/apiiro
+          persist-credentials: false
+
+      - name: Run full-project rulesets
+        shell: bash
+        run: |
+          set +e
+          mkdir -p /tmp/semgrep-audit
+          : > /tmp/semgrep-audit/config-status.tsv
+          configs=(
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+            p/cwe-top-25
+            p/sql-injection
+            p/javascript
+            p/typescript
+            p/react
+            p/nextjs
+            p/nodejs
+            p/yaml
+            p/github-actions
+            p/trailofbits
+            .audit-rules/elttam/rules
+            .audit-rules/elttam/rules-audit
+            .audit-rules/apiiro
+          )
+
+          for config in "${configs[@]}"; do
+            name="${config//\//_}"
+            name="${name//./_}"
+            out="/tmp/semgrep-audit/${name}.json"
+            err="/tmp/semgrep-audit/${name}.stderr"
+            semgrep scan --metrics=off --quiet --config "$config" --json -o "$out" . \
+              --exclude node_modules --exclude .next --exclude coverage --exclude dist \
+              --exclude .audit-rules --exclude static_analysis_semgrep_1 \
+              >/dev/null 2>"$err"
+            rc=$?
+            if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
+              printf 'OK\t%s\n' "$config" >> /tmp/semgrep-audit/config-status.tsv
+            else
+              printf 'FAILED(%s)\t%s\n' "$rc" "$config" >> /tmp/semgrep-audit/config-status.tsv
+            fi
+          done
+
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          directory = Path("/tmp/semgrep-audit")
+          output = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          statuses = (directory / "config-status.tsv").read_text().splitlines()
+          findings = {}
+          for path in directory.glob("*.json"):
+              try:
+                  payload = json.loads(path.read_text())
+              except Exception:
+                  continue
+              for result in payload.get("results", []):
+                  start = result.get("start") or {}
+                  key = (result.get("check_id", "unknown"), result.get("path", "?"), start.get("line", 0))
+                  extra = result.get("extra") or {}
+                  findings.setdefault(key, {
+                      "severity": str(extra.get("severity", "INFO")).upper(),
+                  })
+
+          severity_counts = collections.Counter(item["severity"] for item in findings.values())
+          ok = [line.split("\t", 1)[1] for line in statuses if line.startswith("OK\t")]
+          failed = [line.split("\t", 1)[1] for line in statuses if line.startswith("FAILED(")]
+          lines = [
+              "## Semgrep OSS full-project security audit",
+              "",
+              f"- Rule configurations loaded: **{len(ok)}/{len(statuses)}**",
+              f"- Unique findings (deduplicated by rule and location): **{len(findings)}**",
+              "- Findings list omits source snippets and matched values to avoid exposing secrets in public workflow logs.",
+              "",
+              "### Findings by severity",
+              "",
+              "| Severity | Count |",
+              "|---|---:|",
+          ]
+          for severity in ["ERROR", "WARNING", "INFO", "INVENTORY"]:
+              lines.append(f"| {severity} | {severity_counts.get(severity, 0)} |")
+          if findings:
+              lines += ["", "### Locations (first 200)", "", "| Severity | Rule | File:line |", "|---|---|---|"]
+              for (rule, file, line), item in sorted(findings.items(), key=lambda entry: (entry[1]["severity"], entry[0][1], entry[0][2]))[:200]:
+                  safe_file = file.replace("|", "\\|")
+                  safe_rule = rule.replace("|", "\\|")
+                  lines.append(f"| {item['severity']} | `{safe_rule}` | `{safe_file}:{line}` |")
+          if failed:
+              lines += ["", "### Rule configurations that did not complete", ""]
+              lines += [f"- `{line}`" for line in failed]
+              lines += ["", "Check the job logs for the configuration loader's diagnostics. A failed config is not counted as a successful scan."]
+          output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          if not ok:
+              raise SystemExit("No Semgrep ruleset completed successfully.")
+          PY
