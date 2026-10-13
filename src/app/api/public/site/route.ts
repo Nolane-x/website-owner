@@ -45,7 +45,11 @@ export async function GET(req: Request) {
       settingsMap[s.key] = s.valueJson;
     }
 
-    const publicAccess = await checkPublicAccessProtection();
+    const publicAccessSetting = settingList.find((setting) => setting.key === 'public_access');
+    const publicAccess = await checkPublicAccessProtection({
+      ownerProfileId: profileList[0]?.id ?? null,
+      settingValue: publicAccessSetting?.valueJson,
+    });
     const siteSettings = toPublicSiteSettings(settingsMap);
 
     const isLocked = publicAccess.requirePassword && !publicAccess.hasValidGuestSession;
