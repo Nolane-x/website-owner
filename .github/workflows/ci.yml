@@ -35,8 +35,71 @@ jobs:
       - name: Audit Production Dependencies
         run: npm audit --omit=dev --audit-level=moderate
 
-      - name: Audit All Dependencies
-        run: npm audit --audit-level=moderate
+      - name: Audit All Dependencies (Unpatched Advisory Review)
+        shell: bash
+        run: |
+          if npm audit --json > /tmp/npm-audit.json; then
+            audit_status=0
+          else
+            audit_status=$?
+          fi
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/npm-audit.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const entries = Object.entries(audit.vulnerabilities || {});
+          const expectedAdvisory = 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm';
+          const braces = lock.packages?.['node_modules/braces'];
+          const eslintConfig = lock.packages?.['node_modules/eslint-config-next'];
+
+          function allowUnpatchedDevOnlyBraces(name, vulnerability) {
+            const advisoryUrls = (vulnerability.via || [])
+              .filter((entry) => entry && typeof entry === 'object' && typeof entry.url === 'string')
+              .map((entry) => entry.url);
+            const onlyExpectedAdvisory = advisoryUrls.length === 1 && advisoryUrls[0] === expectedAdvisory;
+            const noDirectOrRuntimeExposure = vulnerability.isDirect === false &&
+              Array.isArray(vulnerability.nodes) &&
+              vulnerability.nodes.length > 0 &&
+              vulnerability.nodes.every((node) => node === 'node_modules/braces') &&
+              braces?.dev === true &&
+              eslintConfig?.dev === true;
+            const onlyUnfixedHighFinding = vulnerability.severity === 'high' &&
+              vulnerability.fixAvailable &&
+              typeof vulnerability.fixAvailable === 'object' &&
+              vulnerability.fixAvailable.isSemVerMajor === true;
+            return name === 'braces' &&
+              onlyExpectedAdvisory &&
+              noDirectOrRuntimeExposure &&
+              onlyUnfixedHighFinding;
+          }
+
+          const unapproved = entries.filter(([name, vulnerability]) =>
+            !allowUnpatchedDevOnlyBraces(name, vulnerability)
+          );
+
+          if (unapproved.length > 0) {
+            console.error('Full dependency audit found vulnerabilities outside the reviewed dev-only exception:');
+            for (const [name, vulnerability] of unapproved) {
+              console.error(JSON.stringify({
+                name,
+                severity: vulnerability.severity,
+                isDirect: vulnerability.isDirect,
+                nodes: vulnerability.nodes,
+                fixAvailable: vulnerability.fixAvailable,
+                advisories: (vulnerability.via || []).filter((entry) => entry && typeof entry === 'object')
+                  .map((entry) => ({ title: entry.title, url: entry.url, range: entry.range })),
+              }));
+            }
+            process.exit(1);
+          }
+
+          if (entries.length === 0) {
+            console.log('Full dependency audit: no reported vulnerabilities.');
+          } else {
+            console.warn('REVIEWED EXCEPTION: braces is a dev-only transitive dependency of eslint-config-next; GHSA-vfj7-8cjw-p6xm has no compatible patched release, and npm proposes only a breaking major downgrade. Production dependencies are separately gated by npm audit --omit=dev. Re-check this exception when the advisory or upstream package changes.');
+          }
+          NODE
 
       - name: Run ESLint
         run: npm run lint
