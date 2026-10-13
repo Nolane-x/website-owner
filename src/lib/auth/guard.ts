@@ -4,6 +4,7 @@ import { getDb, initializeDatabase } from '../db';
 import { profiles, settings } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getGuestSessionFromCookies } from './guest-session';
+import { MAX_PUBLIC_ACCESS_CONFIG_BYTES } from '../security/public-egress-limits';
 
 export type RequireOwnerResult =
   | { authorized: true; profile: AuthenticatedProfile; session: AuthenticatedSession; response?: never }
@@ -81,7 +82,19 @@ export async function checkPublicAccessProtection(preloaded?: PreloadedPublicAcc
     }
 
     const publicSettings = await db
-      .select({ valueJson: settings.valueJson })
+      .select({
+        valueJson: sql<Record<string, unknown>>`CASE
+          WHEN OCTET_LENGTH(${settings.valueJson}::text) <= ${MAX_PUBLIC_ACCESS_CONFIG_BYTES}
+            THEN ${settings.valueJson}
+          ELSE jsonb_build_object(
+            'requirePassword', TRUE,
+            'passwordHash', 'PUBLIC_ACCESS_CONFIG_TOO_LARGE',
+            'passwordHint', 'Cấu hình truy cập vượt giới hạn; cần kiểm tra trong quản trị.',
+            'allowCopy', FALSE,
+            'showSearch', FALSE
+          )
+        END`,
+      })
       .from(settings)
       .where(and(eq(settings.key, 'public_access'), eq(settings.profileId, ownerId)))
       .limit(1);
