@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     // 1. Lấy thông tin hiển thị của Owner
     const profileList = await db.select({
       id: profiles.id,
-      displayName: profiles.displayName,
+      displayName: sql<string>`left(${profiles.displayName}, 120)`,
       bio: sql<string | null>`left(${profiles.bio}, 1200)`,
       avatarUrl: sql<string | null>`CASE WHEN ${profiles.avatarUrl} IS NOT NULL AND length(${profiles.avatarUrl}) <= 4096 AND ${profiles.avatarUrl} NOT LIKE 'data:%' THEN ${profiles.avatarUrl} ELSE NULL END`,
     }).from(profiles).orderBy(profiles.createdAt).limit(1);
