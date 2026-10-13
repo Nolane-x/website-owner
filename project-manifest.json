@@ -213,7 +213,7 @@
       "mimeType": "application/json",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Record CI dependency audits, CSP hardening, bootstrap race prevention, and Semgrep OSS scanning."
+      "shortDescription": "Record bootstrap locking, CSP hardening, full dependency review, and Semgrep audit coverage."
     },
     {
       "relativePath": "src/app/api/admin/export/route.ts",
@@ -565,7 +565,7 @@
       "mimeType": "text/yaml",
       "version": "5.0.0",
       "status": "modified",
-      "shortDescription": "Run both production-only and full dependency audits in CI so vulnerable build/test dependencies are not ignored."
+      "shortDescription": "Keep production dependency vulnerabilities as a hard gate and fully audit dev dependencies, allowing only the reviewed, unpatched, dev-only braces advisory with a breaking-major-only npm fix suggestion."
     },
     {
       "relativePath": "tests/sanitize-runtime.test.ts",
