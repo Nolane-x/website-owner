@@ -5,6 +5,7 @@ import {
   getEcosystemStats,
   serializeEcosystem,
   stepEcosystem,
+  type EcosystemWorld,
 } from '@/lib/life-lab/ecosystem';
 
 describe('Life Lab evolution ecosystem engine', () => {
@@ -68,7 +69,7 @@ describe('Life Lab evolution ecosystem engine', () => {
       age: 30,
       genome: { metabolism: 0.45, vision: 5, fertility: 0.065 },
     }));
-    let world = {
+    let world: EcosystemWorld = {
       ...base,
       food: new Uint8Array(base.food.length).fill(3),
       organisms,
