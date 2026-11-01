@@ -289,7 +289,7 @@ describe('Evolution Lab Living World engine', () => {
     const right = createLivingWorld(202, 32, 20, { grazer: 10, hunter: 1, omnivore: 4, parasite: 0, microbe: 8 });
     const comparison = compareLivingWorlds(left, right);
     expect(comparison.populationDelta).toBe(6);
-    expect(comparison.lineageDiversityDelta).toBe(0);
+    expect(comparison.lineageDiversityDelta).toBe(-1);
     expect(comparison.species.grazer).toBe(2);
     expect(comparison.species.parasite).toBe(-1);
     expect(Number.isFinite(comparison.traitDifferences.sociality)).toBe(true);
