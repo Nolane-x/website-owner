@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react';
 import {
   ArrowLeft,
-  Atom,
   BookOpen,
   Bookmark,
   Bot,
