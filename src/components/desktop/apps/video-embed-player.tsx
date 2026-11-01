@@ -97,7 +97,7 @@ function playerErrorMessage(code: number): string {
   return 'YouTube không thể phát video này trong trình nhúng.';
 }
 
-function YouTubePlayer({ item, shortMode, onProgress, onStateChange }: VideoPlayerProps) {
+function YouTubePlayer({ item, onProgress, onStateChange }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayerInstance | null>(null);
   const callbacksRef = useRef({ onProgress, onStateChange });
