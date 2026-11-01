@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addVideoToLibrary,
+  buildVideoRecommendationQuery,
   createVideoLibraryItem,
   createVideoPlaylist,
   emptyVideoLibrary,
@@ -122,6 +123,17 @@ describe('Video Library recommendations', () => {
     state = recordVideoProgress(state, recent.id, 30, 100);
     const ranked = rankVideoRecommendations([popular, recent, relevant], state, 5);
     expect(ranked.map((item) => item.id)).toEqual([relevant.id, popular.id]);
+  });
+
+  it('builds a focused YouTube query from favorites, watch-later and viewing history', () => {
+    const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning neural networks', creator: 'AI Research Lab' })!;
+    const saved = addVideoToLibrary(emptyVideoLibrary(), favorite);
+    const interested = toggleVideoFavorite(saved, favorite.id);
+    const query = buildVideoRecommendationQuery(interested, 4);
+    expect(query).toContain('learning');
+    expect(query).toContain('neural');
+    expect(query.split(' ')).toHaveLength(4);
+    expect(buildVideoRecommendationQuery(emptyVideoLibrary())).toBe('');
   });
 
   it('uses popularity as a cold-start signal and respects the requested result limit', () => {
