@@ -185,7 +185,7 @@ describe('Negative video discovery preferences', () => {
     const unrelated = createVideoLibraryItem({
       platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'English speaking practice for IELTS',
     })!;
-    const state = toggleMutedVideoTopic(emptyVideoLibrary(), 'robotics');
+    const state = toggleMutedVideoTopic(toggleFollowedVideoTopic(emptyVideoLibrary(), 'robotics'), 'robotics');
 
     expect(rankVideoRecommendations([robotics, unrelated], state, 2).map((item) => item.id))
       .toEqual([unrelated.id, robotics.id]);
