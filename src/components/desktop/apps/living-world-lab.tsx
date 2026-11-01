@@ -48,7 +48,7 @@ const EXPERIMENT_KEY = 'webos:evolution:living-world-experiments:v2';
 const MAX_CHECKPOINTS = 12;
 const MAX_EXPERIMENTS = 6;
 
-type MapLayer = 'terrain' | 'food' | 'climate';
+type MapLayer = 'terrain' | 'elevation' | 'food' | 'soil' | 'climate';
 
 interface PopulationSample {
   generation: number;
@@ -154,12 +154,28 @@ function drawLivingWorld(canvas: HTMLCanvasElement | null, world: LivingWorld, l
   for (let index = 0; index < world.biomes.length; index++) {
     const x = index % world.width;
     const y = Math.floor(index / world.width);
-    context.fillStyle = biomeColors[world.biomes[index]] ?? biomeColors[0];
+    if (layer === 'elevation') {
+      const height = world.elevation[index];
+      const shade = Math.round(42 + height / 255 * 180);
+      context.fillStyle = 'rgb(' + shade + ',' + Math.min(255, shade + 8) + ',' + Math.min(255, shade + 18) + ')';
+    } else if (layer === 'soil') {
+      const fertility = world.fertility[index];
+      const nutrient = world.detritus[index];
+      context.fillStyle = 'rgb(' + Math.round(55 + fertility * 0.16) + ',' + Math.round(48 + fertility * 0.68) + ',' + Math.round(39 + nutrient * 8) + ')';
+    } else {
+      context.fillStyle = biomeColors[world.biomes[index]] ?? biomeColors[0];
+    }
     context.fillRect(Math.floor(x * cellWidth), Math.floor(y * cellHeight), Math.ceil(cellWidth), Math.ceil(cellHeight));
     if (layer === 'food' && world.food[index] > 0) {
       const alpha = 0.13 + world.food[index] / 15 * 0.67;
       context.fillStyle = 'rgba(180, 255, 144,' + alpha.toFixed(2) + ')';
       context.fillRect(Math.floor(x * cellWidth), Math.floor(y * cellHeight), Math.ceil(cellWidth), Math.ceil(cellHeight));
+    }
+    if (layer === 'food' && world.seedBank[index] > 0 && (x + y) % 2 === 0) {
+      context.beginPath();
+      context.arc((x + 0.5) * cellWidth, (y + 0.5) * cellHeight, Math.max(1, Math.min(cellWidth, cellHeight) * 0.13), 0, Math.PI * 2);
+      context.fillStyle = 'rgba(248, 213, 122,' + (0.2 + world.seedBank[index] / 15 * 0.65).toFixed(2) + ')';
+      context.fill();
     }
     if (layer === 'climate') {
       const heat = world.temperature[index];
@@ -766,12 +782,22 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
                 onLostPointerCapture={() => { paintingRef.current = false; lastPaintedCellRef.current = -1; }}
               />
               <div className="pointer-events-none absolute bottom-2 left-2 flex max-w-[75%] flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-black/75 px-2.5 py-1.5 text-[8px] text-stone-200 backdrop-blur">
-                {BIOMES.map((biome) => <span key={biome.id} className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: biome.color }} />{biome.name}</span>)}
+                {layer === 'terrain'
+                  ? BIOMES.map((biome) => <span key={biome.id} className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: biome.color }} />{biome.name}</span>)
+                  : layer === 'food'
+                    ? <><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#a8f08f]" />Sinh khối</span><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#f8d57a]" />Ngân hàng hạt</span><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#d5ad69]" />Chất hữu cơ</span></>
+                    : layer === 'elevation'
+                      ? <><span>Thấp · xanh tối</span><span>Cao · sáng</span></>
+                      : layer === 'soil'
+                        ? <><span>Đất nghèo</span><span>Đất giàu dinh dưỡng</span></>
+                        : <><span>Lạnh / ít ẩm</span><span>Nóng / ẩm</span></>}
               </div>
               <div className="absolute right-2 top-2 flex flex-wrap justify-end gap-1">
                 {([
-                  ['terrain', 'Địa hình'],
-                  ['food', 'Thức ăn'],
+                  ['terrain', 'Sinh cảnh'],
+                  ['elevation', 'Độ cao'],
+                  ['food', 'Cây & hạt'],
+                  ['soil', 'Đất'],
                   ['climate', 'Khí hậu'],
                 ] as Array<[MapLayer, string]>).map(([value, label]) => (
                   <button key={value} type="button" onClick={() => { setEditingTerrain(false); setLayer(value); }} aria-pressed={layer === value} className={layer === value ? 'rounded-md border border-cyan-200/35 bg-cyan-200/20 px-2 py-1 text-[8px] text-cyan-50' : 'rounded-md border border-white/10 bg-black/65 px-2 py-1 text-[8px] text-stone-300 backdrop-blur'}>{label}</button>
@@ -811,7 +837,8 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
 
           <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StatCard label="Quần thể" value={stats.population.toLocaleString('vi-VN')} detail={stats.diversity + '/5 nhóm còn tồn tại'} tone="text-white" />
-            <StatCard label="Thảm thực vật" value={stats.foodUnits.toLocaleString('vi-VN')} detail="Đơn vị thức ăn trên bản đồ" tone="text-lime-200" />
+            <StatCard label="Thảm thực vật" value={stats.foodUnits.toLocaleString('vi-VN')} detail="Sinh khối thực vật trên bản đồ" tone="text-lime-200" />
+            <StatCard label="Ngân hàng hạt" value={stats.seedUnits.toLocaleString('vi-VN')} detail="Hạt giống trong đất" tone="text-amber-100" />
             <StatCard label="Sinh / tử" value={stats.births.toLocaleString('vi-VN') + ' / ' + stats.deaths.toLocaleString('vi-VN')} detail="Tổng tích lũy trong thế giới" tone="text-cyan-100" />
             <StatCard label="Dòng di truyền" value={stats.lineageDiversity.toLocaleString('vi-VN')} detail="Nhánh gene đang tồn tại" tone="text-violet-100" />
             <StatCard label="Năng lượng TB" value={stats.averageEnergy.toFixed(1)} detail="Mức năng lượng cá thể" tone="text-amber-100" />
@@ -971,6 +998,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
                 <div className="flex justify-between"><span className="text-stone-500">Đa dạng loài</span><span className="font-mono text-white">{comparison.a.diversity} → {comparison.b.diversity}</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Dòng gene</span><span className="font-mono text-white">{comparison.a.lineageDiversity} → {comparison.b.lineageDiversity} ({comparison.diff.lineageDiversityDelta > 0 ? '+' : ''}{comparison.diff.lineageDiversityDelta})</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Thức ăn chênh lệch</span><span className="font-mono text-white">{comparison.diff.foodDelta > 0 ? '+' : ''}{comparison.diff.foodDelta}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Ngân hàng hạt chênh lệch</span><span className="font-mono text-white">{comparison.diff.seedDelta > 0 ? '+' : ''}{comparison.diff.seedDelta}</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Sinh / tử chênh lệch</span><span className="font-mono text-white">+{comparison.diff.birthDelta} / +{comparison.diff.deathDelta}</span></div>
                 <div className="border-t border-white/10 pt-2">
                   {SPECIES.map((species) => <div key={species.id} className="flex justify-between py-0.5"><span className="text-stone-500">{species.short}</span><span className="font-mono text-stone-200">{comparison.diff.species[species.id] > 0 ? '+' : ''}{comparison.diff.species[species.id]}</span></div>)}
