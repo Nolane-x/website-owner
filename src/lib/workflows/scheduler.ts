@@ -190,6 +190,7 @@ export async function runDailyScheduledOverdueReports(
           totalTasks: report.totalTasks,
           overdueCount: report.overdueCount,
           overdueTasks: report.overdueTasks,
+          overdueTasksTruncated: report.overdueTasksTruncated,
           sideEffects: false,
           executorMode: 'legacy_read_only',
         };
