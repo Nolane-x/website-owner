@@ -30,6 +30,7 @@ export interface WorkflowNodeExecutorResult {
   totalTasks?: number;
   overdueCount?: number;
   overdueTasks?: OverdueReport['overdueTasks'];
+  overdueTasksTruncated?: boolean;
 }
 
 export class WorkflowExecutionError extends Error {
@@ -245,7 +246,8 @@ export async function executeWorkflowGraph(
       executionTrace,
       totalTasks: report.totalTasks,
       overdueCount: report.overdueCount,
-      overdueTasks: report.overdueTasks.slice(0, 100),
+      overdueTasks: report.overdueTasks,
+      overdueTasksTruncated: report.overdueTasksTruncated,
     };
   }
 
@@ -367,7 +369,12 @@ async function executeOperation(
     }
     case 'emit_no_overdue_report': {
       if (!context.overdueReport) {
-        if (!context.tasks) context.tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
+        if (!context.tasks) context.tasks = await db.select({
+          id: kanbanTasks.id,
+          title: kanbanTasks.title,
+          dueDate: kanbanTasks.dueDate,
+          status: kanbanTasks.status,
+        }).from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
         context.overdueReport = buildOverdueReport(context.tasks, now);
       }
       if (context.overdueReport.overdueCount !== 0) {
