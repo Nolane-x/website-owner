@@ -464,6 +464,40 @@ function recommendationTokens(value: string): string[] {
     .match(/[a-z0-9]{3,}/g)?.filter((token) => !RECOMMENDATION_STOP_WORDS.has(token)) ?? [];
 }
 
+/** Build a compact YouTube query from the owner's saved interests for fresh recommendations. */
+export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms = 5): string {
+  const safeLimit = Number.isFinite(maxTerms) ? Math.max(0, Math.min(8, Math.floor(maxTerms))) : 5;
+  if (safeLimit === 0) return '';
+  const byId = new Map(state.items.map((item) => [item.id, item]));
+  const weights = new Map<string, number>();
+  const add = (value: string, weight: number) => {
+    for (const token of new Set(recommendationTokens(value))) {
+      weights.set(token, (weights.get(token) ?? 0) + weight);
+    }
+  };
+  for (const id of state.favorites.slice(0, 20)) {
+    const item = byId.get(id);
+    if (item) { add(item.title, 4); add(item.creator, 1.8); }
+  }
+  for (const id of state.watchLater.slice(0, 20)) {
+    const item = byId.get(id);
+    if (item) { add(item.title, 3); add(item.creator, 1.2); }
+  }
+  state.history.slice(0, 10).forEach((entry, index) => {
+    const item = byId.get(entry.itemId);
+    if (item) {
+      const weight = Math.max(0.8, 2 - index * 0.12);
+      add(item.title, weight);
+      add(item.creator, weight * 0.55);
+    }
+  });
+  return [...weights.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, safeLimit)
+    .map(([token]) => token)
+    .join(' ');
+}
+
 /** Rank provider candidates using only local favorites, watch-later and history metadata. */
 export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: VideoLibraryState, limit = 8): VideoLibraryItem[] {
   const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.min(24, Math.floor(limit))) : 8;
