@@ -432,7 +432,6 @@ export function createLivingWorld(
       const y = centerY + offset;
       if (y < 0 || y >= finalHeight) continue;
       const index = indexOf(x, y, finalWidth);
-      if (biomes[index] === BIOME.mountain) continue;
       biomes[index] = BIOME.water;
       humidity[index] = 255;
       fertility[index] = 0;
@@ -785,8 +784,16 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
         animal.y = host.y;
         const drain = (0.25 + animal.genome.virulence * 1.2) * world.rules.diseasePressure * (1 - host.genome.immunity * 0.72);
         host.energy -= drain;
-        animal.energy = Math.min(110, animal.energy + drain * 1.15);
+        animal.energy = Math.min(110, animal.energy + drain * 1.15
+          - 0.22 * animal.genome.metabolism * world.rules.metabolism);
         animal.age++;
+        if (animal.energy <= 0 || animal.age > 300) {
+          alive[organismIndex] = false;
+          deathsNow++;
+          const remains = indexOf(animal.x, animal.y, world.width);
+          detritus[remains] = Math.min(15, detritus[remains] + 1);
+          continue;
+        }
       }
       if (animal.hostId >= 0) {
         const threshold = world.rules.reproductionThreshold * 0.72;
