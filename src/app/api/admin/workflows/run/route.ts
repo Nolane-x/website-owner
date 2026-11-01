@@ -175,7 +175,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (workflow.triggerType === 'overdue_report') {
-      const tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, auth.profile.id));
+      const tasks = await db.select({
+        id: kanbanTasks.id,
+        title: kanbanTasks.title,
+        dueDate: kanbanTasks.dueDate,
+        status: kanbanTasks.status,
+      }).from(kanbanTasks).where(eq(kanbanTasks.profileId, auth.profile.id));
       const report = buildOverdueReport(tasks, new Date());
       const resultMessage = `Đã kiểm tra ${report.totalTasks} task; ${report.overdueCount} task quá hạn chưa hoàn tất.`;
       await finishRun('succeeded', {
@@ -183,6 +188,7 @@ export async function POST(req: NextRequest) {
         totalTasks: report.totalTasks,
         overdueCount: report.overdueCount,
         overdueTasks: report.overdueTasks,
+        overdueTasksTruncated: report.overdueTasksTruncated,
         sideEffects: false,
       });
       return NextResponse.json({
@@ -193,6 +199,7 @@ export async function POST(req: NextRequest) {
         totalTasks: report.totalTasks,
         overdueCount: report.overdueCount,
         overdueTasks: report.overdueTasks,
+        overdueTasksTruncated: report.overdueTasksTruncated,
         sideEffects: false,
       });
     }
