@@ -694,6 +694,7 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
     for (const token of new Set(recommendationTokens(text))) profile.set(token, (profile.get(token) ?? 0) + weight);
   };
   for (const topicId of state.followedTopics.slice(0, 20)) {
+    if (state.mutedTopics.includes(topicId)) continue;
     const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
     addProfile(topic ? topic.query + ' ' + topic.id.replace(/-/g, ' ') : topicId.replace(/-/g, ' '), 4.5);
   }
