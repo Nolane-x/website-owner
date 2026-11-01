@@ -189,6 +189,26 @@ describe('Video Library recommendations', () => {
     expect(buildVideoRecommendationQuery(emptyVideoLibrary())).toBe('');
   });
 
+  it('scores new recommendations against explicitly followed topics', () => {
+    const relevant = createVideoLibraryItem({
+      platform: 'youtube',
+      videoId: 'M7lc1UVf-VE',
+      title: 'Artificial intelligence agents explained',
+      creator: 'AI Research Channel',
+      viewCount: 2_000,
+    })!;
+    const popular = createVideoLibraryItem({
+      platform: 'youtube',
+      videoId: '9bZkp7q19f0',
+      title: 'Unrelated comedy compilation',
+      creator: 'Entertainment Channel',
+      viewCount: 900_000_000,
+    })!;
+    const state = toggleFollowedVideoTopic(emptyVideoLibrary(), 'artificial-intelligence');
+    expect(rankVideoRecommendations([popular, relevant], state, 2).map((item) => item.id))
+      .toEqual([relevant.id, popular.id]);
+  });
+
   it('limits creator repetition when ranking a recommendation shelf', () => {
     const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning neural networks', creator: 'AI Research Lab' })!;
     const candidates = [
