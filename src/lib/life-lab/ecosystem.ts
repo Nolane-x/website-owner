@@ -379,7 +379,6 @@ export function stepEcosystem(world: EcosystemWorld): EcosystemWorld {
 
   let birthsThisGeneration = 0;
   let deathsThisGeneration = 0;
-  const originalPopulation = organisms.length;
 
   for (const organismIndex of order) {
     const animal = organisms[organismIndex];
