@@ -450,7 +450,7 @@ describe('Evolution Lab Living World engine', () => {
   });
 
   it('rejects malformed, oversized, overlapping and invalid-genome world snapshots', () => {
-    const world = createLivingWorld(88, 32, 20, { grazer: 2, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const world = createLivingWorld(88, 32, 20, { grazer: 2, hunter: 0, omnivore: 0, parasite: 1, microbe: 0 });
     const valid = JSON.parse(serializeLivingWorld(world)) as Record<string, unknown>;
     expect(deserializeLivingWorld('not-json')).toBeNull();
     expect(deserializeLivingWorld('x'.repeat(500_001))).toBeNull();
@@ -467,6 +467,16 @@ describe('Evolution Lab Living World engine', () => {
     const badOrganisms = badGenome.organisms as Array<Record<string, unknown>>;
     badOrganisms[0] = { ...badOrganisms[0], genome: { ...(badOrganisms[0].genome as Record<string, unknown>), virulence: 5 } };
     expect(deserializeLivingWorld(JSON.stringify(badGenome))).toBeNull();
+
+    const misplacedParasite = JSON.parse(JSON.stringify(valid)) as Record<string, unknown>;
+    const misplacedOrganisms = misplacedParasite.organisms as Array<Record<string, unknown>>;
+    const parasiteIndex = misplacedOrganisms.findIndex((animal) => animal.species === 'parasite' && typeof animal.hostId === 'number' && animal.hostId >= 0);
+    expect(parasiteIndex).toBeGreaterThanOrEqual(0);
+    const parasite = misplacedOrganisms[parasiteIndex];
+    const host = misplacedOrganisms.find((animal) => animal.id === parasite.hostId);
+    expect(host).toBeDefined();
+    misplacedOrganisms[parasiteIndex] = { ...parasite, x: ((host?.x as number) + 1) % world.width };
+    expect(deserializeLivingWorld(JSON.stringify(misplacedParasite))).toBeNull();
 
     const badRules = { ...valid, rules: { ...(world.rules), mutationRate: 2 } };
     expect(deserializeLivingWorld(JSON.stringify(badRules))).toBeNull();
