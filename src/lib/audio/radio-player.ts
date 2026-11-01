@@ -57,27 +57,28 @@ export const RADIO_STATIONS: RadioStation[] = [
 
 export const DEFAULT_RADIO_STATION = RADIO_STATIONS[0];
 
-const listeners = new Set<(snapshot: RadioPlayerSnapshot) => void>();
+const listeners = new Set<() => void>();
 
-let snapshot: RadioPlayerSnapshot = {
+// Immutable snapshots keep useSyncExternalStore subscriptions stable and avoid
+// effects calling setState synchronously during Audio Lab mount.
+let snapshot: Readonly<RadioPlayerSnapshot> = Object.freeze({
   sourceUrl: null,
   stationName: null,
   status: 'idle',
   volume: 0.6,
   error: null,
-};
+});
 
 let audioElement: HTMLAudioElement | null = null;
 let playbackRequested = false;
 let playGeneration = 0;
 
 function emit(): void {
-  const current = getRadioPlayerSnapshot();
-  for (const listener of listeners) listener(current);
+  for (const listener of listeners) listener();
 }
 
 function update(patch: Partial<RadioPlayerSnapshot>): void {
-  snapshot = { ...snapshot, ...patch };
+  snapshot = Object.freeze({ ...snapshot, ...patch });
   emit();
 }
 
@@ -167,11 +168,11 @@ function getAudioElement(): HTMLAudioElement {
   return audio;
 }
 
-export function getRadioPlayerSnapshot(): RadioPlayerSnapshot {
-  return { ...snapshot };
+export function getRadioPlayerSnapshot(): Readonly<RadioPlayerSnapshot> {
+  return snapshot;
 }
 
-export function subscribeRadioPlayer(listener: (state: RadioPlayerSnapshot) => void): () => void {
+export function subscribeRadioPlayer(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     // Unsubscribing a window's UI must never stop the page-lifetime player.
