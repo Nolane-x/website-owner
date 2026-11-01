@@ -536,10 +536,31 @@ export function toggleHiddenVideoCreator(state: VideoLibraryState, item: VideoLi
   return { ...state, hiddenCreators };
 }
 
-export function isVideoExcludedFromRecommendations(item: VideoLibraryItem, state: VideoLibraryState): boolean {
-  if (state.notInterestedVideos.some((record) => record.id === item.id)) return true;
+export function isVideoNotInterested(item: VideoLibraryItem, state: VideoLibraryState): boolean {
+  return state.notInterestedVideos.some((record) => record.id === item.id);
+}
+
+export function isVideoCreatorHidden(item: VideoLibraryItem, state: VideoLibraryState): boolean {
   const keys = new Set(videoCreatorKeys(item));
   return state.hiddenCreators.some((entry) => keys.has(entry.key));
+}
+
+export function isVideoExcludedFromRecommendations(item: VideoLibraryItem, state: VideoLibraryState): boolean {
+  return isVideoNotInterested(item, state) || isVideoCreatorHidden(item, state);
+}
+
+export function restoreNotInterestedVideo(state: VideoLibraryState, videoId: string): VideoLibraryState {
+  return {
+    ...state,
+    notInterestedVideos: state.notInterestedVideos.filter((record) => record.id !== videoId),
+  };
+}
+
+export function restoreHiddenVideoCreator(state: VideoLibraryState, key: string): VideoLibraryState {
+  return {
+    ...state,
+    hiddenCreators: state.hiddenCreators.filter((entry) => entry.key !== key),
+  };
 }
 
 export function toggleVideoWatchLater(state: VideoLibraryState, itemId: string): VideoLibraryState {
