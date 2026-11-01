@@ -264,6 +264,7 @@ function eventIcon(event: WorldEvent) {
   if (event.type === 'weather' || event.type === 'season') return <Wind className="h-3.5 w-3.5 text-sky-200" />;
   if (event.type === 'extinction' || event.type === 'crash') return <ShieldAlert className="h-3.5 w-3.5 text-rose-200" />;
   if (event.type === 'birth' || event.type === 'boom') return <Leaf className="h-3.5 w-3.5 text-lime-200" />;
+  if (event.type === 'speciation') return <GitBranch className="h-3.5 w-3.5 text-violet-200" />;
   return <Activity className="h-3.5 w-3.5 text-amber-200" />;
 }
 
@@ -279,6 +280,7 @@ function buildResearchNotes(world: LivingWorld, stats: LivingWorldStats): string
   if (stats.counts.hunter > Math.max(1, stats.counts.grazer) * 0.42) notes.push('Áp lực săn mồi tương đối cao so với con mồi ăn cỏ; quần thể săn mồi có thể tự suy giảm nếu nguồn con mồi cạn kiệt.');
   if (stats.counts.microbe < 3 && stats.detritusUnits > 30) notes.push('Vật chất hữu cơ đang tích tụ trong khi vi sinh vật ít. Chu trình tái chế dinh dưỡng có nguy cơ chậm lại.');
   if (stats.diversity <= 2) notes.push('Độ đa dạng loài thấp. Một cú sốc môi trường có thể gây tác động dây chuyền lên toàn bộ hệ sinh thái.');
+  if (stats.lineageDiversity > stats.diversity) notes.push('Có ' + stats.lineageDiversity + ' dòng gene đang tồn tại trên ' + stats.diversity + ' nhóm sinh thái. Đây là phân nhánh di truyền trong mô phỏng, chưa đồng nghĩa với cách ly sinh sản hay loài mới ngoài tự nhiên.');
   if (stats.averageTraits.immunity < 0.25 && stats.counts.parasite > 0) notes.push('Miễn dịch di truyền trung bình thấp trong khi ký sinh trùng vẫn tồn tại; đây là một áp lực chọn lọc đáng theo dõi.');
   if (notes.length === 0) notes.push('Chưa có tín hiệu mất cân bằng nổi bật theo các ngưỡng phân tích đơn giản. Hãy tiếp tục chạy nhiều mùa để kiểm tra độ ổn định.');
   return notes.slice(0, 5);
@@ -289,16 +291,13 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(7);
   const [layer, setLayer] = useState<MapLayer>('terrain');
-  const [stats, setStats] = useState<LivingWorldStats>(() => getLivingWorldStats(readInitialWorld()));
-  const [populationHistory, setPopulationHistory] = useState<PopulationSample[]>(() => [sampleWorld(readInitialWorld())]);
+  const [stats, setStats] = useState<LivingWorldStats>(() => getLivingWorldStats(world));
+  const [populationHistory, setPopulationHistory] = useState<PopulationSample[]>(() => [sampleWorld(world)]);
   const [checkpoints, setCheckpoints] = useState<WorldCheckpoint[]>(readCheckpoints);
   const [experiments, setExperiments] = useState<WorldExperiment[]>(readExperiments);
   const [experimentName, setExperimentName] = useState('');
-  const [seedInput, setSeedInput] = useState(() => String(readInitialWorld().seed));
-  const [populations, setPopulations] = useState<Record<SpeciesId, number>>(() => {
-    const initial = countSpecies(readInitialWorld());
-    return initial;
-  });
+  const [seedInput, setSeedInput] = useState(() => String(world.seed));
+  const [populations, setPopulations] = useState<Record<SpeciesId, number>>(() => countSpecies(world));
   const [settingsOpen, setSettingsOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [compareLeft, setCompareLeft] = useState('');
@@ -577,6 +576,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
             <StatCard label="Quần thể" value={stats.population.toLocaleString('vi-VN')} detail={stats.diversity + '/5 nhóm còn tồn tại'} tone="text-white" />
             <StatCard label="Thảm thực vật" value={stats.foodUnits.toLocaleString('vi-VN')} detail="Đơn vị thức ăn trên bản đồ" tone="text-lime-200" />
             <StatCard label="Sinh / tử" value={stats.births.toLocaleString('vi-VN') + ' / ' + stats.deaths.toLocaleString('vi-VN')} detail="Tổng tích lũy trong thế giới" tone="text-cyan-100" />
+            <StatCard label="Dòng di truyền" value={stats.lineageDiversity.toLocaleString('vi-VN')} detail="Nhánh gene đang tồn tại" tone="text-violet-100" />
             <StatCard label="Năng lượng TB" value={stats.averageEnergy.toFixed(1)} detail="Mức năng lượng cá thể" tone="text-amber-100" />
           </section>
 
@@ -720,6 +720,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
               <div className="mt-2 space-y-1.5 text-[8px]">
                 <div className="flex justify-between"><span className="text-stone-500">Chênh lệch dân số</span><span className="font-mono text-white">{comparison.diff.populationDelta > 0 ? '+' : ''}{comparison.diff.populationDelta}</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Đa dạng loài</span><span className="font-mono text-white">{comparison.a.diversity} → {comparison.b.diversity}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Dòng gene</span><span className="font-mono text-white">{comparison.a.lineageDiversity} → {comparison.b.lineageDiversity} ({comparison.diff.lineageDiversityDelta > 0 ? '+' : ''}{comparison.diff.lineageDiversityDelta})</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Thức ăn chênh lệch</span><span className="font-mono text-white">{comparison.diff.foodDelta > 0 ? '+' : ''}{comparison.diff.foodDelta}</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Sinh / tử chênh lệch</span><span className="font-mono text-white">+{comparison.diff.birthDelta} / +{comparison.diff.deathDelta}</span></div>
                 <div className="border-t border-white/10 pt-2">
