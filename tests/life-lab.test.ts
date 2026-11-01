@@ -99,6 +99,17 @@ describe('Life Lab simulation engine', () => {
     expect(clearSimulation(painted).generation).toBe(0);
   });
 
+  it('keeps a paint stroke idempotent when pointer events revisit the same cell', () => {
+    const initial = createEmptySimulation('life', 12, 12);
+    const painted = paintSimulation(initial, 5, 5, 1, 1);
+    const repeated = paintSimulation(painted, 5, 5, 1, 1);
+    expect(repeated.cells).toEqual(painted.cells);
+    expect(getSimulationStats(repeated).active).toBe(getSimulationStats(painted).active);
+
+    const erased = paintSimulation(repeated, 5, 5, 1, 0);
+    expect(getSimulationStats(erased).active).toBe(0);
+  });
+
   it('reports useful population and density metrics', () => {
     const state = setCells(createEmptySimulation('forest', 4, 4), [
       [0, 0, 1], [1, 0, 1], [2, 0, 2], [3, 3, 2],
