@@ -29,6 +29,7 @@ describe('page-lifetime external radio player', () => {
   let player: typeof import('../src/lib/audio/radio-player');
 
   beforeAll(async () => {
+    vi.stubGlobal('window', {});
     vi.stubGlobal('Audio', MockAudio);
     player = await import('../src/lib/audio/radio-player');
   });
