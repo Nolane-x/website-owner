@@ -259,19 +259,28 @@ function splitLineage(
   parent: WorldOrganism,
   child: WorldOrganism,
   mutationRate: number,
-  random: () => number,
 ): boolean {
-  if (mutationRate < 0.16) return false;
+  if (mutationRate < 0.08) return false;
   const ranges: Record<keyof WorldGenome, number> = {
     metabolism: 1.15, vision: 10, fertility: 0.072, speed: 1.45,
     sociality: 1, aggression: 1, camouflage: 1, immunity: 1,
     efficiency: 1.35, virulence: 1,
   };
   let largestShift = 0;
-  for (const key of Object.keys(ranges) as Array<keyof WorldGenome>) {
-    largestShift = Math.max(largestShift, Math.abs(child.genome[key] - parent.genome[key]) / ranges[key]);
+  let squaredDistance = 0;
+  let changedTraits = 0;
+  const keys = Object.keys(ranges) as Array<keyof WorldGenome>;
+  for (const key of keys) {
+    const shift = Math.abs(child.genome[key] - parent.genome[key]) / ranges[key];
+    largestShift = Math.max(largestShift, shift);
+    squaredDistance += shift * shift;
+    if (shift >= 0.025) changedTraits++;
   }
-  return largestShift >= 0.11 && random() < mutationRate * 1.8;
+  const meanGeneticDistance = Math.sqrt(squaredDistance / keys.length);
+  // A lineage is split only when a child carries several meaningful changes
+  // and a sufficiently large overall genome displacement. Random mutation
+  // already supplies the stochastic component, so no second random gate is needed.
+  return changedTraits >= 2 && largestShift >= 0.07 && meanGeneticDistance >= 0.035;
 }
 
 function passable(biome: number, species: SpeciesId): boolean {
@@ -832,7 +841,7 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
           child.energy = 25;
           child.genome = mutateGenome(animal.genome, world.rules.mutationRate, random);
           child.lineageId = animal.lineageId;
-          if (splitLineage(animal, child, world.rules.mutationRate, random)) {
+          if (splitLineage(animal, child, world.rules.mutationRate)) {
             child.lineageId = nextLineageId++;
             newLineages.add(child.lineageId);
           }
