@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOwner } from '@/lib/auth/guard';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { getClientIp, rateLimiter } from '@/lib/security/rate-limit';
-import { parseIsoDuration } from '@/lib/video/video-library';
+import { normalizeVideoSearchOrder, parseIsoDuration } from '@/lib/video/video-library';
 import { getStoredYouTubeApiKey } from '@/lib/video/youtube-api-key-store';
 
 export const runtime = 'nodejs';
@@ -146,7 +146,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       requestUrl.searchParams.set('part', 'snippet');
       requestUrl.searchParams.set('type', 'video');
       requestUrl.searchParams.set('q', mode === 'shorts' ? (query || 'shorts') : query);
-      requestUrl.searchParams.set('order', mode === 'shorts' ? 'viewCount' : 'relevance');
+      const order = mode === 'shorts' ? 'viewCount' : normalizeVideoSearchOrder(body.order);
+      requestUrl.searchParams.set('order', order);
       requestUrl.searchParams.set('safeSearch', 'moderate');
       requestUrl.searchParams.set('videoEmbeddable', 'true');
       requestUrl.searchParams.set('videoSyndicated', 'true');
