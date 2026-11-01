@@ -301,6 +301,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const [checkpoints, setCheckpoints] = useState<WorldCheckpoint[]>(readCheckpoints);
   const [experiments, setExperiments] = useState<WorldExperiment[]>(readExperiments);
   const [experimentName, setExperimentName] = useState('');
+  const [fileMessage, setFileMessage] = useState('');
   const [seedInput, setSeedInput] = useState(() => String(world.seed));
   const [populations, setPopulations] = useState<Record<SpeciesId, number>>(() => countSpecies(world));
   const [settingsOpen, setSettingsOpen] = useState(true);
@@ -556,6 +557,52 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
 
   const removeExperiment = (id: string) => setExperiments((items) => items.filter((item) => item.id !== id));
   const removeCheckpoint = (id: string) => setCheckpoints((items) => items.filter((item) => item.id !== id));
+
+  const exportCurrentWorld = () => {
+    try {
+      const snapshot = serializeLivingWorld(worldRef.current);
+      const blob = new Blob([snapshot], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'living-world-' + worldRef.current.seed + '-g' + worldRef.current.generation + '.json';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      setFileMessage('Đã tạo tệp snapshot JSON từ thế giới hiện tại.');
+    } catch {
+      setFileMessage('Không thể xuất snapshot trong trình duyệt này.');
+    }
+  };
+
+  const importWorldFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (file.size > 500_000) {
+      setFileMessage('Tệp vượt giới hạn 500 KB.');
+      input.value = '';
+      return;
+    }
+    try {
+      const snapshot = await file.text();
+      const restored = deserializeLivingWorld(snapshot);
+      if (!restored) {
+        setFileMessage('Snapshot không hợp lệ hoặc không tương thích với phiên bản này.');
+        input.value = '';
+        return;
+      }
+      setRunning(false);
+      commitWorld(restored);
+      lastCheckpointRef.current = restored.generation - (restored.generation % 40);
+      setSeedInput(String(restored.seed));
+      setPopulations(countSpecies(restored));
+      setEditingTerrain(false);
+      setFileMessage('Đã nhập thế giới G' + restored.generation.toLocaleString('vi-VN') + ' · seed ' + restored.seed + '.');
+    } catch {
+      setFileMessage('Không thể đọc tệp snapshot.');
+    }
+    input.value = '';
+  };
 
   const comparison = useMemo(() => {
     if (!compareLeft || !compareRight || compareLeft === compareRight) return null;
@@ -835,6 +882,18 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
                 <button type="button" onClick={() => removeExperiment(experiment.id)} aria-label={'Xóa ' + experiment.name} className="rounded p-1 text-stone-600 hover:text-rose-200"><Trash2 className="h-3 w-3" /></button>
               </div>)}
               {experiments.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[8px] text-stone-600">Chưa lưu thí nghiệm nào.</p> : null}
+            </div>
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <p className="text-[8px] font-semibold uppercase tracking-wider text-stone-500">Sao lưu và trao đổi thế giới</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" onClick={exportCurrentWorld} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cyan-200/20 bg-cyan-200/10 px-2.5 py-2 text-[8px] font-semibold text-cyan-50"><Save className="h-3 w-3" /> Xuất snapshot</button>
+                <label className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[8px] text-stone-300">
+                  <History className="h-3 w-3" /> Nhập snapshot
+                  <input type="file" accept=".json,application/json" onChange={(event) => { void importWorldFile(event); }} className="sr-only" />
+                </label>
+              </div>
+              {fileMessage ? <p aria-live="polite" className="mt-2 text-[8px] leading-relaxed text-stone-500">{fileMessage}</p> : null}
+              <p className="mt-2 text-[8px] leading-relaxed text-stone-600">Tệp được kiểm tra cấu trúc, kích thước, gene, tọa độ, liên kết vật chủ và giới hạn quần thể trước khi khôi phục. Không tải lên máy chủ.</p>
             </div>
           </section>
 
