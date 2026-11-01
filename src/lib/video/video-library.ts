@@ -51,6 +51,7 @@ export interface VideoPlaylist {
 export interface VideoNotInterestedRecord {
   id: string;
   title: string;
+  description: string;
   creator: string;
   updatedAt: number;
 }
@@ -360,6 +361,7 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
       const candidate: VideoNotInterestedRecord = {
         id: record.id,
         title: cleanText(record.title, 240, 'Video không quan tâm'),
+        description: cleanText(record.description, 600),
         creator: cleanText(record.creator, 120),
         updatedAt: Number.isFinite(record.updatedAt) ? Number(record.updatedAt) : Date.now(),
       };
@@ -523,7 +525,7 @@ export function toggleNotInterestedVideo(state: VideoLibraryState, item: VideoLi
   const existing = state.notInterestedVideos.some((record) => record.id === item.id);
   const notInterestedVideos = existing
     ? state.notInterestedVideos.filter((record) => record.id !== item.id)
-    : [{ id: item.id, title: cleanText(item.title, 240, 'Video không quan tâm'), creator: cleanText(item.creator, 120), updatedAt: Date.now() }, ...state.notInterestedVideos]
+    : [{ id: item.id, title: cleanText(item.title, 240, 'Video không quan tâm'), description: cleanText(item.description, 600), creator: cleanText(item.creator, 120), updatedAt: Date.now() }, ...state.notInterestedVideos]
       .slice(0, MAX_NOT_INTERESTED_VIDEOS);
   return { ...state, notInterestedVideos };
 }
@@ -540,6 +542,10 @@ export function toggleHiddenVideoCreator(state: VideoLibraryState, item: VideoLi
 
 export function isVideoNotInterested(item: VideoLibraryItem, state: VideoLibraryState): boolean {
   return state.notInterestedVideos.some((record) => record.id === item.id);
+}
+
+export function canHideVideoCreator(item: VideoLibraryItem): boolean {
+  return videoCreatorKeys(item).length > 0;
 }
 
 export function isVideoCreatorHidden(item: VideoLibraryItem, state: VideoLibraryState): boolean {
@@ -704,6 +710,18 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
     const item = byId.get(id);
     if (item) { addProfile(item.title, 4); addProfile(item.creator, 2.5); addProfile(item.description, 0.8); }
   }
+  const negativeProfile = new Map<string, number>();
+  const addNegative = (text: string, weight: number) => {
+    for (const token of new Set(recommendationTokens(text))) {
+      negativeProfile.set(token, (negativeProfile.get(token) ?? 0) + weight);
+    }
+  };
+  for (const record of state.notInterestedVideos.slice(0, 30)) {
+    addNegative(record.title, 1.25);
+    addNegative(record.description, 0.3);
+    addNegative(record.creator, 0.35);
+  }
+
   for (const id of state.watchLater.slice(0, 30)) {
     const item = byId.get(id);
     if (item) { addProfile(item.title, 3); addProfile(item.creator, 2); addProfile(item.description, 0.6); }
@@ -742,6 +760,9 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
     for (const token of titleTokens) score += (profile.get(token) ?? 0) * 3;
     for (const token of creatorTokens) score += (profile.get(token) ?? 0) * 2;
     for (const token of descriptionTokens) score += (profile.get(token) ?? 0) * 0.35;
+    for (const token of titleTokens) score -= (negativeProfile.get(token) ?? 0) * 1.8;
+    for (const token of creatorTokens) score -= (negativeProfile.get(token) ?? 0) * 0.8;
+    for (const token of descriptionTokens) score -= (negativeProfile.get(token) ?? 0) * 0.15;
     const mutedTitleHits = mutedTopicTokens.reduce((total, tokens) =>
       total + [...titleTokens].filter((token) => tokens.has(token)).length, 0);
     const mutedDescriptionHits = mutedTopicTokens.reduce((total, tokens) =>
