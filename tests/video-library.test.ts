@@ -130,6 +130,17 @@ describe('Followed video topics', () => {
     expect(toggleFollowedVideoTopic(state, '../admin')).toBe(state);
   });
 
+  it('keeps the latest follow when the saved topic limit is reached', () => {
+    const initial = normalizeVideoLibrary({
+      items: [],
+      followedTopics: Array.from({ length: 40 }, (_, index) => 'topic-' + index),
+    });
+    const updated = toggleFollowedVideoTopic(initial, 'new-topic');
+    expect(updated.followedTopics).toHaveLength(40);
+    expect(updated.followedTopics).not.toContain('topic-0');
+    expect(updated.followedTopics.at(-1)).toBe('new-topic');
+  });
+
   it('normalizes duplicate and invalid followed-topic values and supports older library snapshots', () => {
     const normalized = normalizeVideoLibrary({
       items: [],
@@ -169,12 +180,12 @@ describe('Video Library recommendations', () => {
     const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning neural networks', creator: 'AI Research Lab' })!;
     const saved = addVideoToLibrary(emptyVideoLibrary(), favorite);
     const interested = toggleFollowedVideoTopic(toggleVideoFavorite(saved, favorite.id), 'artificial-intelligence');
-    const query = buildVideoRecommendationQuery(interested, 4);
+    const query = buildVideoRecommendationQuery(interested, 8);
     expect(query).toContain('learning');
     expect(query).toContain('neural');
     expect(query).toContain('artificial');
     expect(query).toContain('intelligence');
-    expect(query.split(' ')).toHaveLength(4);
+    expect(query.split(' ')).toHaveLength(8);
     expect(buildVideoRecommendationQuery(emptyVideoLibrary())).toBe('');
   });
 
