@@ -31,6 +31,7 @@ export interface WorldOrganism {
   territoryX: number;
   territoryY: number;
   hostId: number;
+  lineageId: number;
 }
 
 export interface WorldRules {
@@ -46,7 +47,7 @@ export interface WorldRules {
 export interface WorldEvent {
   id: number;
   generation: number;
-  type: 'season' | 'weather' | 'birth' | 'predation' | 'extinction' | 'boom' | 'crash' | 'milestone';
+  type: 'season' | 'weather' | 'birth' | 'predation' | 'extinction' | 'boom' | 'crash' | 'speciation' | 'milestone';
   title: string;
   detail: string;
 }
@@ -58,6 +59,7 @@ export interface LivingWorld {
   seed: number;
   rngState: number;
   nextId: number;
+  nextLineageId: number;
   food: Uint8Array;
   detritus: Uint8Array;
   fertility: Uint8Array;
@@ -85,6 +87,7 @@ export interface LivingWorldStats {
   births: number;
   deaths: number;
   diversity: number;
+  lineageDiversity: number;
   preyPredatorBalance: number;
   fertileTiles: number;
 }
@@ -252,6 +255,25 @@ function mutateGenome(genome: WorldGenome, rate: number, random: () => number): 
   };
 }
 
+function splitLineage(
+  parent: WorldOrganism,
+  child: WorldOrganism,
+  mutationRate: number,
+  random: () => number,
+): boolean {
+  if (mutationRate < 0.16) return false;
+  const ranges: Record<keyof WorldGenome, number> = {
+    metabolism: 1.15, vision: 10, fertility: 0.072, speed: 1.45,
+    sociality: 1, aggression: 1, camouflage: 1, immunity: 1,
+    efficiency: 1.35, virulence: 1,
+  };
+  let largestShift = 0;
+  for (const key of Object.keys(ranges) as Array<keyof WorldGenome>) {
+    largestShift = Math.max(largestShift, Math.abs(child.genome[key] - parent.genome[key]) / ranges[key]);
+  }
+  return largestShift >= 0.11 && random() < mutationRate * 1.8;
+}
+
 function passable(biome: number, species: SpeciesId): boolean {
   if (species === 'microbe') return biome !== BIOME.water;
   if (species === 'parasite') return biome !== BIOME.water && biome !== BIOME.mountain;
@@ -309,6 +331,7 @@ function createOrganism(
   y: number,
   random: () => number,
   hostId = -1,
+  lineageId = SPECIES_IDS.indexOf(species) + 1,
 ): WorldOrganism {
   return {
     id,
@@ -325,6 +348,7 @@ function createOrganism(
     territoryX: x,
     territoryY: y,
     hostId,
+    lineageId,
   };
 }
 
@@ -400,6 +424,22 @@ export function createLivingWorld(
     }
   }
 
+  // Carve a continuous meandering river through the generated terrain.
+  const riverPhase = hashNoise(normalizedSeed, 7, 19, 4) * Math.PI * 2;
+  for (let x = 0; x < finalWidth; x++) {
+    const centerY = Math.floor(finalHeight * (0.48 + 0.17 * Math.sin(x * 0.075 + riverPhase) + 0.055 * Math.sin(x * 0.19 + riverPhase * 0.7)));
+    for (let offset = -1; offset <= 1; offset++) {
+      const y = centerY + offset;
+      if (y < 0 || y >= finalHeight) continue;
+      const index = indexOf(x, y, finalWidth);
+      if (biomes[index] === BIOME.mountain) continue;
+      biomes[index] = BIOME.water;
+      humidity[index] = 255;
+      fertility[index] = 0;
+      food[index] = 0;
+    }
+  }
+
   const world: LivingWorld = {
     width: finalWidth,
     height: finalHeight,
@@ -407,6 +447,7 @@ export function createLivingWorld(
     seed: normalizedSeed,
     rngState: random.state,
     nextId,
+    nextLineageId: SPECIES_IDS.length + 1,
     food,
     detritus,
     fertility,
@@ -726,6 +767,8 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
   let birthsNow = 0;
   let deathsNow = 0;
   let predationsNow = 0;
+  let nextLineageId = world.nextLineageId;
+  const newLineages = new Set<number>();
   for (const organismIndex of order) {
     const animal = organisms[organismIndex];
     if (!alive[organismIndex]) continue;
@@ -751,6 +794,11 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
           const child = createOrganism(world.nextId + birthsNow, 'parasite', animal.x, animal.y, random, animal.hostId);
           child.energy = 25;
           child.genome = mutateGenome(animal.genome, world.rules.mutationRate, random);
+          child.lineageId = animal.lineageId;
+          if (splitLineage(animal, child, world.rules.mutationRate, random)) {
+            child.lineageId = nextLineageId++;
+            newLineages.add(child.lineageId);
+          }
           animal.energy -= 22;
           organisms.push(child);
           alive.push(true);
@@ -885,6 +933,11 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
         const child = createOrganism(world.nextId + birthsNow, animal.species, position.x, position.y, random);
         child.energy = 35;
         child.genome = mutateGenome(animal.genome, world.rules.mutationRate, random);
+        child.lineageId = animal.lineageId;
+        if (splitLineage(animal, child, world.rules.mutationRate, random)) {
+          child.lineageId = nextLineageId++;
+          newLineages.add(child.lineageId);
+        }
         child.territoryX = animal.territoryX;
         child.territoryY = animal.territoryY;
         animal.energy -= 30;
@@ -902,6 +955,7 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
   const events = [...world.eventLog, ...climate.events].slice(-MAX_EVENTS);
   if (birthsNow > 0 && (world.generation + 1) % 20 === 0) addEvent(events, world.generation + 1, 'birth', 'Thế hệ mới xuất hiện', birthsNow + ' cá thể được sinh ra trong lượt mô phỏng này.');
   if (predationsNow >= 3) addEvent(events, world.generation + 1, 'predation', 'Áp lực săn mồi tăng', predationsNow + ' cuộc săn thành công trong thế hệ này.');
+  if (newLineages.size > 0) addEvent(events, world.generation + 1, 'speciation', 'Dòng di truyền phân nhánh', newLineages.size + ' nhánh gene mới hình thành sau các đột biến lớn. Đây là phân nhánh di truyền trong mô hình, chưa khẳng định cách ly sinh sản.');
   for (const species of SPECIES_IDS) {
     if (previousCounts[species] > 0 && nextCounts[species] === 0) {
       addEvent(events, world.generation + 1, 'extinction', 'Một loài biến mất', SPECIES.find((entry) => entry.id === species)?.name + ' đã tuyệt chủng trong mô phỏng.');
@@ -919,6 +973,7 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
     generation: world.generation + 1,
     rngState: randomState.state,
     nextId: world.nextId + birthsNow,
+    nextLineageId,
     food,
     detritus,
     humidity,
@@ -956,6 +1011,7 @@ export function getLivingWorldStats(world: LivingWorld): LivingWorldStats {
     if (world.fertility[index] >= 128) fertileTiles++;
   }
   const diversity = SPECIES_IDS.filter((species) => counts[species] > 0).length;
+  const lineageDiversity = new Set(world.organisms.map((animal) => animal.lineageId)).size;
   return {
     population,
     counts,
@@ -966,6 +1022,7 @@ export function getLivingWorldStats(world: LivingWorld): LivingWorldStats {
     births: world.births,
     deaths: world.deaths,
     diversity,
+    lineageDiversity,
     preyPredatorBalance: counts.hunter + counts.omnivore > 0
       ? counts.grazer / (counts.hunter + counts.omnivore)
       : counts.grazer,
@@ -983,6 +1040,7 @@ export function serializeLivingWorld(world: LivingWorld): string {
     seed: world.seed,
     rngState: world.rngState,
     nextId: world.nextId,
+    nextLineageId: world.nextLineageId,
     food: encode(world.food),
     detritus: encode(world.detritus),
     fertility: encode(world.fertility),
@@ -1059,6 +1117,7 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
     if (!finite(rngState) || !Number.isInteger(rngState) || rngState < 0 || rngState > 0xffff_ffff) return null;
     if (!finite(parsed.generation) || !Number.isInteger(parsed.generation) || parsed.generation < 0) return null;
     if (!finite(parsed.nextId) || !Number.isInteger(parsed.nextId) || parsed.nextId < 1 || parsed.nextId > 2_000_000_000) return null;
+    if (!finite(parsed.nextLineageId) || !Number.isInteger(parsed.nextLineageId) || parsed.nextLineageId < SPECIES_IDS.length + 1 || parsed.nextLineageId > 2_000_000_000) return null;
     if (!finite(parsed.births) || !Number.isInteger(parsed.births) || parsed.births < 0) return null;
     if (!finite(parsed.deaths) || !Number.isInteger(parsed.deaths) || parsed.deaths < 0) return null;
     if (!SEASON_IDS.includes(parsed.season as SeasonId) || !WEATHER_IDS.includes(parsed.weather as WeatherId)) return null;
@@ -1092,6 +1151,7 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
       if (animal.memoryX < -1 || animal.memoryX >= width || animal.memoryY < -1 || animal.memoryY >= height) return null;
       if (animal.threatX < -1 || animal.threatX >= width || animal.threatY < -1 || animal.threatY >= height) return null;
       if (animal.territoryX < 0 || animal.territoryX >= width || animal.territoryY < 0 || animal.territoryY >= height) return null;
+      if (!finite(animal.lineageId) || !Number.isInteger(animal.lineageId) || animal.lineageId < 1 || animal.lineageId >= Number(parsed.nextLineageId)) return null;
       if (animal.species === 'parasite') {
         if (animal.hostId < -1 || (animal.hostId >= 0 && animal.hostId === animal.id)) return null;
       } else if (animal.hostId !== -1) return null;
@@ -1116,6 +1176,7 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
         territoryX: animal.territoryX,
         territoryY: animal.territoryY,
         hostId: animal.hostId,
+        lineageId: animal.lineageId,
       });
     }
     const validIds = new Set(organisms.map((animal) => animal.id));
@@ -1128,7 +1189,7 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
       if (!event || typeof event !== 'object') return null;
       const record = event as Record<string, unknown>;
       if (!finite(record.id) || !Number.isInteger(record.id) || !finite(record.generation) || !Number.isInteger(record.generation) || record.generation < 0) return null;
-      if (!['season', 'weather', 'birth', 'predation', 'extinction', 'boom', 'crash', 'milestone'].includes(String(record.type))) return null;
+      if (!['season', 'weather', 'birth', 'predation', 'extinction', 'boom', 'crash', 'speciation', 'milestone'].includes(String(record.type))) return null;
       if (typeof record.title !== 'string' || record.title.length > 120 || typeof record.detail !== 'string' || record.detail.length > 320) return null;
     }
     return {
@@ -1138,6 +1199,7 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
       seed,
       rngState,
       nextId: parsed.nextId,
+      nextLineageId: parsed.nextLineageId,
       food,
       detritus,
       fertility,
@@ -1167,6 +1229,7 @@ export function compareLivingWorlds(left: LivingWorld, right: LivingWorld): {
   birthDelta: number;
   deathDelta: number;
   diversityDelta: number;
+  lineageDiversityDelta: number;
   traitDifferences: Partial<Record<keyof WorldGenome, number>>;
 } {
   const a = getLivingWorldStats(left);
@@ -1185,6 +1248,7 @@ export function compareLivingWorlds(left: LivingWorld, right: LivingWorld): {
     birthDelta: b.births - a.births,
     deathDelta: b.deaths - a.deaths,
     diversityDelta: b.diversity - a.diversity,
+    lineageDiversityDelta: b.lineageDiversity - a.lineageDiversity,
     traitDifferences,
   };
 }
