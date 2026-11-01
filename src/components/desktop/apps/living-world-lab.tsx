@@ -291,6 +291,7 @@ function buildResearchNotes(world: LivingWorld, stats: LivingWorldStats): string
 export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const [world, setWorld] = useState<LivingWorld>(readInitialWorld);
   const [running, setRunning] = useState(false);
+  const [fastForwarding, setFastForwarding] = useState(false);
   const [speed, setSpeed] = useState(7);
   const [layer, setLayer] = useState<MapLayer>('terrain');
   const [editingTerrain, setEditingTerrain] = useState(false);
@@ -313,6 +314,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const lastCheckpointRef = useRef(world.generation - (world.generation % 40));
   const paintingRef = useRef(false);
   const lastPaintedCellRef = useRef(-1);
+  const batchCancelledRef = useRef(false);
 
   useEffect(() => {
     worldRef.current = world;
@@ -344,6 +346,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   }, [experiments]);
 
   useEffect(() => () => {
+    batchCancelledRef.current = true;
     try {
       localStorage.setItem(ACTIVE_KEY, serializeLivingWorld(worldRef.current));
     } catch {
@@ -487,8 +490,48 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   };
 
   const advanceOnce = () => {
+    if (fastForwarding) return;
     setRunning(false);
     commitWorld(stepLivingWorld(worldRef.current));
+  };
+
+  const fastForward = async (generations: number) => {
+    if (running || fastForwarding) return;
+    setRunning(false);
+    setFastForwarding(true);
+    batchCancelledRef.current = false;
+    let next = worldRef.current;
+    let lastCheckpoint = lastCheckpointRef.current;
+    const newCheckpoints: WorldCheckpoint[] = [];
+    const samples: PopulationSample[] = [];
+    try {
+      for (let index = 0; index < generations; index++) {
+        if (batchCancelledRef.current) return;
+        next = stepLivingWorld(next);
+        if (next.generation % 3 === 0) samples.push(sampleWorld(next));
+        if (next.generation >= lastCheckpoint + 40 && next.generation % 40 === 0) {
+          newCheckpoints.unshift({
+            id: 'auto-' + next.seed + '-' + next.generation,
+            name: 'Tự động · G' + next.generation.toLocaleString('vi-VN'),
+            generation: next.generation,
+            snapshot: serializeLivingWorld(next),
+            note: 'Mốc tự động trong tiến trình tua nhanh.',
+          });
+          lastCheckpoint = next.generation;
+        }
+        if ((index + 1) % 10 === 0) {
+          await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        }
+      }
+      worldRef.current = next;
+      setWorld(next);
+      setStats(getLivingWorldStats(next));
+      setPopulationHistory((current) => [...current, ...samples].slice(-100));
+      if (newCheckpoints.length > 0) setCheckpoints((current) => [...newCheckpoints, ...current].slice(0, MAX_CHECKPOINTS));
+      lastCheckpointRef.current = lastCheckpoint;
+    } finally {
+      if (!batchCancelledRef.current) setFastForwarding(false);
+    }
   };
 
   const updateRule = <K extends keyof WorldRules>(key: K, value: WorldRules[K]) => {
@@ -734,11 +777,13 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => running ? pauseWorld() : setRunning(true)} className={running ? 'inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-2.5 text-[10px] font-semibold text-amber-100' : 'inline-flex items-center gap-2 rounded-xl bg-cyan-200 px-4 py-2.5 text-[10px] font-semibold text-[#071216] hover:bg-cyan-100'}>
+              <button type="button" disabled={fastForwarding} onClick={() => running ? pauseWorld() : setRunning(true)} className={running ? 'inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-2.5 text-[10px] font-semibold text-amber-100 disabled:opacity-40' : 'inline-flex items-center gap-2 rounded-xl bg-cyan-200 px-4 py-2.5 text-[10px] font-semibold text-[#071216] hover:bg-cyan-100 disabled:opacity-40'}>
                 {running ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}{running ? 'Tạm dừng' : 'Cho thế giới tiến hóa'}
               </button>
-              <button type="button" onClick={advanceOnce} disabled={running} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><StepForward className="h-3.5 w-3.5" /> Một thế hệ</button>
-              <button type="button" onClick={createRandomWorld} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300"><Plus className="h-3.5 w-3.5" /> Thế giới mới</button>
+              <button type="button" onClick={advanceOnce} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><StepForward className="h-3.5 w-3.5" /> Một thế hệ</button>
+              <button type="button" onClick={() => { void fastForward(100); }} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-200/20 bg-cyan-200/10 px-3 py-2.5 text-[10px] text-cyan-50 disabled:opacity-40">+100 thế hệ</button>
+              <button type="button" onClick={() => { void fastForward(1000); }} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200/20 bg-violet-200/10 px-3 py-2.5 text-[10px] text-violet-50 disabled:opacity-40">+1.000 thế hệ</button>
+              <button type="button" onClick={createRandomWorld} disabled={fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Thế giới mới</button>
               <div className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
                 <Activity className="h-3.5 w-3.5 text-cyan-100" />
                 <span className="text-[9px] text-stone-500">Tốc độ</span>
@@ -983,7 +1028,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
 
       <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-[8px] text-stone-600">
         <span>Living World · Mô phỏng cục bộ, không API · {world.width * world.height} ô địa hình · tối đa 420 cá thể</span>
-        <span>{running ? 'Đang tiến hóa' : 'Đang tạm dừng'} · dữ liệu nằm trong browser profile này</span>
+        <span>{fastForwarding ? 'Đang tua nhanh' : running ? 'Đang tiến hóa' : 'Đang tạm dừng'} · dữ liệu nằm trong browser profile này</span>
       </footer>
     </section>
   );
