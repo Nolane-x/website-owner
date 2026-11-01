@@ -117,6 +117,11 @@ export const DynamicCalendarApp = dynamic(
   { loading: LoadingFallback, ssr: false }
 );
 
+export const DynamicVideoApp = dynamic(
+  () => import('@/components/desktop/apps/video-app').then((m) => m.VideoApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
 export function renderAppContent(appId: string) {
   switch (appId) {
     case 'inbox':
@@ -145,6 +150,8 @@ export function renderAppContent(appId: string) {
       return <DynamicWallpapersApp />;
     case 'music':
       return <DynamicMusicApp />;
+    case 'video':
+      return <DynamicVideoApp />;
     case 'calculator':
       return <DynamicCalculatorApp />;
     case 'devtools':
