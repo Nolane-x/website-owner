@@ -448,17 +448,18 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
 
     const biomeIndex = BIOMES.findIndex((biome) => biome.id === brushBiome);
     if (biomeIndex < 0) return;
-    const profile: Record<BiomeId, { food: number; fertility: number; humidity: number; temperature: number; elevation: number }> = {
-      plains: { food: 8, fertility: 150, humidity: 125, temperature: 168, elevation: 142 },
-      forest: { food: 11, fertility: 212, humidity: 178, temperature: 145, elevation: 130 },
-      desert: { food: 2, fertility: 45, humidity: 32, temperature: 228, elevation: 105 },
-      mountain: { food: 1, fertility: 64, humidity: 105, temperature: 112, elevation: 244 },
-      water: { food: 0, fertility: 0, humidity: 255, temperature: 108, elevation: 42 },
-      wetland: { food: 12, fertility: 226, humidity: 236, temperature: 142, elevation: 76 },
+    const profile: Record<BiomeId, { food: number; seeds: number; fertility: number; humidity: number; temperature: number; elevation: number }> = {
+      plains: { food: 8, seeds: 6, fertility: 150, humidity: 125, temperature: 168, elevation: 142 },
+      forest: { food: 11, seeds: 8, fertility: 212, humidity: 178, temperature: 145, elevation: 130 },
+      desert: { food: 2, seeds: 3, fertility: 45, humidity: 32, temperature: 228, elevation: 105 },
+      mountain: { food: 1, seeds: 2, fertility: 64, humidity: 105, temperature: 112, elevation: 244 },
+      water: { food: 0, seeds: 0, fertility: 0, humidity: 255, temperature: 108, elevation: 42 },
+      wetland: { food: 12, seeds: 7, fertility: 226, humidity: 236, temperature: 142, elevation: 76 },
     };
     const terrain = profile[brushBiome];
     const biomes = new Uint8Array(worldRef.current.biomes);
     const food = new Uint8Array(worldRef.current.food);
+    const seedBank = new Uint8Array(worldRef.current.seedBank);
     const fertility = new Uint8Array(worldRef.current.fertility);
     const humidity = new Uint8Array(worldRef.current.humidity);
     const temperature = new Uint8Array(worldRef.current.temperature);
@@ -480,6 +481,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
         if (occupied.has(index)) continue;
         biomes[index] = biomeIndex;
         food[index] = terrain.food;
+        seedBank[index] = terrain.seeds;
         fertility[index] = terrain.fertility;
         humidity[index] = terrain.humidity;
         temperature[index] = terrain.temperature;
@@ -488,7 +490,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
       }
     }
     if (!changed) return;
-    const next = { ...worldRef.current, biomes, food, fertility, humidity, temperature, elevation };
+    const next = { ...worldRef.current, biomes, food, seedBank, fertility, humidity, temperature, elevation };
     worldRef.current = next;
     setWorld(next);
     setStats(getLivingWorldStats(next));
