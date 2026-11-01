@@ -1,10 +1,19 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Radio, Play, Pause, Volume2, VolumeX, CloudRain, Waves, Flame, Wind, Disc, AlertTriangle, Loader2 } from 'lucide-react';
-import { AmbientMixer } from '@/lib/audio/ambient-mixer';
+import { ambientMixer } from '@/lib/audio/ambient-mixer';
 import type { AmbientSoundType } from '@/lib/audio/ambient-synth';
 import { loadMusicPreferences, saveMusicPreferences } from '@/lib/audio/audio-preferences';
+import {
+  getRadioPlayerSnapshot,
+  normalizeRadioStreamUrl,
+  pauseRadioStream,
+  playRadioStream,
+  RADIO_STATIONS,
+  setRadioPlayerVolume,
+  subscribeRadioPlayer,
+} from '@/lib/audio/radio-player';
 import { PREFERENCE_PERSISTENCE_EVENT, reportPreferencePersistence, type PreferencePersistenceResult } from '@/lib/persistence-events';
 
 interface AmbientTrack {
@@ -24,20 +33,30 @@ const TRACKS: AmbientTrack[] = [
 
 export function MusicApp() {
   const [initialPreferences] = useState(() => loadMusicPreferences());
-  const [mixer] = useState(() => new AmbientMixer());
-  const [activeLayers, setActiveLayers] = useState<AmbientSoundType[]>([]);
+  // Keep one shared mixer for the lifetime of the page, not one per window.
+  const [mixer] = useState(() => ambientMixer);
+  const [activeLayers, setActiveLayers] = useState<AmbientSoundType[]>(() => mixer.getActiveLayers());
   const [volumes, setVolumes] = useState<Record<AmbientSoundType, number>>(initialPreferences.volumes);
   const [masterVolume, setMasterVolume] = useState(initialPreferences.masterVolume);
   const [bars, setBars] = useState<number[]>(Array.from({ length: 12 }, () => 3));
   const [audioSupported, setAudioSupported] = useState(true);
   const [preferencesWarning, setPreferencesWarning] = useState<string | null>(null);
 
-  const [isRadioPlaying, setIsRadioPlaying] = useState(false);
-  const [isRadioLoading, setIsRadioLoading] = useState(false);
+  const radioState = useSyncExternalStore(subscribeRadioPlayer, getRadioPlayerSnapshot, getRadioPlayerSnapshot);
   const [radioVolume, setRadioVolume] = useState(initialPreferences.radioVolume);
-  const [radioError, setRadioError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [radioSourceUrl, setRadioSourceUrl] = useState(initialPreferences.radioSourceUrl);
+  const [radioStationName, setRadioStationName] = useState(initialPreferences.radioStationName);
+  const [customRadioUrl, setCustomRadioUrl] = useState(() =>
+    RADIO_STATIONS.some((station) => station.url === initialPreferences.radioSourceUrl)
+      ? ''
+      : initialPreferences.radioSourceUrl,
+  );
+  const [sourceError, setSourceError] = useState<string | null>(null);
+
   const activeSet = useMemo(() => new Set(activeLayers), [activeLayers]);
+  const selectedPreset = RADIO_STATIONS.some((station) => station.url === radioSourceUrl);
+  const isRadioPlaying = radioState.status === 'playing';
+  const isRadioLoading = radioState.status === 'loading';
 
   useEffect(() => {
     const handlePersistence = (event: Event) => {
@@ -49,31 +68,35 @@ export function MusicApp() {
   }, []);
 
   useEffect(() => {
-    const saved = saveMusicPreferences({ volumes, masterVolume, radioVolume });
-    reportPreferencePersistence('audio-lab', saved ? null : 'Không thể lưu âm lượng vào trình duyệt này; hãy kiểm tra quyền lưu dữ liệu website.');
-  }, [volumes, masterVolume, radioVolume]);
+    const saved = saveMusicPreferences({
+      volumes,
+      masterVolume,
+      radioVolume,
+      radioSourceUrl,
+      radioStationName,
+    });
+    reportPreferencePersistence('audio-lab', saved ? null : 'Không thể lưu âm lượng và nguồn radio vào trình duyệt này; hãy kiểm tra quyền lưu dữ liệu website.');
+  }, [volumes, masterVolume, radioVolume, radioSourceUrl, radioStationName]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = radioVolume;
+    setRadioPlayerVolume(radioVolume);
   }, [radioVolume]);
 
   useEffect(() => {
-    const audioElement = audioRef.current;
-    return () => {
-      mixer.stopAll();
-      if (audioElement) audioElement.pause();
-    };
-  }, [mixer]);
+    mixer.setMasterVolume(masterVolume);
+  }, [masterVolume, mixer]);
 
   useEffect(() => {
     if (activeLayers.length === 0) return;
     const interval = window.setInterval(() => setBars(mixer.getFrequencyLevels(12)), 100);
     return () => window.clearInterval(interval);
   }, [activeLayers.length, mixer]);
+
+  // Deliberately no audio cleanup here. The player and ambientMixer are
+  // page-lifetime singletons; unmounting this UI must not pause/stop playback.
   const displayedBars = activeLayers.length ? bars : Array.from({ length: 12 }, () => 3);
 
   const toggleSound = (type: AmbientSoundType) => {
-    setRadioError(null);
     if (activeSet.has(type)) {
       mixer.stopLayer(type);
       setActiveLayers((previous) => previous.filter((active) => active !== type));
@@ -82,7 +105,6 @@ export function MusicApp() {
     const started = mixer.startLayer(type, volumes[type]);
     if (!started) {
       setAudioSupported(false);
-      setRadioError('Trình duyệt không hỗ trợ Web Audio hoặc không thể khởi tạo âm thanh. Hãy thử Chrome/Edge.');
       return;
     }
     mixer.setMasterVolume(masterVolume);
@@ -100,50 +122,52 @@ export function MusicApp() {
   };
 
   const toggleRadio = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    setRadioError(null);
-    if (isRadioPlaying || isRadioLoading) {
-      audio.pause();
-      setIsRadioPlaying(false);
-      setIsRadioLoading(false);
+    if (radioState.status === 'playing' || radioState.status === 'loading') {
+      pauseRadioStream();
       return;
     }
-    setIsRadioLoading(true);
-    audio.volume = radioVolume;
+    setSourceError(null);
     try {
-      await audio.play();
-      setIsRadioPlaying(true);
-    } catch {
-      setIsRadioPlaying(false);
-      setRadioError('Không phát được luồng radio từ nguồn bên ngoài. Có thể do nguồn ngừng hoạt động, CORS/chính sách mạng hoặc codec.');
-    } finally {
-      setIsRadioLoading(false);
+      await playRadioStream(radioSourceUrl, radioStationName);
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'URL radio không hợp lệ.');
     }
   };
 
-  const handleRadioVolumeChange = (volume: number) => {
-    const safeVolume = Math.max(0, Math.min(1, volume));
-    setRadioVolume(safeVolume);
-    if (audioRef.current) audioRef.current.volume = safeVolume;
+  const handleStationChange = (value: string) => {
+    const station = RADIO_STATIONS.find((item) => item.url === value);
+    if (!station) return;
+    setRadioSourceUrl(station.url);
+    setRadioStationName(station.name);
+    setCustomRadioUrl('');
+    setSourceError(null);
   };
+
+  const applyCustomRadioUrl = () => {
+    try {
+      const safeUrl = normalizeRadioStreamUrl(customRadioUrl);
+      setRadioSourceUrl(safeUrl);
+      setRadioStationName('Luồng tùy chỉnh');
+      setSourceError(null);
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'URL radio không hợp lệ.');
+    }
+  };
+
+  const statusLabel = isRadioPlaying
+    ? 'Đang phát: ' + (radioState.stationName || 'Radio bên ngoài')
+    : isRadioLoading
+      ? 'Đang kết nối luồng radio...'
+      : radioState.status === 'paused'
+        ? 'Đã tạm dừng: ' + (radioState.stationName || 'Radio bên ngoài')
+        : radioState.status === 'error'
+          ? 'Không phát được luồng radio'
+          : activeLayers.length
+            ? activeLayers.length + ' lớp âm thanh tổng hợp đang chạy'
+            : 'Chưa có âm thanh nào đang chạy';
 
   return (
     <div className="flex flex-col h-full bg-stone-950 text-stone-200 text-xs p-4 overflow-y-auto space-y-5">
-      <audio
-        ref={audioRef}
-        src="https://streams.ilovemusic.de/iloveradio17.mp3"
-        preload="none"
-        onPlaying={() => { setIsRadioPlaying(true); setIsRadioLoading(false); setRadioError(null); }}
-        onPause={() => setIsRadioPlaying(false)}
-        onEnded={() => setIsRadioPlaying(false)}
-        onError={() => {
-          setIsRadioPlaying(false);
-          setIsRadioLoading(false);
-          setRadioError('Nguồn radio bên ngoài hiện không tải được. Đây là dịch vụ bên thứ ba, không được bảo đảm uptime hoặc giấy phép phát sóng bởi Personal Web OS.');
-        }}
-      />
-
       <div className="p-4 rounded-2xl bg-stone-900/80 border border-stone-800 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className={isRadioPlaying || activeLayers.length ? 'p-3 rounded-2xl bg-stone-800 text-emerald-400 border border-stone-700 animate-spin' : 'p-3 rounded-2xl bg-stone-800 text-emerald-400 border border-stone-700'} style={{ animationDuration: '6s' }}>
@@ -151,9 +175,7 @@ export function MusicApp() {
           </div>
           <div className="min-w-0">
             <h3 className="font-bold text-stone-100 text-sm">Audio Lab & Ambient Mixer</h3>
-            <p className="text-stone-400 text-[11px] mt-0.5">
-              {isRadioPlaying ? 'Radio bên ngoài đang phát' : activeLayers.length ? activeLayers.length + ' lớp âm thanh tổng hợp đang chạy' : 'Chưa có âm thanh tổng hợp nào đang chạy'}
-            </p>
+            <p className="text-stone-400 text-[11px] mt-0.5">{statusLabel}</p>
           </div>
         </div>
         <div className="flex items-end gap-1 h-9 shrink-0" role="img" aria-label="Phổ tần số âm thanh thực tế từ AnalyserNode Web Audio">
@@ -163,29 +185,92 @@ export function MusicApp() {
         </div>
       </div>
 
-      {radioError && <div role="alert" className="p-3 rounded-xl border border-amber-800 bg-amber-950/30 text-amber-200 text-xs flex items-start gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{radioError}</div>}
+      {(radioState.error || sourceError) && (
+        <div role="alert" className="p-3 rounded-xl border border-amber-800 bg-amber-950/30 text-amber-200 text-xs flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{sourceError || radioState.error}</span>
+        </div>
+      )}
 
-      <div className="p-3.5 rounded-xl bg-stone-900/60 border border-stone-800 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <button onClick={() => void toggleRadio()} disabled={isRadioLoading} className={isRadioPlaying ? 'p-3 rounded-xl transition disabled:opacity-50 bg-rose-600 hover:bg-rose-500 text-white' : 'p-3 rounded-xl transition disabled:opacity-50 bg-emerald-600 hover:bg-emerald-500 text-white'} aria-label={isRadioPlaying ? 'Tạm dừng radio bên ngoài' : 'Phát radio bên ngoài'}>
-            {isRadioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isRadioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-          </button>
-          <div className="min-w-0">
-            <span className="font-bold text-stone-200">Luồng radio bên thứ ba</span>
-            <span className="block text-stone-400 text-[11px]">Cần kết nối mạng; khả dụng phụ thuộc nguồn stream</span>
+      <section className="p-3.5 rounded-xl bg-stone-900/60 border border-stone-800 space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => void toggleRadio()}
+              className={isRadioPlaying ? 'p-3 rounded-xl transition bg-rose-600 hover:bg-rose-500 text-white' : 'p-3 rounded-xl transition disabled:opacity-50 bg-emerald-600 hover:bg-emerald-500 text-white'}
+              aria-label={isRadioPlaying || isRadioLoading ? 'Tạm dừng radio bên ngoài' : 'Phát radio bên ngoài'}
+            >
+              {isRadioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isRadioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+            </button>
+            <div className="min-w-0">
+              <span className="font-bold text-stone-200">Radio trực tuyến bên ngoài</span>
+              <span className="block text-stone-400 text-[11px]">
+                {radioState.stationName || radioStationName} · Phát trực tiếp từ máy chủ của đài
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {radioVolume === 0 ? <VolumeX className="w-4 h-4 text-stone-500" /> : <Volume2 className="w-4 h-4 text-stone-400" />}
+            <input type="range" min={0} max={1} step={0.05} value={radioVolume} onChange={(event) => setRadioVolume(Number(event.target.value))} aria-label="Âm lượng radio" className="w-24 accent-emerald-500 cursor-pointer" />
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {radioVolume === 0 ? <VolumeX className="w-4 h-4 text-stone-500" /> : <Volume2 className="w-4 h-4 text-stone-400" />}
-          <input type="range" min={0} max={1} step={0.05} value={radioVolume} onChange={(event) => handleRadioVolumeChange(Number(event.target.value))} aria-label="Âm lượng radio" className="w-24 accent-emerald-500 cursor-pointer" />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label className="min-w-0">
+            <span className="block text-[10px] text-stone-500 mb-1">Chọn đài phát trực tuyến</span>
+            <select
+              value={selectedPreset ? radioSourceUrl : '__custom__'}
+              onChange={(event) => handleStationChange(event.target.value)}
+              className="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-xs text-stone-200 outline-none focus:border-emerald-500"
+              aria-label="Nguồn radio"
+            >
+              {RADIO_STATIONS.map((station) => (
+                <option key={station.id} value={station.url}>{station.name} — {station.description}</option>
+              ))}
+              {!selectedPreset && <option value="__custom__">Luồng HTTPS tùy chỉnh…</option>}
+            </select>
+          </label>
+          <div className="min-w-0">
+            <label htmlFor="custom-radio-url" className="block text-[10px] text-stone-500 mb-1">Hoặc dán URL stream HTTPS trực tiếp</label>
+            <div className="flex gap-2">
+              <input
+                id="custom-radio-url"
+                type="url"
+                inputMode="url"
+                value={customRadioUrl}
+                onChange={(event) => setCustomRadioUrl(event.target.value)}
+                placeholder="https://…/stream.mp3"
+                className="min-w-0 flex-1 rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-xs text-stone-200 outline-none placeholder:text-stone-600 focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={applyCustomRadioUrl}
+                disabled={!customRadioUrl.trim()}
+                className="shrink-0 rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-200 transition hover:bg-stone-800 disabled:opacity-40"
+              >
+                Dùng URL
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+        <p className="text-[10px] leading-relaxed text-stone-500">
+          Hỗ trợ URL stream âm thanh trực tiếp HTTPS (MP3/AAC/Ogg), không phải trang web, YouTube hay link tải playlist. Âm thanh truyền trực tiếp từ đài đến trình duyệt; website không tải hoặc lưu file nhạc.
+        </p>
+        {radioState.status === 'error' && (
+          <button type="button" onClick={() => void toggleRadio()} className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300">
+            Thử kết nối lại
+          </button>
+        )}
+      </section>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h4 className="font-semibold text-stone-200">Bộ trộn nhiều lớp tổng hợp</h4>
-            <p className="text-[11px] text-stone-500 mt-1">Mỗi lớp có gain độc lập; nhiều lớp có thể phát đồng thời. Phổ tần số đọc từ AnalyserNode thật. Âm lượng được tự lưu; khi mở lại không tự phát âm thanh.</p>
+            <p className="text-[11px] text-stone-500 mt-1">
+              Mỗi lớp có gain độc lập; nhiều lớp có thể phát đồng thời. Phổ tần số đọc từ AnalyserNode thật. Âm lượng và đài phát được lưu trên trình duyệt.
+            </p>
             {preferencesWarning && <p role="status" className="mt-1 text-[10px] text-amber-300">{preferencesWarning}</p>}
           </div>
           <div className="flex items-center gap-2 text-stone-400">
@@ -223,7 +308,10 @@ export function MusicApp() {
           })}
         </div>
       </section>
-      <p className="text-[10px] leading-relaxed text-stone-600">Âm thanh tổng hợp được tạo cục bộ bằng Web Audio API. Luồng radio là dịch vụ bên thứ ba; Personal Web OS không bảo đảm nội dung, bản quyền hoặc thời gian hoạt động của nguồn này.</p>
+
+      <p className="text-[10px] leading-relaxed text-stone-600">
+        Đóng cửa sổ Audio Lab chỉ ẩn bảng điều khiển: radio và các lớp âm thanh vẫn tiếp tục phát. Mở lại Audio Lab để tạm dừng hoặc điều chỉnh âm lượng. Đóng tab hoặc tải lại toàn bộ website sẽ dừng phát.
+      </p>
     </div>
   );
 }

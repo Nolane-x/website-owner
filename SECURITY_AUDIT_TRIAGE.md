@@ -21,3 +21,15 @@ These findings have not been silently suppressed. The scan remains visible and C
 ## Dependency advisory exception
 
 The full dependency audit separately reports the unpatched `braces` advisory `GHSA-vfj7-8cjw-p6xm` through the development-only ESLint dependency chain. Production dependencies pass `npm audit --omit=dev --audit-level=moderate`. CI permits only this exact lockfile-verified development chain, and fails if the advisory shape, path, severity, lockfile status, or proposed fix changes. npm currently proposes a breaking major downgrade of `eslint-config-next`; no forced downgrade is applied. Reassess this exception when upstream publishes a compatible fix.
+
+
+## Additional dependency advisory review — 2026-11-01
+
+The production dependency set was updated within the current major versions:
+- `next`: 16.4.0 → 16.4.3
+- `dompurify`: 3.4.16 → 3.4.17 (transitive through `isomorphic-dompurify`)
+- `zod`: 4.6.5 → 4.6.7
+
+`npm audit --omit=dev --audit-level=moderate` now reports zero production vulnerabilities.
+
+A new moderate advisory, `GHSA-g3hv-75wg-m249`, remains in the development-only ESLint / TypeScript-ESLint graph through `minimatch <11.0.1`. The reviewed lockfile contains only `dev: true` copies of all affected packages. npm offers no compatible patch within the current ESLint 9 / eslint-config-next 16 dependency constraints and proposes breaking downgrades to ESLint 4.0.0 or eslint-config-next 0.2.4. Those downgrades were not applied. CI permits only the exact package nodes, via-chain, advisory URL/range, moderate severity, dev-only lockfile state, and breaking-only fix proposal; any graph change fails the review. Recheck when upstream releases a compatible update.

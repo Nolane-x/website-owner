@@ -1,9 +1,12 @@
 import type { AmbientSoundType } from './ambient-synth';
+import { DEFAULT_RADIO_STATION, normalizeRadioStreamUrl } from './radio-player';
 
 export interface MusicPreferences {
   volumes: Record<AmbientSoundType, number>;
   masterVolume: number;
   radioVolume: number;
+  radioSourceUrl: string;
+  radioStationName: string;
 }
 
 export const DEFAULT_AMBIENT_VOLUMES: Record<AmbientSoundType, number> = {
@@ -23,11 +26,22 @@ function safeVolume(value: unknown, fallback: number): number {
     : fallback;
 }
 
+function safeRadioSource(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_RADIO_STATION.url;
+  try {
+    return normalizeRadioStreamUrl(value);
+  } catch {
+    return DEFAULT_RADIO_STATION.url;
+  }
+}
+
 export function defaultMusicPreferences(): MusicPreferences {
   return {
     volumes: { ...DEFAULT_AMBIENT_VOLUMES },
     masterVolume: 0.5,
     radioVolume: 0.6,
+    radioSourceUrl: DEFAULT_RADIO_STATION.url,
+    radioStationName: DEFAULT_RADIO_STATION.name,
   };
 }
 
@@ -40,10 +54,30 @@ export function normalizeMusicPreferences(value: unknown): MusicPreferences {
     : {};
   const volumes = { ...defaults.volumes };
   for (const type of TYPES) volumes[type] = safeVolume(rawVolumes[type], defaults.volumes[type]);
+
+  const rawRadioSourceUrl = typeof raw.radioSourceUrl === 'string' ? raw.radioSourceUrl : null;
+  const radioSourceUrl = safeRadioSource(rawRadioSourceUrl);
+  let radioSourceIsValid = rawRadioSourceUrl === null;
+  if (rawRadioSourceUrl !== null) {
+    try {
+      normalizeRadioStreamUrl(rawRadioSourceUrl);
+      radioSourceIsValid = true;
+    } catch {
+      radioSourceIsValid = false;
+    }
+  }
+  const radioStationName = !radioSourceIsValid
+    ? DEFAULT_RADIO_STATION.name
+    : typeof raw.radioStationName === 'string' && raw.radioStationName.trim()
+      ? raw.radioStationName.trim().slice(0, 80)
+      : (radioSourceUrl === DEFAULT_RADIO_STATION.url ? DEFAULT_RADIO_STATION.name : 'Luồng tùy chỉnh');
+
   return {
     volumes,
     masterVolume: safeVolume(raw.masterVolume, defaults.masterVolume),
     radioVolume: safeVolume(raw.radioVolume, defaults.radioVolume),
+    radioSourceUrl,
+    radioStationName,
   };
 }
 

@@ -75,10 +75,13 @@ describe('owner Audio Lab preferences', () => {
   it('persists all volumes but does not persist active playback state', () => {
     const storage = createStorage();
     vi.stubGlobal('window', { localStorage: storage });
+    const defaults = defaultMusicPreferences();
     const preferences = {
       volumes: { rain: 0.1, ocean: 0.2, campfire: 0.3, binaural: 0.4, whitenoise: 0.5 },
       masterVolume: 0.65,
       radioVolume: 0.15,
+      radioSourceUrl: defaults.radioSourceUrl,
+      radioStationName: defaults.radioStationName,
     };
     expect(saveMusicPreferences(preferences)).toBe(true);
     expect(loadMusicPreferences()).toEqual(preferences);
@@ -98,6 +101,8 @@ describe('owner Audio Lab preferences', () => {
     expect(result).not.toHaveProperty('impostor');
     expect(result.masterVolume).toBe(1);
     expect(result.radioVolume).toBe(0.6);
+    expect(result.radioSourceUrl).toBe(defaultMusicPreferences().radioSourceUrl);
+    expect(result.radioStationName).toBe(defaultMusicPreferences().radioStationName);
   });
 });
 

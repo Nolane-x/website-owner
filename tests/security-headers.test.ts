@@ -12,6 +12,16 @@ describe('global content security policy', () => {
     expect(policy).not.toContain("'unsafe-eval'");
   });
 
+  it('allows direct HTTPS media streams without opening script/connect permissions', async () => {
+    const headers = await nextConfig.headers?.();
+    const globalHeaders = headers?.find((entry) => entry.source === '/(.*)')?.headers ?? [];
+    const policy = globalHeaders.find((entry) => entry.key.toLowerCase() === 'content-security-policy')?.value ?? '';
+
+    expect(policy).toContain("media-src 'self' https:");
+    expect(policy).toContain("connect-src 'self' https:");
+    expect(policy).not.toContain('media-src *');
+  });
+
   it('retains baseline browser security headers', async () => {
     const headers = await nextConfig.headers?.();
     const globalHeaders = headers?.find((entry) => entry.source === '/(.*)')?.headers ?? [];

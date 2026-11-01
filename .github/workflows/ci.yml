@@ -100,8 +100,132 @@ jobs:
               onlyBreakingDowngrade;
           }
 
+          const reviewedMinimatchDevChain = {
+            '@eslint-community/eslint-utils': {
+              direct: false,
+              via: ['eslint'],
+              nodes: [
+                'node_modules/@eslint-community/eslint-utils',
+                'node_modules/@next/eslint-plugin-next/node_modules/@eslint-community/eslint-utils',
+              ],
+              fix: { name: 'eslint', version: '4.0.0' },
+            },
+            '@eslint/config-array': {
+              direct: false, via: ['minimatch'], nodes: ['node_modules/@eslint/config-array'],
+              fix: { name: 'eslint', version: '4.0.0' },
+            },
+            '@eslint/eslintrc': {
+              direct: false, via: ['minimatch'], nodes: ['node_modules/@eslint/eslintrc'],
+              fix: { name: 'eslint', version: '4.0.0' },
+            },
+            '@next/eslint-plugin-next': {
+              direct: false, via: ['@eslint-community/eslint-utils'], nodes: ['node_modules/@next/eslint-plugin-next'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            '@typescript-eslint/eslint-plugin': {
+              direct: false, via: ['@typescript-eslint/parser', '@typescript-eslint/type-utils', '@typescript-eslint/utils', 'eslint'],
+              nodes: ['node_modules/@typescript-eslint/eslint-plugin'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            '@typescript-eslint/parser': {
+              direct: false, via: ['@typescript-eslint/typescript-estree', 'eslint'],
+              nodes: ['node_modules/@typescript-eslint/parser'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            '@typescript-eslint/type-utils': {
+              direct: false, via: ['@typescript-eslint/typescript-estree', '@typescript-eslint/utils', 'eslint'],
+              nodes: ['node_modules/@typescript-eslint/type-utils'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            '@typescript-eslint/typescript-estree': {
+              direct: false, via: ['minimatch'], nodes: ['node_modules/@typescript-eslint/typescript-estree'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            '@typescript-eslint/utils': {
+              direct: false, via: ['@eslint-community/eslint-utils', '@typescript-eslint/typescript-estree', 'eslint'],
+              nodes: ['node_modules/@typescript-eslint/utils'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            'eslint': {
+              direct: true, via: ['@eslint-community/eslint-utils', '@eslint/config-array', '@eslint/eslintrc', 'minimatch'],
+              nodes: ['node_modules/eslint'], fix: { name: 'eslint', version: '4.0.0' },
+            },
+            'eslint-config-next': {
+              direct: true,
+              via: ['@next/eslint-plugin-next', 'eslint', 'eslint-plugin-import', 'eslint-plugin-jsx-a11y', 'eslint-plugin-react', 'typescript-eslint'],
+              nodes: ['node_modules/eslint-config-next'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            'eslint-plugin-import': {
+              direct: false, via: ['minimatch'], nodes: ['node_modules/eslint-plugin-import'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            'eslint-plugin-jsx-a11y': {
+              direct: false, via: ['minimatch'], nodes: ['node_modules/eslint-plugin-jsx-a11y'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            'eslint-plugin-react': {
+              direct: false, via: ['minimatch'], nodes: ['node_modules/eslint-plugin-react'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+            'minimatch': {
+              direct: false, via: [],
+              nodes: [
+                'node_modules/minimatch',
+                'node_modules/@typescript-eslint/typescript-estree/node_modules/minimatch',
+              ],
+              fix: { name: 'eslint', version: '4.0.0' },
+              advisory: 'https://github.com/advisories/GHSA-g3hv-75wg-m249',
+            },
+            'typescript-eslint': {
+              direct: false,
+              via: ['@typescript-eslint/eslint-plugin', '@typescript-eslint/parser', '@typescript-eslint/typescript-estree', '@typescript-eslint/utils', 'eslint'],
+              nodes: ['node_modules/typescript-eslint'],
+              fix: { name: 'eslint-config-next', version: '0.2.4' },
+            },
+          };
+
+          function sameStringSet(actual, expected) {
+            if (!Array.isArray(actual) || actual.length !== expected.length) return false;
+            const left = [...actual].sort();
+            const right = [...expected].sort();
+            return left.every((value, index) => value === right[index]);
+          }
+
+          function allowReviewedDevOnlyMinimatch(name, vulnerability) {
+            const expected = reviewedMinimatchDevChain[name];
+            if (!expected || vulnerability.severity !== 'moderate' ||
+                vulnerability.isDirect !== expected.direct ||
+                !sameStringSet(vulnerability.nodes, expected.nodes) ||
+                !sameStringSet((vulnerability.via || []).filter((entry) => typeof entry === 'string'), expected.via)) {
+              return false;
+            }
+
+            // Every concrete installed copy must remain dev-only. A production
+            // resolution or a newly nested dependency path invalidates this review.
+            if (!expected.nodes.every((node) => lock.packages?.[node]?.dev === true)) return false;
+
+            const advisoryEntries = (vulnerability.via || []).filter((entry) =>
+              entry && typeof entry === 'object' && typeof entry.url === 'string'
+            );
+            if (expected.advisory) {
+              if (advisoryEntries.length !== 1 ||
+                  advisoryEntries[0].url !== expected.advisory ||
+                  advisoryEntries[0].range !== '<11.0.1') return false;
+            } else if (advisoryEntries.length !== 0) {
+              return false;
+            }
+
+            const fix = vulnerability.fixAvailable;
+            return Boolean(fix && typeof fix === 'object' &&
+              fix.name === expected.fix.name &&
+              fix.version === expected.fix.version &&
+              fix.isSemVerMajor === true);
+          }
+
           const unapproved = entries.filter(([name, vulnerability]) =>
-            !allowUnpatchedDevOnlyBraces(name, vulnerability)
+            !allowUnpatchedDevOnlyBraces(name, vulnerability) &&
+            !allowReviewedDevOnlyMinimatch(name, vulnerability)
           );
 
           if (unapproved.length > 0) {
@@ -124,7 +248,7 @@ jobs:
           if (entries.length === 0) {
             console.log('Full dependency audit: no reported vulnerabilities.');
           } else {
-            console.warn('REVIEWED EXCEPTION: braces is a dev-only transitive dependency of eslint-config-next; GHSA-vfj7-8cjw-p6xm has no compatible patched release, and npm proposes only a breaking major downgrade. Production dependencies are separately gated by npm audit --omit=dev. Re-check this exception when the advisory or upstream package changes.');
+            console.warn('REVIEWED EXCEPTIONS: (1) GHSA-vfj7-8cjw-p6xm in the exact dev-only braces → micromatch → fast-glob → @next/eslint-plugin-next → eslint-config-next chain; npm proposes only a breaking major downgrade. (2) GHSA-g3hv-75wg-m249 in the exact dev-only minimatch/ESLint/TypeScript-ESLint dependency graph; every affected lockfile node is dev:true and npm proposes only breaking downgrades to ESLint 4.0.0 or eslint-config-next 0.2.4. Production dependencies are separately gated by npm audit --omit=dev. Recheck exact nodes, paths, severities, fixes, and advisory ranges whenever the lockfile or upstream packages change.');
           }
           NODE
 

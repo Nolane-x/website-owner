@@ -32,12 +32,12 @@
     "isomorphic-dompurify": "^4.5.0",
     "lucide-react": "^1.53.0",
     "marked": "^18.1.0",
-    "next": "16.4.0",
+    "next": "16.4.3",
     "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwind-merge": "^3.7.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -49,12 +49,12 @@
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "16.4.3",
+    "jsdom": "25.0.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.3.4",
-    "vitest": "^5.0.3",
-    "jsdom": "25.0.1"
+    "vitest": "^5.0.3"
   },
   "overrides": {
     "esbuild": "^0.28.2",
