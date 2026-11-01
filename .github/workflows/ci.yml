@@ -179,7 +179,7 @@ jobs:
             },
             'typescript-eslint': {
               direct: false,
-              via: ['@typescript-eslint/eslint-plugin', '@typescript-eslint/parser', '@typescript-eslint/typescript-estree', '@typescript-eslint/utils'],
+              via: ['@typescript-eslint/eslint-plugin', '@typescript-eslint/parser', '@typescript-eslint/typescript-estree', '@typescript-eslint/utils', 'eslint'],
               nodes: ['node_modules/typescript-eslint'],
               fix: { name: 'eslint-config-next', version: '0.2.4' },
             },
