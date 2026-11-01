@@ -292,7 +292,9 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
   };
 
   const createRandomWorld = () => {
-    newWorld(Date.now() >>> 0 || 1);
+    const current = worldRef.current;
+    const nextSeed = (Math.imul(current.seed, 1_664_525) + 1_013_904_223 + current.generation) >>> 0 || 1;
+    newWorld(nextSeed);
   };
 
   const stepOnce = () => {
