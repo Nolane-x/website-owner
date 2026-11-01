@@ -92,9 +92,10 @@ describe('Video Library metadata and persistence', () => {
     });
     expect(tiktokItem()).toMatchObject({
       id: 'tiktok:' + TIKTOK_ID,
-      canonicalUrl: 'https://www.tiktok.com/@_/video/' + TIKTOK_ID,
+      canonicalUrl: 'https://www.tiktok.com/player/v1/' + TIKTOK_ID,
       isShort: true,
     });
+    expect(createVideoLibraryItem({ platform: 'youtube', videoId: YOUTUBE_ID })?.durationSeconds).toBeNull();
     expect(createVideoLibraryItem({ platform: 'youtube', videoId: 'bad' })).toBeNull();
     expect(createVideoLibraryItem({ platform: 'tiktok', videoId: 'not-a-number' })).toBeNull();
   });
