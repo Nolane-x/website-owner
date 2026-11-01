@@ -56,6 +56,7 @@ import {
   saveVideoLibrary,
   setVideoShort,
   toggleVideoFavorite,
+  toggleFollowedVideoTopic,
   toggleVideoInPlaylist,
   toggleVideoWatchLater,
   type VideoLibraryItem,
@@ -524,6 +525,11 @@ export function VideoApp() {
     [topicGroup],
   );
 
+  const followedTopicItems = useMemo(
+    () => VIDEO_TOPICS.filter((topic) => library.followedTopics.includes(topic.id)),
+    [library.followedTopics],
+  );
+
   const continueWatching = useMemo(() => {
     return library.history
       .filter((entry) => entry.progressSeconds > 5 && (!entry.durationSeconds || entry.progressSeconds < entry.durationSeconds - 10))
@@ -564,6 +570,10 @@ export function VideoApp() {
       toggleVideoWatchLater(previous, item.id),
       item,
     ));
+  };
+
+  const toggleFollowTopic = (topicId: string) => {
+    setLibrary((previous) => toggleFollowedVideoTopic(previous, topicId));
   };
 
   const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '', queryOverride?: string, headingOverride?: string, orderOverride?: VideoSearchOrder) => {
@@ -902,6 +912,29 @@ export function VideoApp() {
                 <div><h3 className="text-xs font-semibold text-stone-100">Dành cho bạn</h3><p className="mt-1 text-[9px] text-stone-500">Gợi ý truy vấn video mới từ chủ đề bạn yêu thích, xem sau và lịch sử; sau đó xếp hạng theo độ liên quan. Khi chưa có dữ liệu cá nhân, hệ thống dùng xu hướng Việt Nam.</p></div>
                 <button type="button" onClick={loadRecommended} disabled={loading} className="rounded-lg border border-stone-800 px-3 py-2 text-[9px] text-stone-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40">Làm mới gợi ý</button>
               </div>
+              {followedTopicItems.length > 0 ? (
+                <div className="space-y-2 rounded-xl border border-sky-900/50 bg-sky-950/15 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-sky-300">Chủ đề bạn theo dõi</p>
+                    <button type="button" onClick={() => setTab('topics')} className="text-[9px] text-stone-500 hover:text-sky-300">Quản lý chủ đề</button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {followedTopicItems.map((topic) => (
+                      <button key={topic.id} type="button" onClick={() => loadTopic(topic)} disabled={loading} className="inline-flex items-center gap-1.5 rounded-full border border-sky-800/60 bg-sky-950/40 px-2.5 py-1.5 text-[9px] text-sky-200 transition hover:border-sky-500 hover:bg-sky-900/40 disabled:opacity-50">
+                        <Sparkles className="h-3 w-3" /> {topic.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-stone-500">Các chủ đề này được ưu tiên khi tạo truy vấn gợi ý và đồng bộ cùng thư viện của bạn.</p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-stone-800 px-3 py-2.5">
+                  <p className="text-[9px] text-stone-500">Theo dõi lĩnh vực yêu thích để cá nhân hóa video gợi ý.</p>
+                  <button type="button" onClick={() => setTab('topics')} className="inline-flex items-center gap-1.5 rounded-lg border border-sky-900/70 px-2.5 py-1.5 text-[9px] text-sky-300 hover:bg-sky-950/40">
+                    <Sparkles className="h-3 w-3" /> Chọn chủ đề
+                  </button>
+                </div>
+              )}
               {recommendedVideos.length > 0 ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {recommendedVideos.map((item) => renderCard(item, { shortAction: true }))}
@@ -1036,26 +1069,39 @@ export function VideoApp() {
                 {visibleTopics.map((topic) => {
                   const Icon = TOPIC_ICON_MAP[topic.icon];
                   const active = activeTopic?.id === topic.id;
+                  const followed = library.followedTopics.includes(topic.id);
                   return (
-                    <button
-                      key={topic.id}
-                      type="button"
-                      onClick={() => loadTopic(topic)}
-                      disabled={loading}
-                      aria-pressed={active}
-                      className={active
-                        ? 'group flex min-h-[104px] items-start gap-3 rounded-xl border border-sky-500/60 bg-sky-950/35 p-3 text-left transition'
-                        : 'group flex min-h-[104px] items-start gap-3 rounded-xl border border-stone-800 bg-stone-900/55 p-3 text-left transition hover:border-sky-800 hover:bg-slate-900/80 disabled:opacity-50'}
-                    >
-                      <span className={active ? 'rounded-xl bg-sky-500/15 p-2.5 text-sky-300' : 'rounded-xl bg-stone-800 p-2.5 text-stone-400 group-hover:bg-sky-950/60 group-hover:text-sky-300'}>
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[11px] font-semibold text-stone-100">{topic.label}</span>
-                        <span className="mt-1 block text-[9px] leading-relaxed text-stone-500">{topic.description}</span>
-                        <span className="mt-2 inline-flex items-center gap-1 text-[8px] font-semibold uppercase tracking-wider text-sky-400/80">{topic.group} <ChevronDown className="h-3 w-3 -rotate-90" /></span>
-                      </span>
-                    </button>
+                    <article key={topic.id} className={active
+                      ? 'group flex min-h-[124px] flex-col rounded-xl border border-sky-500/60 bg-sky-950/35 p-3 transition'
+                      : 'group flex min-h-[124px] flex-col rounded-xl border border-stone-800 bg-stone-900/55 p-3 transition hover:border-sky-800 hover:bg-slate-900/80'}>
+                      <button
+                        type="button"
+                        onClick={() => loadTopic(topic)}
+                        disabled={loading}
+                        aria-pressed={active}
+                        className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:opacity-50"
+                      >
+                        <span className={active ? 'rounded-xl bg-sky-500/15 p-2.5 text-sky-300' : 'rounded-xl bg-stone-800 p-2.5 text-stone-400 group-hover:bg-sky-950/60 group-hover:text-sky-300'}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[11px] font-semibold text-stone-100">{topic.label}</span>
+                          <span className="mt-1 block text-[9px] leading-relaxed text-stone-500">{topic.description}</span>
+                          <span className="mt-2 inline-flex items-center gap-1 text-[8px] font-semibold uppercase tracking-wider text-sky-400/80">{topic.group} <ChevronDown className="h-3 w-3 -rotate-90" /></span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleFollowTopic(topic.id)}
+                        aria-pressed={followed}
+                        className={followed
+                          ? 'mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-500/15 px-2.5 py-2 text-[9px] font-semibold text-sky-300 ring-1 ring-sky-500/30'
+                          : 'mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-800 px-2.5 py-2 text-[9px] text-stone-500 transition hover:border-sky-700 hover:text-sky-300'}
+                      >
+                        <Bookmark className="h-3 w-3" fill={followed ? 'currentColor' : 'none'} />
+                        {followed ? 'Đang theo dõi' : 'Theo dõi chủ đề'}
+                      </button>
+                    </article>
                   );
                 })}
               </div>
@@ -1068,6 +1114,14 @@ export function VideoApp() {
                     <p className="text-[9px] font-semibold uppercase tracking-wider text-sky-400">Đang khám phá</p>
                     <h3 className="mt-1 truncate text-sm font-bold text-white">{activeTopic.label}</h3>
                     <p className="mt-1 text-[9px] text-stone-500">{results.length} kết quả tải được · Sắp xếp theo {SEARCH_SORT_OPTIONS.find((option) => option.id === resultSort)?.label.toLowerCase()}</p>
+                    {activeTopic.id !== 'custom-topic' && (
+                      <button type="button" onClick={() => toggleFollowTopic(activeTopic.id)} className={library.followedTopics.includes(activeTopic.id)
+                        ? 'mt-2 inline-flex items-center gap-1.5 rounded-lg bg-sky-500/15 px-2.5 py-1.5 text-[9px] font-semibold text-sky-300'
+                        : 'mt-2 inline-flex items-center gap-1.5 rounded-lg border border-stone-700 px-2.5 py-1.5 text-[9px] text-stone-400 hover:border-sky-700 hover:text-sky-300'}>
+                        <Bookmark className="h-3 w-3" fill={library.followedTopics.includes(activeTopic.id) ? 'currentColor' : 'none'} />
+                        {library.followedTopics.includes(activeTopic.id) ? 'Đang theo dõi' : 'Theo dõi chủ đề này'}
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5" aria-label="Sắp xếp kết quả chủ đề">
                     {SEARCH_SORT_OPTIONS.map((option) => (
