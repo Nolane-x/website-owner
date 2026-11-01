@@ -272,6 +272,7 @@ export function LifeLabApp() {
       setRunning(false);
       const world = simulationRef.current;
       setSimulation(world);
+      setHud({ generation: world.generation, stats: getSimulationStats(world) });
       setPreferences((current) => ({
         ...current,
         mode: world.mode,
