@@ -311,7 +311,6 @@ export function VideoApp() {
 
   useEffect(() => {
     if (!hydrated || !remoteHydrated || !cloudSyncEnabled) return;
-    setCloudSyncStatus('pending');
     const syncTimer = window.setTimeout(async () => {
       setCloudSyncStatus('syncing');
       try {
