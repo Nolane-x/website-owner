@@ -28,23 +28,30 @@ export const RADIO_STATIONS: RadioStation[] = [
   {
     id: 'anti-radio',
     name: 'Anti Radio',
-    description: 'Electronic, house và nhiều thể loại',
+    description: 'Electronic, house và nhiều thể loại · MP3',
     url: 'https://stream.antiradio.net/listen/anti_radio/mp3',
     homepage: 'https://antiradio.net/stream/',
   },
   {
-    id: 'relaxing-jazz',
-    name: 'Relaxing Jazz',
+    id: 'relaxing-jazz-320',
+    name: 'Relaxing Jazz · HQ',
+    description: 'Smooth jazz · MP3 320 kbps',
+    url: 'https://443-1.autopo.st/171/stream/3/',
+    homepage: 'https://relaxingjazz.com/listen/',
+  },
+  {
+    id: 'relaxing-jazz-128',
+    name: 'Relaxing Jazz · Everyday',
     description: 'Smooth jazz · MP3 128 kbps',
     url: 'https://443-1.autopo.st/171/stream/1/',
     homepage: 'https://relaxingjazz.com/listen/',
   },
   {
-    id: 'tilderadio',
-    name: 'TildeRadio',
-    description: 'Indie, alternative và chương trình cộng đồng',
-    url: 'https://tilderadio.org/listen/mp3/192k',
-    homepage: 'https://tilderadio.org/',
+    id: 'relaxing-jazz-32',
+    name: 'Relaxing Jazz · Data Saver',
+    description: 'Smooth jazz · MP3 32 kbps, mono',
+    url: 'https://443-1.autopo.st/171/stream/2/',
+    homepage: 'https://relaxingjazz.com/listen/',
   },
 ];
 
