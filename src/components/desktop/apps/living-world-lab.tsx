@@ -36,6 +36,7 @@ import {
   stepLivingWorld,
   type LivingWorld,
   type LivingWorldStats,
+  type BiomeId,
   type SpeciesId,
   type WorldRules,
   type WorldEvent,
@@ -292,6 +293,9 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(7);
   const [layer, setLayer] = useState<MapLayer>('terrain');
+  const [editingTerrain, setEditingTerrain] = useState(false);
+  const [brushBiome, setBrushBiome] = useState<BiomeId>('forest');
+  const [brushRadius, setBrushRadius] = useState(1);
   const [stats, setStats] = useState<LivingWorldStats>(() => getLivingWorldStats(world));
   const [populationHistory, setPopulationHistory] = useState<PopulationSample[]>(() => [sampleWorld(world)]);
   const [checkpoints, setCheckpoints] = useState<WorldCheckpoint[]>(readCheckpoints);
@@ -306,6 +310,8 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const worldRef = useRef(world);
   const lastCheckpointRef = useRef(world.generation - (world.generation % 40));
+  const paintingRef = useRef(false);
+  const lastPaintedCellRef = useRef(-1);
 
   useEffect(() => {
     worldRef.current = world;
@@ -405,6 +411,64 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const pauseWorld = () => {
     setRunning(false);
     commitWorld(worldRef.current);
+  };
+
+  const paintTerrain = (clientX: number, clientY: number) => {
+    if (!editingTerrain || running) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const centerX = Math.min(world.width - 1, Math.max(0, Math.floor((clientX - rect.left) / rect.width * world.width)));
+    const centerY = Math.min(world.height - 1, Math.max(0, Math.floor((clientY - rect.top) / rect.height * world.height)));
+    const centerIndex = centerY * world.width + centerX;
+    if (lastPaintedCellRef.current === centerIndex) return;
+    lastPaintedCellRef.current = centerIndex;
+
+    const biomeIndex = BIOMES.findIndex((biome) => biome.id === brushBiome);
+    if (biomeIndex < 0) return;
+    const profile: Record<BiomeId, { food: number; fertility: number; humidity: number; temperature: number }> = {
+      plains: { food: 8, fertility: 150, humidity: 125, temperature: 168 },
+      forest: { food: 11, fertility: 212, humidity: 178, temperature: 145 },
+      desert: { food: 2, fertility: 45, humidity: 32, temperature: 228 },
+      mountain: { food: 1, fertility: 64, humidity: 105, temperature: 112 },
+      water: { food: 0, fertility: 0, humidity: 255, temperature: 108 },
+      wetland: { food: 12, fertility: 226, humidity: 236, temperature: 142 },
+    };
+    const terrain = profile[brushBiome];
+    const biomes = new Uint8Array(worldRef.current.biomes);
+    const food = new Uint8Array(worldRef.current.food);
+    const fertility = new Uint8Array(worldRef.current.fertility);
+    const humidity = new Uint8Array(worldRef.current.humidity);
+    const temperature = new Uint8Array(worldRef.current.temperature);
+    const occupied = new Set<number>();
+    for (const animal of worldRef.current.organisms) {
+      if (animal.species === 'parasite' && animal.hostId >= 0) continue;
+      occupied.add(animal.y * world.width + animal.x);
+    }
+
+    let changed = false;
+    for (let dy = -brushRadius; dy <= brushRadius; dy++) {
+      for (let dx = -brushRadius; dx <= brushRadius; dx++) {
+        if (dx * dx + dy * dy > brushRadius * brushRadius) continue;
+        const x = centerX + dx;
+        const y = centerY + dy;
+        if (x < 0 || x >= world.width || y < 0 || y >= world.height) continue;
+        const index = y * world.width + x;
+        if (occupied.has(index)) continue;
+        biomes[index] = biomeIndex;
+        food[index] = terrain.food;
+        fertility[index] = terrain.fertility;
+        humidity[index] = terrain.humidity;
+        temperature[index] = terrain.temperature;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    const next = { ...worldRef.current, biomes, food, fertility, humidity, temperature };
+    worldRef.current = next;
+    setWorld(next);
+    setStats(getLivingWorldStats(next));
   };
 
   const createWorld = (seed: number) => {
@@ -576,7 +640,29 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
             </div>
 
             <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#050b0d]">
-              <canvas ref={canvasRef} width={1152} height={704} role="img" aria-label="Bản đồ thế giới mô phỏng với sáu quần xã sinh thái và năm nhóm sinh vật" className="block h-auto max-h-[58vh] w-full object-contain" />
+              <canvas
+                ref={canvasRef}
+                width={1152}
+                height={704}
+                role="img"
+                aria-label="Bản đồ thế giới mô phỏng với sáu quần xã sinh thái và năm nhóm sinh vật"
+                className="block h-auto max-h-[58vh] w-full object-contain"
+                style={{ cursor: editingTerrain ? 'crosshair' : 'default', touchAction: 'none' }}
+                onPointerDown={(event) => {
+                  if (!editingTerrain || running) return;
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  paintingRef.current = true;
+                  lastPaintedCellRef.current = -1;
+                  paintTerrain(event.clientX, event.clientY);
+                }}
+                onPointerMove={(event) => {
+                  if (paintingRef.current) paintTerrain(event.clientX, event.clientY);
+                }}
+                onPointerUp={() => { paintingRef.current = false; lastPaintedCellRef.current = -1; }}
+                onPointerCancel={() => { paintingRef.current = false; lastPaintedCellRef.current = -1; }}
+                onLostPointerCapture={() => { paintingRef.current = false; lastPaintedCellRef.current = -1; }}
+              />
               <div className="pointer-events-none absolute bottom-2 left-2 flex max-w-[75%] flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-black/75 px-2.5 py-1.5 text-[8px] text-stone-200 backdrop-blur">
                 {BIOMES.map((biome) => <span key={biome.id} className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: biome.color }} />{biome.name}</span>)}
               </div>
@@ -589,6 +675,15 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
                   <button key={value} type="button" onClick={() => setLayer(value)} aria-pressed={layer === value} className={layer === value ? 'rounded-md border border-cyan-200/35 bg-cyan-200/20 px-2 py-1 text-[8px] text-cyan-50' : 'rounded-md border border-white/10 bg-black/65 px-2 py-1 text-[8px] text-stone-300 backdrop-blur'}>{label}</button>
                 ))}
               </div>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] bg-black/15 p-2">
+              <button type="button" disabled={running} onClick={() => { setEditingTerrain((value) => !value); setLayer('terrain'); lastPaintedCellRef.current = -1; }} aria-pressed={editingTerrain} className={editingTerrain ? 'rounded-lg border border-cyan-200/40 bg-cyan-200/15 px-2.5 py-1.5 text-[8px] font-semibold text-cyan-50 disabled:opacity-40' : 'rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[8px] text-stone-300 disabled:opacity-40'}> {editingTerrain ? 'Đang vẽ địa hình' : 'Bật vẽ địa hình'} </button>
+              <select aria-label="Loại địa hình để vẽ" value={brushBiome} onChange={(event) => setBrushBiome(event.target.value as BiomeId)} disabled={!editingTerrain || running} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-[8px] text-stone-200 disabled:opacity-40">
+                {BIOMES.map((biome) => <option key={biome.id} value={biome.id}>{biome.name}</option>)}
+              </select>
+              <label className="flex items-center gap-2 text-[8px] text-stone-500">Cỡ cọ <input type="range" min={1} max={4} value={brushRadius} disabled={!editingTerrain || running} onChange={(event) => setBrushRadius(Number(event.target.value))} className="w-16 accent-cyan-200 disabled:opacity-40" /><span className="font-mono text-stone-300">{brushRadius}</span></label>
+              <span className="ml-auto text-[8px] text-stone-600">{editingTerrain ? 'Kéo trên bản đồ để sơn ô đất trống; cá thể không bị ghi đè.' : 'Tạm dừng mô phỏng để chỉnh sửa địa hình.'}</span>
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
