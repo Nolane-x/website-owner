@@ -123,7 +123,7 @@ function YouTubePlayer({ item, shortMode = false, onProgress, onStateChange }: V
           height: '100%',
           videoId: item.platformId,
           playerVars: {
-            autoplay: shortMode ? 1 : 0,
+            autoplay: 0,
             controls: 1,
             rel: 0,
             playsinline: 1,
@@ -214,7 +214,7 @@ function TikTokPlayer({ item, shortMode = false, onProgress, onStateChange }: Vi
   const callbacksRef = useRef({ onProgress, onStateChange });
   const [error, setError] = useState<string | null>(null);
   const embedUrl = 'https://www.tiktok.com/player/v1/' + item.platformId +
-    '?controls=1&progress_bar=1&play_button=1&volume_control=1&fullscreen_button=1&timestamp=1&description=1&music_info=1&autoplay=' + (shortMode ? '1&force_muted=1' : '0') + '&loop=0&rel=0';
+    '?controls=1&progress_bar=1&play_button=1&volume_control=1&fullscreen_button=1&timestamp=1&description=1&music_info=1&autoplay=' + (shortMode ? '1&muted=1' : '0') + '&loop=0&rel=0';
 
   useEffect(() => {
     callbacksRef.current = { onProgress, onStateChange };
