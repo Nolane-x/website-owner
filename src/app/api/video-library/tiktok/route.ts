@@ -87,11 +87,28 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (text.length > 128 * 1024) return errorResponse('Phản hồi TikTok vượt giới hạn an toàn.', 502);
 
     const metadata = JSON.parse(text) as Record<string, unknown>;
+    // TikTok's oEmbed payload usually exposes the numeric ID inside its
+    // HTML snippet rather than a dedicated JSON field. Extract only that
+    // numeric attribute; never inject or render the returned HTML.
+    const embeddedHtml = typeof metadata.html === 'string' && metadata.html.length <= 64 * 1024
+      ? metadata.html
+      : '';
+    const htmlVideoId = embeddedHtml.match(/data-video-id=["'](\d{10,24})["']/i)?.[1] ??
+      embeddedHtml.match(/\/embed\/v2\/(\d{10,24})/i)?.[1] ??
+      '';
+    const directPathVideoId = (() => {
+      try {
+        const submitted = new URL(body.url as string);
+        return submitted.pathname.match(/\/video\/(\d{10,24})/)?.[1] ?? '';
+      } catch {
+        return '';
+      }
+    })();
     const videoId = typeof metadata.embed_product_id === 'string'
       ? metadata.embed_product_id
       : typeof metadata.video_id === 'string'
         ? metadata.video_id
-        : '';
+        : htmlVideoId || directPathVideoId;
     if (metadata.provider_name !== 'TikTok' || metadata.type !== 'video' || !/^\d{10,24}$/.test(videoId)) {
       return errorResponse('Liên kết này không phải video TikTok công khai có thể nhúng.', 422);
     }
