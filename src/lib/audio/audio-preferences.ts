@@ -57,14 +57,15 @@ export function normalizeMusicPreferences(value: unknown): MusicPreferences {
 
   const rawRadioSourceUrl = typeof raw.radioSourceUrl === 'string' ? raw.radioSourceUrl : null;
   const radioSourceUrl = safeRadioSource(rawRadioSourceUrl);
-  const radioSourceIsValid = rawRadioSourceUrl === null || (() => {
+  let radioSourceIsValid = rawRadioSourceUrl === null;
+  if (rawRadioSourceUrl !== null) {
     try {
       normalizeRadioStreamUrl(rawRadioSourceUrl);
-      return true;
+      radioSourceIsValid = true;
     } catch {
-      return false;
+      radioSourceIsValid = false;
     }
-  })();
+  }
   const radioStationName = !radioSourceIsValid
     ? DEFAULT_RADIO_STATION.name
     : typeof raw.radioStationName === 'string' && raw.radioStationName.trim()
