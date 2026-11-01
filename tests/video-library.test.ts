@@ -9,6 +9,7 @@ import {
   parseIsoDuration,
   parseVideoUrl,
   recordVideoProgress,
+  mergeVideoLibraries,
   rankVideoRecommendations,
   removeVideoFromLibrary,
   setVideoShort,
@@ -81,6 +82,25 @@ describe('Video Library URL parsing', () => {
       needsResolve: true,
     });
     expect(parseVideoUrl('https://tiktok.com.evil.example/@creator/video/' + TIKTOK_ID)).toBeNull();
+  });
+});
+
+describe('Video Library cloud merge', () => {
+  it('keeps unique local and cloud videos, saved sets, history and playlist membership', () => {
+    const localItem = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Local video' })!;
+    const cloudItem = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Cloud video' })!;
+    const local = addVideoToLibrary(emptyVideoLibrary(), localItem);
+    const cloud = addVideoToLibrary(emptyVideoLibrary(), cloudItem);
+    const localWithFavorite = toggleVideoFavorite(local, localItem.id);
+    const cloudWithLater = toggleVideoWatchLater(cloud, cloudItem.id);
+    const localHistory = recordVideoProgress(localWithFavorite, localItem.id, 12, 60);
+    const cloudHistory = recordVideoProgress(cloudWithLater, cloudItem.id, 24, 60);
+    const merged = mergeVideoLibraries(localHistory, cloudHistory);
+
+    expect(merged.items.map((item) => item.id)).toEqual([localItem.id, cloudItem.id]);
+    expect(merged.favorites).toContain(localItem.id);
+    expect(merged.watchLater).toContain(cloudItem.id);
+    expect(merged.history.map((entry) => entry.itemId)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
   });
 });
 
