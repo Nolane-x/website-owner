@@ -25,7 +25,7 @@ The generated world contains six modeled biomes:
 | Water | River/lake cells; impassable to land agents |
 | Wetland | High moisture, fertility and vegetation growth |
 
-A seed-based terrain field creates the initial elevation/moisture pattern. A continuous meandering water corridor is then carved across the map. The terrain brush changes unoccupied cells and resets the local food, fertility, humidity and temperature fields to that biome's starting profile.
+A seed-based terrain field creates the initial elevation/moisture pattern. A continuous meandering water corridor is then carved across the map. The terrain brush changes unoccupied cells and resets the local food, fertility, humidity, temperature and elevation fields to that biome's starting profile.
 
 Vegetation is represented as a cell resource with values from 0 to 15, not as individual plant agents. Dead organisms and wildfire damage add detritus, represented by a second 0–15 cell resource. Microbes consume detritus and increase local soil fertility.
 
@@ -45,7 +45,7 @@ Vegetation growth depends on biome, season, humidity, temperature, soil fertilit
 
 A parasite attached to a host shares the host's coordinates but is not a separate occupying cell. Its host must remain a valid grazer or omnivore. If the host dies, the parasite attempts to detach to an open adjacent cell; otherwise it dies too.
 
-Agents have energy and age budgets. A low-energy or over-age organism dies and contributes detritus. Food, hunting, parasitism and metabolic cost change energy. Reproduction requires age, energy, an open neighboring cell and a probabilistic fertility check. The global population cap prevents unbounded growth.
+Agents have energy and age budgets. Temperature extremes, dry air for grazers/omnivores, high elevation and severe weather increase modeled metabolic pressure. A low-energy or over-age organism dies and contributes detritus. Food, hunting, parasitism and metabolic cost change energy. Reproduction requires age, energy, an open neighboring cell and a probabilistic fertility check. The global population cap prevents unbounded growth.
 
 ## Genome and lineage model
 
@@ -71,6 +71,7 @@ Offspring inherit the parent's genome with independent bounded random mutations.
 - The terrain, food and climate map layers visualize different state arrays.
 - Population history samples the five group counts.
 - The UI can fast-forward by 100 or 1,000 generations in cancellable chunks, yielding to the browser between chunks and creating intermediate 40-generation checkpoints.
+- A 1,000-generation climate-only stress test checks seeded reproducibility, seasonal wraparound and bounded resource values.
 - The event log records season/weather changes, births, predation, booms, crashes, extinctions and genetic lineage branches. It retains the most recent 64 events in a snapshot.
 - Automatic checkpoints are created at roughly 40-generation intervals; manual checkpoints can be created at any paused state. The browser stores at most 12.
 - A checkpoint can be restored as a branch. Named experiments store up to six independent versioned snapshots.
