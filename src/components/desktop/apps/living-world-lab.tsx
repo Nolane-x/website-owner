@@ -292,6 +292,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const [world, setWorld] = useState<LivingWorld>(readInitialWorld);
   const [running, setRunning] = useState(false);
   const [fastForwarding, setFastForwarding] = useState(false);
+  const [fastProgress, setFastProgress] = useState(0);
   const [speed, setSpeed] = useState(7);
   const [layer, setLayer] = useState<MapLayer>('terrain');
   const [editingTerrain, setEditingTerrain] = useState(false);
@@ -418,7 +419,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   };
 
   const paintTerrain = (clientX: number, clientY: number) => {
-    if (!editingTerrain || running) return;
+    if (!editingTerrain || running || fastForwarding) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -499,6 +500,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
     if (running || fastForwarding) return;
     setRunning(false);
     setFastForwarding(true);
+    setFastProgress(0);
     batchCancelledRef.current = false;
     let next = worldRef.current;
     let lastCheckpoint = lastCheckpointRef.current;
@@ -520,6 +522,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
           lastCheckpoint = next.generation;
         }
         if ((index + 1) % 10 === 0) {
+          setFastProgress(Math.round(((index + 1) / generations) * 100));
           await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
         }
       }
@@ -530,7 +533,10 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
       if (newCheckpoints.length > 0) setCheckpoints((current) => [...newCheckpoints, ...current].slice(0, MAX_CHECKPOINTS));
       lastCheckpointRef.current = lastCheckpoint;
     } finally {
-      if (!batchCancelledRef.current) setFastForwarding(false);
+      if (!batchCancelledRef.current) {
+        setFastForwarding(false);
+        setFastProgress(0);
+      }
     }
   };
 
@@ -739,7 +745,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
                 className="block h-auto max-h-[58vh] w-full object-contain"
                 style={{ cursor: editingTerrain ? 'crosshair' : 'default', touchAction: 'none' }}
                 onPointerDown={(event) => {
-                  if (!editingTerrain || running) return;
+                  if (!editingTerrain || running || fastForwarding) return;
                   event.preventDefault();
                   event.currentTarget.setPointerCapture(event.pointerId);
                   paintingRef.current = true;
@@ -768,8 +774,8 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.07] bg-black/15 p-2">
-              <button type="button" disabled={running} onClick={() => { setEditingTerrain((value) => !value); setLayer('terrain'); lastPaintedCellRef.current = -1; }} aria-pressed={editingTerrain} className={editingTerrain ? 'rounded-lg border border-cyan-200/40 bg-cyan-200/15 px-2.5 py-1.5 text-[8px] font-semibold text-cyan-50 disabled:opacity-40' : 'rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[8px] text-stone-300 disabled:opacity-40'}> {editingTerrain ? 'Đang vẽ địa hình' : 'Bật vẽ địa hình'} </button>
-              <select aria-label="Loại địa hình để vẽ" value={brushBiome} onChange={(event) => setBrushBiome(event.target.value as BiomeId)} disabled={!editingTerrain || running} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-[8px] text-stone-200 disabled:opacity-40">
+              <button type="button" disabled={running || fastForwarding} onClick={() => { setEditingTerrain((value) => !value); setLayer('terrain'); lastPaintedCellRef.current = -1; }} aria-pressed={editingTerrain} className={editingTerrain ? 'rounded-lg border border-cyan-200/40 bg-cyan-200/15 px-2.5 py-1.5 text-[8px] font-semibold text-cyan-50 disabled:opacity-40' : 'rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[8px] text-stone-300 disabled:opacity-40'}> {editingTerrain ? 'Đang vẽ địa hình' : 'Bật vẽ địa hình'} </button>
+              <select aria-label="Loại địa hình để vẽ" value={brushBiome} onChange={(event) => setBrushBiome(event.target.value as BiomeId)} disabled={!editingTerrain || running || fastForwarding} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-[8px] text-stone-200 disabled:opacity-40">
                 {BIOMES.map((biome) => <option key={biome.id} value={biome.id}>{biome.name}</option>)}
               </select>
               <label className="flex items-center gap-2 text-[8px] text-stone-500">Cỡ cọ <input type="range" min={1} max={4} value={brushRadius} disabled={!editingTerrain || running} onChange={(event) => setBrushRadius(Number(event.target.value))} className="w-16 accent-cyan-200 disabled:opacity-40" /><span className="font-mono text-stone-300">{brushRadius}</span></label>
@@ -783,11 +789,12 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
               <button type="button" onClick={advanceOnce} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><StepForward className="h-3.5 w-3.5" /> Một thế hệ</button>
               <button type="button" onClick={() => { void fastForward(100); }} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-200/20 bg-cyan-200/10 px-3 py-2.5 text-[10px] text-cyan-50 disabled:opacity-40">+100 thế hệ</button>
               <button type="button" onClick={() => { void fastForward(1000); }} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200/20 bg-violet-200/10 px-3 py-2.5 text-[10px] text-violet-50 disabled:opacity-40">+1.000 thế hệ</button>
+              {fastForwarding ? <span className="min-w-[94px] text-[8px] font-mono text-cyan-100">Đang tua {fastProgress}%</span> : null}
               <button type="button" onClick={createRandomWorld} disabled={fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Thế giới mới</button>
               <div className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
                 <Activity className="h-3.5 w-3.5 text-cyan-100" />
                 <span className="text-[9px] text-stone-500">Tốc độ</span>
-                <input aria-label="Tốc độ mô phỏng thế giới" type="range" min={1} max={20} value={speed} onChange={(event) => setSpeed(Number(event.target.value))} className="w-20 accent-cyan-200" />
+                <input aria-label="Tốc độ mô phỏng thế giới" type="range" min={1} max={20} value={speed} disabled={fastForwarding} onChange={(event) => setSpeed(Number(event.target.value))} className="w-20 accent-cyan-200" />
                 <span className="w-5 text-right font-mono text-[9px] text-stone-300">{speed}</span>
               </div>
             </div>
@@ -840,7 +847,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
           </section>
         </main>
 
-        <aside className="flex min-w-0 flex-col gap-3">
+        <aside className={fastForwarding ? 'pointer-events-none flex min-w-0 flex-col gap-3 opacity-60' : 'flex min-w-0 flex-col gap-3'}>
           <section className="rounded-2xl border border-white/10 bg-[#0d191b] p-4">
             <div className="flex items-center gap-2"><MapIcon className="h-4 w-4 text-cyan-100" /><h3 className="text-[11px] font-semibold text-white">Bản đồ sinh cảnh</h3></div>
             <div className="mt-3 space-y-2">
