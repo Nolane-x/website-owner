@@ -178,6 +178,32 @@ describe('Evolution Lab Living World engine', () => {
     expect(next.deaths).toBeGreaterThanOrEqual(1);
   });
 
+  it('makes aggressive hunters contest overlapping territories when prey is absent', () => {
+    const base = createLivingWorld(199, 32, 20, { grazer: 0, hunter: 2, omnivore: 0, parasite: 0, microbe: 0 });
+    const hunters = base.organisms.map((animal, index) => makeOrganism(animal, {
+      x: index === 0 ? 10 : 11,
+      y: 8,
+      territoryX: 10,
+      territoryY: 8,
+      energy: index === 0 ? 2 : 110,
+      age: 30,
+      genome: { vision: 8, aggression: index === 0 ? 0.05 : 1, fertility: 0.008 },
+    }));
+    const biomes = new Uint8Array(base.biomes.length).fill(4);
+    biomes[8 * base.width + 10] = 0;
+    biomes[8 * base.width + 11] = 0;
+    const world = withChanges(base, {
+      biomes,
+      food: new Uint8Array(base.food.length),
+      organisms: hunters,
+      rules: { ...base.rules, reproductionThreshold: 150, foodRegrowth: 0.001 },
+    });
+    const next = stepLivingWorld(world);
+    expect(next.deaths).toBeGreaterThanOrEqual(1);
+    expect(next.organisms.filter((animal) => animal.species === 'hunter').length).toBe(1);
+    expect(next.organisms.find((animal) => animal.species === 'hunter')?.genome.aggression).toBe(1);
+  });
+
   it('models parasite attachment as a drain on host energy', () => {
     const base = createLivingWorld(11, 32, 20, { grazer: 1, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
     const host = base.organisms[0];
@@ -286,6 +312,8 @@ describe('Evolution Lab Living World engine', () => {
     }
     expect(world.births).toBeGreaterThan(0);
     expect(world.organisms.length).toBeGreaterThan(1);
+    expect(getLivingWorldStats(world).lineageDiversity).toBeGreaterThan(1);
+    expect(world.eventLog.some((event) => event.type === 'speciation')).toBe(true);
     for (const animal of world.organisms) {
       const genome = animal.genome;
       expect(genome.metabolism).toBeGreaterThanOrEqual(0.45);
