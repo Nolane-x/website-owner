@@ -1182,7 +1182,7 @@ export function getLivingWorldStats(world: LivingWorld): LivingWorldStats {
 export function serializeLivingWorld(world: LivingWorld): string {
   const encode = (array: Uint8Array) => Array.from(array, (value) => value.toString(16).padStart(2, '0')).join('');
   return JSON.stringify({
-    version: 2,
+    version: 3,
     width: world.width,
     height: world.height,
     generation: world.generation,
@@ -1255,7 +1255,8 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
   if (typeof value !== 'string' || value.length > MAX_SNAPSHOT_LENGTH) return null;
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
-    if (parsed.version !== 2 || !finite(parsed.width) || !Number.isInteger(parsed.width)
+    const snapshotVersion = parsed.version;
+    if ((snapshotVersion !== 2 && snapshotVersion !== 3) || !finite(parsed.width) || !Number.isInteger(parsed.width)
       || !finite(parsed.height) || !Number.isInteger(parsed.height)) return null;
     const width = parsed.width;
     const height = parsed.height;
@@ -1274,7 +1275,11 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
     if (!finite(parsed.weatherRemaining) || !Number.isInteger(parsed.weatherRemaining) || parsed.weatherRemaining < 0 || parsed.weatherRemaining > 30) return null;
     if (!validRules(parsed.rules)) return null;
     const food = decodeArray(parsed.food, total, 15);
-    const seedBank = decodeArray(parsed.seedBank, total, 15);
+    // Version 2 snapshots predate the seed bank. Keep them readable with an
+    // empty bank; all newly written snapshots use version 3.
+    const seedBank = snapshotVersion === 2 && parsed.seedBank === undefined
+      ? new Uint8Array(total)
+      : decodeArray(parsed.seedBank, total, 15);
     const detritus = decodeArray(parsed.detritus, total, 15);
     const fertility = decodeArray(parsed.fertility, total);
     const humidity = decodeArray(parsed.humidity, total);
