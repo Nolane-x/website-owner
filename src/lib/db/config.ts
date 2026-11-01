@@ -5,6 +5,9 @@
  * DATABASE_URL is preferred; aliases are fallbacks so an integration that
  * only provides POSTGRES_URL does not silently make the whole app unavailable.
  */
+/** Per-serverless-instance cap; use the provider's pooled URL for aggregate scale-out. */
+export const POSTGRES_POOL_MAX = 2;
+
 export const DATABASE_URL_KEYS = [
   'DATABASE_URL',
   'POSTGRES_URL',

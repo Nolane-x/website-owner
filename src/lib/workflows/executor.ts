@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { inboxItems, kanbanTasks } from '@/lib/db/schema';
 import { buildInboxTaskPayload } from '@/lib/workflows/inbox-to-task';
-import { buildOverdueReport, type OverdueReport } from '@/lib/workflows/overdue-report';
+import { buildOverdueReport, type OverdueReport, type OverdueTaskSummary } from '@/lib/workflows/overdue-report';
 import { compileWorkflowGraph, type CompiledWorkflowNode } from '@/lib/workflows/compiler';
 import type { WorkflowEdge } from '@/lib/types';
 
@@ -30,6 +30,7 @@ export interface WorkflowNodeExecutorResult {
   totalTasks?: number;
   overdueCount?: number;
   overdueTasks?: OverdueReport['overdueTasks'];
+  overdueTasksTruncated?: boolean;
 }
 
 export class WorkflowExecutionError extends Error {
@@ -50,7 +51,7 @@ interface ExecutionContext {
   inboxItem?: typeof inboxItems.$inferSelect;
   existingTask?: typeof kanbanTasks.$inferSelect;
   task?: typeof kanbanTasks.$inferSelect;
-  tasks?: (typeof kanbanTasks.$inferSelect)[];
+  tasks?: OverdueTaskSummary[];
   overdueReport?: OverdueReport;
   conditionResult?: boolean;
   sideEffects: boolean;
@@ -245,7 +246,8 @@ export async function executeWorkflowGraph(
       executionTrace,
       totalTasks: report.totalTasks,
       overdueCount: report.overdueCount,
-      overdueTasks: report.overdueTasks.slice(0, 100),
+      overdueTasks: report.overdueTasks,
+      overdueTasksTruncated: report.overdueTasksTruncated,
     };
   }
 
@@ -272,7 +274,12 @@ async function executeOperation(
       return { summary: 'Đã tải mục Inbox trong phạm vi tài khoản chủ sở hữu.' };
     }
     case 'load_owner_tasks': {
-      context.tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
+      context.tasks = await db.select({
+        id: kanbanTasks.id,
+        title: kanbanTasks.title,
+        dueDate: kanbanTasks.dueDate,
+        status: kanbanTasks.status,
+      }).from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
       return { summary: `Đã đọc ${context.tasks.length} task thuộc tài khoản.` };
     }
     case 'task_already_linked': {
@@ -351,13 +358,23 @@ async function executeOperation(
       return { summary: 'Đã xác minh task và cập nhật trạng thái Inbox thành converted.' };
     }
     case 'build_overdue_report': {
-      if (!context.tasks) context.tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
+      if (!context.tasks) context.tasks = await db.select({
+        id: kanbanTasks.id,
+        title: kanbanTasks.title,
+        dueDate: kanbanTasks.dueDate,
+        status: kanbanTasks.status,
+      }).from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
       context.overdueReport = buildOverdueReport(context.tasks, now);
       return { summary: `Báo cáo đã tạo: ${context.overdueReport.overdueCount} task quá hạn.` };
     }
     case 'emit_no_overdue_report': {
       if (!context.overdueReport) {
-        if (!context.tasks) context.tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
+        if (!context.tasks) context.tasks = await db.select({
+          id: kanbanTasks.id,
+          title: kanbanTasks.title,
+          dueDate: kanbanTasks.dueDate,
+          status: kanbanTasks.status,
+        }).from(kanbanTasks).where(eq(kanbanTasks.profileId, profileId));
         context.overdueReport = buildOverdueReport(context.tasks, now);
       }
       if (context.overdueReport.overdueCount !== 0) {

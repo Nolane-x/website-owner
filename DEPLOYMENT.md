@@ -39,7 +39,9 @@ Mở trình duyệt:
 2. Đăng nhập vào [Vercel Dashboard](https://vercel.com/) và bấm **Add New Project**.
 3. Chọn kho chứa GitHub `website-owner`.
 4. Cấu hình biến môi trường (Environment Variables) trong Vercel:
-   - `DATABASE_URL`: Đường dẫn kết nối PostgreSQL (ví dụ Supabase connection string dạng `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres?sslmode=require`). **Bắt buộc phải có một URL database hợp lệ trong Production**.
+   - `DATABASE_URL`: Đường dẫn PostgreSQL dùng cho runtime. **Bắt buộc phải có URL hợp lệ trong Production**.
+   - Với Neon hoặc PostgreSQL serverless tương tự, ưu tiên connection string qua transaction pooler cho `DATABASE_URL`. Với Neon, bật Connection Pooling/PgBouncer trong project và dùng hostname có hậu tố `-pooler`. Vercel Functions có thể scale thành nhiều instance; dùng direct endpoint cho từng instance dễ nhân số kết nối và chạm giới hạn connection của compute. Runtime đã cấu hình `prepare: false` và pool cục bộ tối đa 2 kết nối mỗi instance.
+   - Giữ direct/unpooled URL riêng cho thao tác quản trị hoặc migration cần session-level connection; không dùng direct URL làm `DATABASE_URL` của request path serverless. Ứng dụng hiện không tự chạy migration bằng biến này.
    - Nếu tích hợp PostgreSQL/Vercel/Neon của bạn cấp tên khác, ứng dụng cũng nhận các biến dự phòng theo thứ tự: `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`. `DATABASE_URL` vẫn được ưu tiên; không tự chuyển sang database nhúng trong production.
    - `NODE_ENV`: `production`
    - `CRON_SECRET`: chuỗi ngẫu nhiên khó đoán, tối thiểu 16 ký tự. Vercel tự gửi biến này dưới dạng `Authorization: Bearer …` khi gọi cron. Không ghi secret thật vào Git hoặc tài liệu.

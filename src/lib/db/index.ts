@@ -3,7 +3,7 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
 import postgres from 'postgres';
 import { PGlite } from '@electric-sql/pglite';
 import * as schema from './schema';
-import { resolveDatabaseUrl } from './config';
+import { POSTGRES_POOL_MAX, resolveDatabaseUrl } from './config';
 import { createSingleFlight } from './single-flight';
 import path from 'path';
 import fs from 'fs';
@@ -27,13 +27,13 @@ export function getDb() {
   const databaseUrl = databaseConfig.url;
 
   if (databaseUrl) {
-    // Kết nối PostgreSQL thật. prepare:false also supports transaction poolers
-    // commonly used by managed PostgreSQL providers in serverless deployments.
-    // Keep per-instance pressure bounded on Vercel serverless. A smaller pool
-    // plus a short idle timeout reduces aggregate sessions across scaled-out
-    // function instances without disabling useful in-instance concurrency.
+    // Kết nối PostgreSQL thật. prepare:false is required for transaction poolers.
+    // Prefer a provider's pooled URL (e.g. Neon -pooler endpoint) for Vercel functions:
+    // every serverless instance owns an independent client pool and may scale out quickly.
+    // Keep that per-instance pool deliberately small to avoid multiplying idle/direct
+    // connections across instances; short idle timeout also releases them promptly.
     postgresClient = postgres(databaseUrl, {
-      max: 4,
+      max: POSTGRES_POOL_MAX,
       idle_timeout: 5,
       connect_timeout: 10,
       prepare: false,

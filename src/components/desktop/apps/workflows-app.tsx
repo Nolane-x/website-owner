@@ -78,6 +78,7 @@ interface RunResult {
   totalTasks?: number;
   overdueCount?: number;
   overdueTasks?: TaskSummary[];
+  overdueTasksTruncated?: boolean;
   task?: { id: string; title: string };
   idempotentReplay?: boolean;
   sideEffects?: boolean;
@@ -527,6 +528,7 @@ export function WorkflowsApp() {
                   {runResult.task && <div className="text-xs text-stone-300">Task: <span className="font-mono">{runResult.task.id}</span> · {runResult.task.title}</div>}
                   {typeof runResult.totalTasks === 'number' && <div className="grid grid-cols-2 gap-2"><div className="rounded-lg bg-stone-950/70 p-3"><div className="text-[10px] text-stone-500">Tổng task đã đọc</div><div className="text-xl font-bold">{runResult.totalTasks}</div></div><div className="rounded-lg bg-stone-950/70 p-3"><div className="text-[10px] text-stone-500">Task quá hạn</div><div className="text-xl font-bold text-amber-300">{runResult.overdueCount}</div></div></div>}
                   {runResult.overdueTasks?.map((task) => <div key={task.id} className="flex justify-between gap-3 text-xs border-t border-stone-800 pt-2"><span>{task.title}</span><span className="text-amber-300 shrink-0">{task.dueDate}</span></div>)}
+                  {runResult.overdueTasksTruncated && <p className="border-t border-stone-800 pt-2 text-[10px] text-stone-500">Đang hiển thị {runResult.overdueTasks?.length ?? 0} mục đầu tiên; tổng số task quá hạn vẫn được tính đầy đủ.</p>}
                   {runResult.idempotentReplay && <p className="text-[10px] text-sky-300">Lần chạy này tái sử dụng dữ liệu đã có, không tạo trùng.</p>}
                   {runResult.executorMode === 'node_graph' && <p className="text-[10px] text-sky-300">Đã chạy qua node executor allowlist · compiler: {runResult.compilerMode}</p>}
                   {runResult.sideEffects === false && <p className="text-[10px] text-stone-500 flex gap-1"><ShieldCheck className="w-3 h-3" />Chỉ đọc; không thay đổi dữ liệu.</p>}

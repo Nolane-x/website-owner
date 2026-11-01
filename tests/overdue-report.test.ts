@@ -23,4 +23,20 @@ describe('read-only overdue report', () => {
     expect(report.overdueTasks.map((task) => task.id)).toEqual(['yesterday', 'past-timestamp']);
     expect(report.sideEffects).toBe(false);
   });
+
+  it('keeps the exact overdue count while bounding the returned task sample', () => {
+    const tasks = Array.from({ length: 150 }, (_, index) => ({
+      id: 'overdue-' + index,
+      title: 'Overdue task ' + index,
+      dueDate: '2026-10-01',
+      status: 'todo',
+    }));
+
+    const report = buildOverdueReport(tasks, new Date('2026-10-10T04:00:00.000Z'));
+    expect(report.totalTasks).toBe(150);
+    expect(report.overdueCount).toBe(150);
+    expect(report.overdueTasks).toHaveLength(100);
+    expect(report.overdueTasks[0].id).toBe('overdue-0');
+    expect(report.overdueTasksTruncated).toBe(true);
+  });
 });
