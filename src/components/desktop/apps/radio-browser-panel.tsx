@@ -17,7 +17,7 @@ import {
 type CatalogTab = 'discover' | 'favorites' | 'recent';
 
 interface RadioBrowserPanelProps {
-  onPlayStation: (station: RadioBrowserStation) => void;
+  onPlayStation: (station: RadioBrowserStation) => void | boolean | Promise<boolean>;
   currentStreamUrl?: string | null;
 }
 
@@ -68,6 +68,7 @@ export function RadioBrowserPanel({ onPlayStation, currentStreamUrl }: RadioBrow
   const [languages, setLanguages] = useState<RadioBrowserFacet[]>([]);
   const [genres, setGenres] = useState<RadioBrowserFacet[]>([]);
   const [library, setLibrary] = useState(() => loadRadioLibrary());
+  const [pendingStationId, setPendingStationId] = useState<string | null>(null);
 
   const popularGenres = useMemo(() => {
     const fromDirectory = genres
@@ -139,7 +140,7 @@ export function RadioBrowserPanel({ onPlayStation, currentStreamUrl }: RadioBrow
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [tab, query, country, language, tag, codec, minBitrate, sort, offset]);
+  }, [tab, query, country, language, tag, codec, minBitrate, sort, offset, refreshNonce]);
 
   const visibleStations = tab === 'favorites'
     ? library.favorites
@@ -151,20 +152,28 @@ export function RadioBrowserPanel({ onPlayStation, currentStreamUrl }: RadioBrow
     setter(value);
     setOffset(0);
     setLoading(true);
+    setLoadingMore(false);
   };
 
   const handleQuery = (value: string) => {
     setQuery(value);
     setOffset(0);
     setLoading(true);
+    setLoadingMore(false);
   };
 
-  const handlePlay = (station: RadioBrowserStation) => {
-    onPlayStation(station);
-    setLibrary((previous) => ({
-      ...previous,
-      history: recordRadioHistory(previous.history, station),
-    }));
+  const handlePlay = async (station: RadioBrowserStation) => {
+    setPendingStationId(station.id);
+    try {
+      const result = await onPlayStation(station);
+      if (result === false) return;
+      setLibrary((previous) => ({
+        ...previous,
+        history: recordRadioHistory(previous.history, station),
+      }));
+    } finally {
+      setPendingStationId(null);
+    }
   };
 
   const handleFavorite = (station: RadioBrowserStation) => {
@@ -176,6 +185,7 @@ export function RadioBrowserPanel({ onPlayStation, currentStreamUrl }: RadioBrow
 
   const refresh = () => {
     setLoading(true);
+    setLoadingMore(false);
     setOffset(0);
     setError(null);
     setRefreshNonce((value) => value + 1);
@@ -289,7 +299,7 @@ export function RadioBrowserPanel({ onPlayStation, currentStreamUrl }: RadioBrow
             </label>
             <label>
               <span className="mb-1 block text-[10px] text-stone-500">Sắp xếp</span>
-              <select value={sort} onChange={(event) => { setSort(event.target.value as RadioBrowserSort); setOffset(0); setLoading(true); }} className="w-full rounded-lg border border-stone-700 bg-stone-950 px-2 py-2 text-[11px] text-stone-200">
+              <select value={sort} onChange={(event) => { setSort(event.target.value as RadioBrowserSort); setOffset(0); setLoading(true); setLoadingMore(false); }} className="w-full rounded-lg border border-stone-700 bg-stone-950 px-2 py-2 text-[11px] text-stone-200">
                 <option value="popular">Phổ biến</option>
                 <option value="votes">Được bình chọn</option>
                 <option value="bitrate">Chất lượng cao</option>
@@ -349,8 +359,8 @@ export function RadioBrowserPanel({ onPlayStation, currentStreamUrl }: RadioBrow
                     <button type="button" onClick={() => handleFavorite(station)} aria-label={favorite ? 'Bỏ yêu thích ' + station.name : 'Thêm yêu thích ' + station.name} title={favorite ? 'Bỏ yêu thích' : 'Yêu thích'} className={favorite ? 'rounded-lg p-2 text-rose-400 hover:bg-stone-800' : 'rounded-lg p-2 text-stone-500 hover:bg-stone-800 hover:text-rose-300'}>
                       <Heart className="h-4 w-4" fill={favorite ? 'currentColor' : 'none'} />
                     </button>
-                    <button type="button" onClick={() => handlePlay(station)} aria-label={'Phát ' + station.name} className="rounded-lg bg-emerald-600 p-2 text-white hover:bg-emerald-500">
-                      {active ? <span className="block h-4 w-4 text-[9px] leading-4">ON</span> : <Play className="h-4 w-4" />}
+                    <button type="button" disabled={pendingStationId !== null} onClick={() => void handlePlay(station)} aria-label={'Phát ' + station.name} className="rounded-lg bg-emerald-600 p-2 text-white hover:bg-emerald-500 disabled:opacity-50">
+                      {pendingStationId === station.id ? <Loader2 className="h-4 w-4 animate-spin" /> : active ? <span className="block h-4 w-4 text-[9px] leading-4">ON</span> : <Play className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
@@ -378,7 +388,7 @@ export function RadioBrowserPanel({ onPlayStation, currentStreamUrl }: RadioBrow
         </button>
       )}
       <p className="text-[9px] leading-relaxed text-stone-600">
-        Danh mục do cộng đồng Radio Browser tổng hợp và kiểm tra định kỳ. Tính khả dụng thay đổi theo máy chủ từng đài; nếu một luồng lỗi, thử đài khác. Chất lượng codec/bitrate là metadata lần kiểm tra gần nhất.
+        Danh mục do cộng đồng <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer" className="text-stone-400 underline underline-offset-2 hover:text-emerald-300">Radio Browser</a> tổng hợp và kiểm tra định kỳ. Tính khả dụng thay đổi theo máy chủ từng đài; nếu một luồng lỗi, thử đài khác. Chất lượng codec/bitrate là metadata lần kiểm tra gần nhất.
       </p>
     </section>
   );
