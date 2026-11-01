@@ -299,6 +299,46 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
   return { items, favorites, watchLater, history, playlists };
 }
 
+/** Merge a local snapshot with the cloud snapshot without losing unique saved items. */
+export function mergeVideoLibraries(primary: VideoLibraryState, secondary: VideoLibraryState): VideoLibraryState {
+  const itemsById = new Map<string, VideoLibraryItem>();
+  for (const item of [...secondary.items, ...primary.items]) itemsById.set(item.id, item);
+  const items = [
+    ...primary.items,
+    ...secondary.items.filter((item) => !primary.items.some((saved) => saved.id === item.id)),
+  ];
+
+  const historyByItemId = new Map<string, VideoWatchRecord>();
+  for (const entry of [...secondary.history, ...primary.history]) {
+    const existing = historyByItemId.get(entry.itemId);
+    if (!existing || entry.watchedAt >= existing.watchedAt) historyByItemId.set(entry.itemId, entry);
+  }
+
+  const playlistsById = new Map<string, VideoPlaylist>();
+  for (const playlist of [...secondary.playlists, ...primary.playlists]) {
+    const existing = playlistsById.get(playlist.id);
+    if (!existing) {
+      playlistsById.set(playlist.id, playlist);
+      continue;
+    }
+    const newer = playlist.updatedAt >= existing.updatedAt ? playlist : existing;
+    playlistsById.set(playlist.id, {
+      ...newer,
+      itemIds: [...new Set([...playlist.itemIds, ...existing.itemIds])],
+      updatedAt: Math.max(playlist.updatedAt, existing.updatedAt),
+    });
+  }
+
+  const validIds = new Set(itemsById.keys());
+  return normalizeVideoLibrary({
+    items,
+    favorites: [...primary.favorites, ...secondary.favorites],
+    watchLater: [...primary.watchLater, ...secondary.watchLater],
+    history: [...historyByItemId.values()].sort((a, b) => b.watchedAt - a.watchedAt),
+    playlists: [...playlistsById.values()],
+  });
+}
+
 export function loadVideoLibrary(): VideoLibraryState {
   if (typeof window === 'undefined') return emptyVideoLibrary();
   try {
