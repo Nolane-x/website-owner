@@ -9,7 +9,7 @@
     "framework": "Next.js 16 (App Router) + React 19 + TypeScript",
     "styling": "Tailwind CSS v4 + Nolane UI (NUI) Editorial Bàn Giấy Design Tokens",
     "orm": "Drizzle ORM",
-    "database": "Production requires a real PostgreSQL URL: DATABASE_URL first, then POSTGRES_URL, POSTGRES_PRISMA_URL, DATABASE_URL_UNPOOLED or POSTGRES_URL_NON_POOLING. Production never silently switches to ephemeral PGlite; postgres.js uses prepare:false for transaction-pooler compatibility.",
+    "database": "Production requires a real PostgreSQL URL: DATABASE_URL first, then POSTGRES_URL, POSTGRES_PRISMA_URL, DATABASE_URL_UNPOOLED or POSTGRES_URL_NON_POOLING. Production never silently switches to ephemeral PGlite. On Vercel/serverless, prefer the provider's transaction-pooled runtime endpoint (Neon hostname ending in -pooler); reserve direct URLs for migrations/admin work. postgres.js uses prepare:false, max:2 connections per function instance, a 5-second idle timeout and a 10-second connect timeout to bound aggregate connection pressure.",
     "nodeRuntime": "Node.js 24.x in local/CI/Vercel. isomorphic-dompurify and Vitest use the pinned jsdom 25.0.1 dependency; Next externalizes only the sanitizer to avoid the prior jsdom 30 ESM runtime failure.",
     "security": {
       "passwordHashing": "Bcrypt (12 rounds salt)",
