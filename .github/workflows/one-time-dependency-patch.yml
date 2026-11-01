@@ -1,0 +1,49 @@
+name: One-time dependency patch refresh
+
+on:
+  push:
+    branches:
+      - fix/audio-lab-stream-persistence
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.event.head_commit.message != 'chore(deps): patch production audit findings'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/audio-lab-stream-persistence
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Patch production audit findings within compatible versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set "dependencies.next=16.4.3" "dependencies.zod=^4.6.6" "devDependencies.eslint-config-next=16.4.3"
+          npm install --package-lock-only --ignore-scripts
+          npm audit fix --package-lock-only --ignore-scripts
+          npm audit --omit=dev --audit-level=moderate
+
+      - name: Commit patched lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No dependency updates were required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(deps): patch production audit findings"
+          git push origin HEAD:fix/audio-lab-stream-persistence
