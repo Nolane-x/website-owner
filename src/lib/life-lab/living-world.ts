@@ -461,7 +461,7 @@ function nearestHost(
   world: LivingWorld,
   radius: number,
 ): { x: number; y: number; distance: number; hostIndex: number } | null {
-  let best: { x: number; y: number; distance: number; hostIndex: number } | null = null;
+  let best: { x: number; y: number; distance: number; score: number; hostIndex: number } | null = null;
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const distance = Math.max(Math.abs(dx), Math.abs(dy));
@@ -473,7 +473,7 @@ function nearestHost(
       const host = organisms[occupant];
       if (!host || (host.species !== 'grazer' && host.species !== 'omnivore')) continue;
       const score = distance - host.genome.immunity * 2 + animal.genome.virulence;
-      if (!best || score < best.distance - best.hostIndex * 0.000001) best = { x, y, distance: score, hostIndex: occupant };
+      if (!best || score < best.score) best = { x, y, distance, score, hostIndex: occupant };
     }
   }
   return best;
@@ -861,20 +861,12 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
         if (position) { occupancy[here] = -1; animal.x = position.x; animal.y = position.y; occupancy[indexOf(animal.x, animal.y, world.width)] = organismIndex; }
       }
     } else if (animal.species === 'parasite') {
-      if (animal.energy > 50 && random() < animal.genome.fertility && organisms.length < MAX_POPULATION) {
-        const child = createOrganism(world.nextId + birthsNow, 'parasite', animal.x, animal.y, random);
-        child.energy = 24;
-        child.genome = mutateGenome(animal.genome, world.rules.mutationRate, random);
-        animal.energy -= 18;
-        organisms.push(child);
-        alive.push(true);
-        idToIndex.set(child.id, organisms.length - 1);
-        birthsNow++;
-      }
       const host = nearestHost(animal, organisms, alive, occupancy, world, animal.genome.vision);
       if (host && host.distance <= 1.01) {
         const targetIndex = host.hostIndex;
         const target = organisms[targetIndex];
+        const oldPosition = indexOf(animal.x, animal.y, world.width);
+        if (occupancy[oldPosition] === organismIndex) occupancy[oldPosition] = -1;
         animal.hostId = target.id;
         animal.x = target.x;
         animal.y = target.y;
