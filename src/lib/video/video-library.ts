@@ -1,5 +1,10 @@
 export type VideoPlatform = 'youtube' | 'tiktok';
-export type VideoLibraryTab = 'discover' | 'watch' | 'shorts' | 'library' | 'playlists';
+export type VideoLibraryTab = 'discover' | 'topics' | 'watch' | 'shorts' | 'library' | 'playlists';
+export type VideoSearchOrder = 'relevance' | 'date' | 'viewCount';
+
+export function normalizeVideoSearchOrder(value: unknown): VideoSearchOrder {
+  return value === 'date' || value === 'viewCount' || value === 'relevance' ? value : 'relevance';
+}
 
 export interface ParsedVideoLink {
   platform: VideoPlatform;
@@ -541,6 +546,28 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
       score += Math.max(0, 1.2 - ageDays / 45);
     }
     return { item, score, originalIndex };
-  }).sort((a, b) => b.score - a.score || a.originalIndex - b.originalIndex)
-    .slice(0, safeLimit).map(({ item }) => item);
+  }).sort((a, b) => b.score - a.score || a.originalIndex - b.originalIndex);
+
+  // Avoid a recommendation shelf dominated by one channel. Keep the ranking
+  // order, allow at most two videos per creator on the first pass, then fill
+  // any remaining slots so small candidate sets do not look empty.
+  const selected: VideoLibraryItem[] = [];
+  const deferred: VideoLibraryItem[] = [];
+  const creatorCounts = new Map<string, number>();
+  for (const candidate of ranked) {
+    const creatorKey = candidate.item.creator.trim().toLocaleLowerCase() || candidate.item.id;
+    const count = creatorCounts.get(creatorKey) ?? 0;
+    if (count >= 2) {
+      deferred.push(candidate.item);
+      continue;
+    }
+    selected.push(candidate.item);
+    creatorCounts.set(creatorKey, count + 1);
+    if (selected.length >= safeLimit) return selected;
+  }
+  for (const item of deferred) {
+    if (selected.length >= safeLimit) break;
+    selected.push(item);
+  }
+  return selected;
 }
