@@ -178,7 +178,12 @@ export async function runDailyScheduledOverdueReports(
           compiledNodeIds: plan.nodes.map((node) => isRecord(node) ? node.id : null),
         };
       } else {
-        const tasks = await db.select().from(kanbanTasks).where(eq(kanbanTasks.profileId, claim.profileId));
+        const tasks = await db.select({
+          id: kanbanTasks.id,
+          title: kanbanTasks.title,
+          dueDate: kanbanTasks.dueDate,
+          status: kanbanTasks.status,
+        }).from(kanbanTasks).where(eq(kanbanTasks.profileId, claim.profileId));
         const report = buildOverdueReport(tasks, now);
         reportResult = {
           result: `Đã kiểm tra ${report.totalTasks} task; ${report.overdueCount} task quá hạn chưa hoàn tất.`,
