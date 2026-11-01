@@ -26,6 +26,7 @@ import {
   Hourglass,
   Calculator,
   Clapperboard,
+  Atom,
 } from 'lucide-react';
 
 interface DockApp {
@@ -155,6 +156,12 @@ const DOCK_APPS: DockApp[] = [
     title: 'Kho nghiên cứu & Claims',
     icon: <BookOpen className="w-5 h-5 text-cyan-400" />,
     color: 'hover:bg-cyan-500/20',
+  },
+  {
+    appId: 'life-lab',
+    title: 'Life Lab · Emergent Worlds',
+    icon: <Atom className="w-5 h-5 text-emerald-300" />,
+    color: 'hover:bg-emerald-500/20',
   },
   {
     appId: 'ai',
