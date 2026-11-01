@@ -662,7 +662,7 @@ export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms
   };
   for (const topicId of state.followedTopics.slice(0, 20)) {
     const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
-    add(topic ? topic.query + ' ' + topic.id.replace(/-/g, ' ') : topicId.replace(/-/g, ' '), 4.5);
+    add(topic ? topic.query + ' ' + topic.id.replace(/-/g, ' ') : topicId.replace(/-/g, ' '), 2.8);
   }
   for (const id of state.favorites.slice(0, 20)) {
     const item = byId.get(id);
