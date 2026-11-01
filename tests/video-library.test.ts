@@ -18,6 +18,7 @@ import {
   toggleVideoFavorite,
   toggleFollowedVideoTopic,
   toggleHiddenVideoCreator,
+  canHideVideoCreator,
   toggleMutedVideoTopic,
   toggleNotInterestedVideo,
   isVideoCreatorHidden,
@@ -177,6 +178,36 @@ describe('Negative video discovery preferences', () => {
     expect(toggleHiddenVideoCreator(initial, imported)).toBe(initial);
   });
 
+  it('exposes hide controls only when a real creator identity exists', () => {
+    const imported = createVideoLibraryItem({
+      platform: 'youtube', videoId: YOUTUBE_ID, title: 'Imported video', creator: 'YouTube',
+    })!;
+    const knownCreator = createVideoLibraryItem({
+      platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Known creator', creator: 'Actual Channel',
+      creatorId: YOUTUBE_CHANNEL_ID,
+    })!;
+    expect(canHideVideoCreator(imported)).toBe(false);
+    expect(canHideVideoCreator(knownCreator)).toBe(true);
+  });
+
+  it('uses dismissed video title and description as a modest negative relevance signal', () => {
+    const dismissed = createVideoLibraryItem({
+      platform: 'youtube', videoId: YOUTUBE_ID, title: 'Advanced robotics engineering tutorial',
+      description: 'Humanoid robots and automation systems explained',
+    })!;
+    const similar = createVideoLibraryItem({
+      platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Advanced robotics engineering explained',
+      viewCount: 100,
+    })!;
+    const alternative = createVideoLibraryItem({
+      platform: 'youtube', videoId: 'jNQXAC9IVRw', title: 'English pronunciation speaking lesson',
+      viewCount: 100,
+    })!;
+    const state = toggleNotInterestedVideo(emptyVideoLibrary(), dismissed);
+    expect(rankVideoRecommendations([similar, alternative], state, 2).map((item) => item.id))
+      .toEqual([alternative.id, similar.id]);
+  });
+
   it('uses a normalized creator-name fallback when a channel ID is unavailable', () => {
     const first = createVideoLibraryItem({ platform: 'youtube', videoId: YOUTUBE_ID, creator: 'Kênh Thử Nghiệm' })!;
     const second = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', creator: 'kenh thu nghiem' })!;
@@ -239,7 +270,7 @@ describe('Negative video discovery preferences', () => {
 
     expect(normalized.mutedTopics).toEqual(['robotics']);
     expect(normalized.notInterestedVideos).toEqual([
-      { id: 'youtube:' + YOUTUBE_ID, title: 'Latest', creator: '', updatedAt: 20 },
+      { id: 'youtube:' + YOUTUBE_ID, title: 'Latest', description: '', creator: '', updatedAt: 20 },
     ]);
     expect(normalized.hiddenCreators).toEqual([{ key: 'yt:' + YOUTUBE_CHANNEL_ID, label: 'Known channel' }]);
     expect(normalizeVideoLibrary({ items: [], favorites: [], watchLater: [], history: [], playlists: [] }))
