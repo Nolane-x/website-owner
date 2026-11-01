@@ -169,6 +169,13 @@ describe('Negative video discovery preferences', () => {
     expect(isVideoCreatorHidden(creatorVideo, restored)).toBe(false);
   });
 
+  it('does not let a generic imported YouTube platform label become a hidden creator rule', () => {
+    const imported = createVideoLibraryItem({
+      platform: 'youtube', videoId: YOUTUBE_ID, title: 'Imported video', creator: 'YouTube',
+    })!;
+    expect(toggleHiddenVideoCreator(emptyVideoLibrary(), imported)).toBe(emptyVideoLibrary());
+  });
+
   it('uses a normalized creator-name fallback when a channel ID is unavailable', () => {
     const first = createVideoLibraryItem({ platform: 'youtube', videoId: YOUTUBE_ID, creator: 'Kênh Thử Nghiệm' })!;
     const second = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', creator: 'kenh thu nghiem' })!;
@@ -185,10 +192,17 @@ describe('Negative video discovery preferences', () => {
     const unrelated = createVideoLibraryItem({
       platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'English speaking practice for IELTS',
     })!;
-    const state = toggleMutedVideoTopic(toggleFollowedVideoTopic(emptyVideoLibrary(), 'robotics'), 'robotics');
+    const positiveSignal = createVideoLibraryItem({
+      platform: 'youtube', videoId: 'aqz-KE-bpKQ', title: 'Robotics engineering and humanoid robotics',
+    })!;
+    let state = addVideoToLibrary(emptyVideoLibrary(), positiveSignal);
+    state = toggleVideoFavorite(state, positiveSignal.id);
+    state = toggleFollowedVideoTopic(state, 'robotics');
+    state = toggleMutedVideoTopic(state, 'robotics');
 
     expect(rankVideoRecommendations([robotics, unrelated], state, 2).map((item) => item.id))
       .toEqual([unrelated.id, robotics.id]);
+    expect(buildVideoRecommendationQuery(state, 8)).not.toContain('robotics');
     expect(toggleMutedVideoTopic(state, 'robotics').mutedTopics).toEqual([]);
     expect(toggleMutedVideoTopic(state, '../bad')).toBe(state);
   });
