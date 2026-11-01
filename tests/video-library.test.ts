@@ -130,6 +130,21 @@ describe('Followed video topics', () => {
     expect(toggleFollowedVideoTopic(state, '../admin')).toBe(state);
   });
 
+  it('changes only topic preferences and preserves existing video metadata', () => {
+    const item = createVideoLibraryItem({
+      platform: 'youtube',
+      videoId: 'dQw4w9WgXcQ',
+      title: 'Saved video',
+    })!;
+    const state = addVideoToLibrary(emptyVideoLibrary(), item);
+    const addedAt = state.items[0].addedAt;
+    const updated = toggleFollowedVideoTopic(state, 'artificial-intelligence');
+
+    expect(updated.items[0]).toEqual(state.items[0]);
+    expect(updated.items[0].addedAt).toBe(addedAt);
+    expect(updated.followedTopics).toEqual(['artificial-intelligence']);
+  });
+
   it('keeps the latest follow when the saved topic limit is reached', () => {
     const initial = normalizeVideoLibrary({
       items: [],
