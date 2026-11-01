@@ -412,3 +412,64 @@ export function toggleVideoInPlaylist(
     }),
   };
 }
+
+
+const RECOMMENDATION_STOP_WORDS = new Set([
+  'video', 'youtube', 'tiktok', 'shorts', 'short', 'official', 'music',
+  'the', 'and', 'for', 'with', 'from', 'this', 'that', 'you', 'your',
+  'cua', 'voi', 'nhung', 'cac', 'mot', 'nhieu', 'trong', 'duoc', 'cho',
+  'nhu', 'khi', 'tai', 'sao', 'la', 'va', 'co', 'khong', 'nay', 'do',
+  've', 'den', 'tren', 'duoi', 'cach', 'phan', 'tap', 'hoc',
+]);
+
+function recommendationTokens(value: string): string[] {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .match(/[a-z0-9]{3,}/g)?.filter((token) => !RECOMMENDATION_STOP_WORDS.has(token)) ?? [];
+}
+
+/** Rank provider candidates using only local favorites, watch-later and history metadata. */
+export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: VideoLibraryState, limit = 8): VideoLibraryItem[] {
+  const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.min(24, Math.floor(limit))) : 8;
+  if (safeLimit === 0 || candidates.length === 0) return [];
+  const byId = new Map(state.items.map((item) => [item.id, item]));
+  const profile = new Map<string, number>();
+  const addProfile = (text: string, weight: number) => {
+    for (const token of new Set(recommendationTokens(text))) profile.set(token, (profile.get(token) ?? 0) + weight);
+  };
+  for (const id of state.favorites.slice(0, 30)) {
+    const item = byId.get(id);
+    if (item) { addProfile(item.title, 4); addProfile(item.creator, 2.5); addProfile(item.description, 0.8); }
+  }
+  for (const id of state.watchLater.slice(0, 30)) {
+    const item = byId.get(id);
+    if (item) { addProfile(item.title, 3); addProfile(item.creator, 2); addProfile(item.description, 0.6); }
+  }
+  state.history.slice(0, 15).forEach((entry, index) => {
+    const item = byId.get(entry.itemId);
+    if (!item) return;
+    const weight = Math.max(0.75, 2.5 - index * 0.12);
+    addProfile(item.title, weight);
+    addProfile(item.creator, weight * 0.65);
+    addProfile(item.description, weight * 0.25);
+  });
+  const recentlyWatched = new Set(state.history.slice(0, 3).map((entry) => entry.itemId));
+  const unique = new Map<string, VideoLibraryItem>();
+  for (const item of candidates) if (item && !recentlyWatched.has(item.id)) unique.set(item.id, item);
+  const now = Date.now();
+  return [...unique.values()].map((item, originalIndex) => {
+    const titleTokens = new Set(recommendationTokens(item.title));
+    const creatorTokens = new Set(recommendationTokens(item.creator));
+    const descriptionTokens = new Set(recommendationTokens(item.description));
+    let score = 0;
+    for (const token of titleTokens) score += (profile.get(token) ?? 0) * 3;
+    for (const token of creatorTokens) score += (profile.get(token) ?? 0) * 2;
+    for (const token of descriptionTokens) score += (profile.get(token) ?? 0) * 0.35;
+    score += Math.log10((item.viewCount ?? 0) + 1) * 0.22;
+    if (item.publishedAt) {
+      const ageDays = Math.max(0, (now - Date.parse(item.publishedAt)) / 86_400_000);
+      score += Math.max(0, 1.2 - ageDays / 45);
+    }
+    return { item, score, originalIndex };
+  }).sort((a, b) => b.score - a.score || a.originalIndex - b.originalIndex)
+    .slice(0, safeLimit).map(({ item }) => item);
+}
