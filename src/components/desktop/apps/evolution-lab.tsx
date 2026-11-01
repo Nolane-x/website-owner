@@ -197,8 +197,8 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
   const [world, setWorld] = useState<EcosystemWorld>(readInitialWorld);
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(8);
-  const [stats, setStats] = useState<EcosystemStats>(() => getEcosystemStats(readInitialWorld()));
-  const [history, setHistory] = useState<number[]>(() => [getEcosystemStats(readInitialWorld()).population]);
+  const [stats, setStats] = useState<EcosystemStats>(() => getEcosystemStats(world));
+  const [history, setHistory] = useState<number[]>(() => [getEcosystemStats(world).population]);
   const [saved, setSaved] = useState<SavedEcosystem[]>(readSavedExperiments);
   const [experimentName, setExperimentName] = useState('');
   const [seedInput, setSeedInput] = useState('20261101');
