@@ -43,6 +43,7 @@ import {
 import {
   addVideoToLibrary,
   buildVideoRecommendationQuery,
+  canHideVideoCreator,
   createVideoLibraryItem,
   createVideoPlaylist,
   emptyVideoLibrary,
@@ -238,7 +239,7 @@ function VideoCard({
                 <ThumbsDown className="h-3.5 w-3.5" />
               </button>
             )}
-            {onHideCreator && item.creator && (
+            {onHideCreator && canHideVideoCreator(item) && (
               <button type="button" title={creatorHidden ? 'Hiện lại nhà sáng tạo này' : 'Ẩn nhà sáng tạo này'} aria-pressed={creatorHidden} onClick={() => onHideCreator(item)} className={creatorHidden ? 'rounded-md bg-rose-950/60 p-1.5 text-rose-300' : 'rounded-md p-1.5 text-stone-500 hover:bg-stone-800 hover:text-rose-300'}>
                 <EyeOff className="h-3.5 w-3.5" />
               </button>
