@@ -532,6 +532,7 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
   const addProfile = (text: string, weight: number) => {
     for (const token of new Set(recommendationTokens(text))) profile.set(token, (profile.get(token) ?? 0) + weight);
   };
+  for (const topicId of state.followedTopics.slice(0, 20)) addProfile(topicId.replace(/-/g, ' '), 4.5);
   for (const id of state.favorites.slice(0, 30)) {
     const item = byId.get(id);
     if (item) { addProfile(item.title, 4); addProfile(item.creator, 2.5); addProfile(item.description, 0.8); }
