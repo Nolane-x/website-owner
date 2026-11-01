@@ -21,7 +21,7 @@ The generated world contains six modeled biomes:
 | Plains | Moderate vegetation and open movement |
 | Forest | High vegetation growth and cover |
 | Desert | Low moisture and food; higher energetic pressure for grazers |
-| Mountain | Low food and impassable movement for modeled agents |
+| Mountain | Low food; impassable to land animals and parasites, while microbes may traverse it |
 | Water | River/lake cells; impassable to land agents |
 | Wetland | High moisture, fertility and vegetation growth |
 
@@ -70,6 +70,7 @@ Offspring inherit the parent's genome with independent bounded random mutations.
 
 - The terrain, food and climate map layers visualize different state arrays.
 - Population history samples the five group counts.
+- The UI can fast-forward by 100 or 1,000 generations in cancellable chunks, yielding to the browser between chunks and creating intermediate 40-generation checkpoints.
 - The event log records season/weather changes, births, predation, booms, crashes, extinctions and genetic lineage branches. It retains the most recent 64 events in a snapshot.
 - Automatic checkpoints are created at roughly 40-generation intervals; manual checkpoints can be created at any paused state. The browser stores at most 12.
 - A checkpoint can be restored as a branch. Named experiments store up to six independent versioned snapshots.
