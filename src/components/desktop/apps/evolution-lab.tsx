@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { LivingWorldLab } from '@/components/desktop/apps/living-world-lab';
 import {
   Activity,
   ArrowLeft,
@@ -205,6 +206,7 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
   const [grazerInput, setGrazerInput] = useState(() => getEcosystemStats(world).grazers);
   const [hunterInput, setHunterInput] = useState(() => getEcosystemStats(world).hunters);
   const [settingsOpen, setSettingsOpen] = useState(true);
+  const [livingWorldOpen, setLivingWorldOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const worldRef = useRef(world);
 
@@ -354,6 +356,16 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
   const maxHistory = Math.max(1, ...history);
   const trend = history.length > 1 ? history[history.length - 1] - history[0] : 0;
 
+  if (livingWorldOpen) {
+    return (
+      <div className="h-full min-h-0 overflow-y-auto bg-[#081012] p-3 text-stone-200 sm:p-5">
+        <div className="mx-auto flex min-h-full max-w-[1600px] flex-col">
+          <LivingWorldLab onBack={() => setLivingWorldOpen(false)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="flex min-h-0 flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -369,9 +381,14 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
             <p className="mt-0.5 text-[10px] text-stone-500">Một thế giới nhỏ, các cá thể riêng biệt và chọn lọc tự nhiên</p>
           </div>
         </div>
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[9px] text-stone-300 hover:bg-white/[0.08]">
-          <ArrowLeft className="h-3.5 w-3.5" /> Các mô phỏng tế bào
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => { if (running) pause(); setLivingWorldOpen(true); }} className="inline-flex items-center gap-2 rounded-xl border border-cyan-200/25 bg-cyan-200/10 px-3 py-2 text-[9px] font-semibold text-cyan-50 hover:bg-cyan-200/15">
+            <Dna className="h-3.5 w-3.5" /> Living World v2 <span className="rounded bg-cyan-100/15 px-1 py-0.5 text-[7px] uppercase tracking-wider">Full world</span>
+          </button>
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[9px] text-stone-300 hover:bg-white/[0.08]">
+            <ArrowLeft className="h-3.5 w-3.5" /> Các mô phỏng tế bào
+          </button>
+        </div>
       </header>
 
       <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
