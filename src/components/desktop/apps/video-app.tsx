@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import {
   addVideoToLibrary,
+  buildVideoRecommendationQuery,
   createVideoLibraryItem,
   createVideoPlaylist,
   emptyVideoLibrary,
@@ -391,8 +392,8 @@ export function VideoApp() {
     ));
   };
 
-  const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '') => {
-    const requestQuery = pageToken ? resultQuery : mode === 'search' ? query.trim() : mode === 'shorts' ? (query.trim().length >= 2 ? query.trim() : 'shorts') : '';
+  const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '', queryOverride?: string, headingOverride?: string) => {
+    const requestQuery = pageToken ? resultQuery : mode === 'search' ? (queryOverride ?? query.trim()) : mode === 'shorts' ? (query.trim().length >= 2 ? query.trim() : 'shorts') : '';
     setLoading(true);
     setError(null);
     setNeedsApiKey(false);
@@ -423,9 +424,11 @@ export function VideoApp() {
       setResultCategoryId(categoryId);
       setResultQuery(requestQuery);
       setNextPageToken(payload.nextPageToken ?? null);
-      setResultHeading(mode === 'trending'
-        ? categoryId ? 'Video thịnh hành theo chủ đề' : 'Đang thịnh hành tại Việt Nam'
-        : mode === 'shorts' ? 'Video ngắn đủ điều kiện nhúng từ YouTube' : 'Kết quả YouTube: ' + requestQuery);
+      if (!pageToken) {
+        setResultHeading(headingOverride || (mode === 'trending'
+          ? categoryId ? 'Video thịnh hành theo chủ đề' : 'Đang thịnh hành tại Việt Nam'
+          : mode === 'shorts' ? 'Video ngắn đủ điều kiện nhúng từ YouTube' : 'Kết quả YouTube: ' + requestQuery));
+      }
       if (mode === 'shorts' && items.length > 0) {
         setLibrary((previous) => {
           const newIds = new Set(items.map((item) => item.id));
@@ -460,6 +463,19 @@ export function VideoApp() {
   const loadTrending = (categoryId = '') => {
     setProvider('youtube');
     void executeYouTubeRequest('trending', null, categoryId);
+  };
+
+  const loadRecommended = () => {
+    setProvider('youtube');
+    const recommendationQuery = buildVideoRecommendationQuery(library);
+    if (!recommendationQuery) {
+      loadTrending();
+      return;
+    }
+    void executeYouTubeRequest(
+      'search', null, '', recommendationQuery,
+      'Gợi ý theo sở thích: ' + recommendationQuery,
+    );
   };
 
   const discoverShorts = () => {
@@ -679,8 +695,8 @@ export function VideoApp() {
 
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div><h3 className="text-xs font-semibold text-stone-100">Dành cho bạn</h3><p className="mt-1 text-[9px] text-stone-500">Gợi ý dựa trên video yêu thích, xem sau và lịch sử gần đây; khi chưa có dữ liệu cá nhân sẽ dùng độ phổ biến và độ mới.</p></div>
-                <button type="button" onClick={() => loadTrending()} disabled={loading} className="rounded-lg border border-stone-800 px-3 py-2 text-[9px] text-stone-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40">Làm mới gợi ý</button>
+                <div><h3 className="text-xs font-semibold text-stone-100">Dành cho bạn</h3><p className="mt-1 text-[9px] text-stone-500">Gợi ý truy vấn video mới từ chủ đề bạn yêu thích, xem sau và lịch sử; sau đó xếp hạng theo độ liên quan. Khi chưa có dữ liệu cá nhân, hệ thống dùng xu hướng Việt Nam.</p></div>
+                <button type="button" onClick={loadRecommended} disabled={loading} className="rounded-lg border border-stone-800 px-3 py-2 text-[9px] text-stone-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40">Làm mới gợi ý</button>
               </div>
               {recommendedVideos.length > 0 ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -690,7 +706,7 @@ export function VideoApp() {
                 <div className="rounded-xl border border-dashed border-stone-800 px-4 py-5 text-center">
                   <Sparkles className="mx-auto h-5 w-5 text-emerald-400/70" />
                   <p className="mt-2 text-[10px] text-stone-400">Tìm hoặc thêm vài video để tạo gợi ý theo sở thích của bạn.</p>
-                  <button type="button" onClick={() => loadTrending()} disabled={loading} className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-[9px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40">Khám phá video thịnh hành</button>
+                  <button type="button" onClick={loadRecommended} disabled={loading} className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-[9px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40">Tạo gợi ý video mới</button>
                 </div>
               )}
             </section>
