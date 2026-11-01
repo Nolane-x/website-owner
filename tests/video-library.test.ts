@@ -11,6 +11,7 @@ import {
   parseVideoUrl,
   recordVideoProgress,
   mergeVideoLibraries,
+  normalizeVideoSearchOrder,
   rankVideoRecommendations,
   removeVideoFromLibrary,
   setVideoShort,
@@ -111,6 +112,17 @@ describe('Video Library cloud merge', () => {
   });
 });
 
+describe('YouTube discovery search options', () => {
+  it('allows only supported search ordering values', () => {
+    expect(normalizeVideoSearchOrder('date')).toBe('date');
+    expect(normalizeVideoSearchOrder('viewCount')).toBe('viewCount');
+    expect(normalizeVideoSearchOrder('relevance')).toBe('relevance');
+    expect(normalizeVideoSearchOrder('rating')).toBe('relevance');
+    expect(normalizeVideoSearchOrder('https://example.com')).toBe('relevance');
+    expect(normalizeVideoSearchOrder(null)).toBe('relevance');
+  });
+});
+
 describe('Video Library recommendations', () => {
   it('ranks matching interests above unrelated popularity and excludes recently watched videos', () => {
     const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning with neural networks', creator: 'AI Research Lab' })!;
@@ -134,6 +146,22 @@ describe('Video Library recommendations', () => {
     expect(query).toContain('neural');
     expect(query.split(' ')).toHaveLength(4);
     expect(buildVideoRecommendationQuery(emptyVideoLibrary())).toBe('');
+  });
+
+  it('limits creator repetition when ranking a recommendation shelf', () => {
+    const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning neural networks', creator: 'AI Research Lab' })!;
+    const candidates = [
+      createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Machine learning neural networks explained', creator: 'AI Research Lab', viewCount: 1000 })!,
+      createVideoLibraryItem({ platform: 'youtube', videoId: 'jNQXAC9IVRw', title: 'AI deep learning neural network tutorial', creator: 'AI Research Lab', viewCount: 900 })!,
+      createVideoLibraryItem({ platform: 'youtube', videoId: '9bZkp7q19f0', title: 'Neural networks and artificial intelligence', creator: 'AI Research Lab', viewCount: 800 })!,
+      createVideoLibraryItem({ platform: 'youtube', videoId: 'aqz-KE-bpKQ', title: 'Machine learning research explained', creator: 'Science Channel', viewCount: 700 })!,
+    ];
+    let state = addVideoToLibrary(emptyVideoLibrary(), favorite);
+    state = toggleVideoFavorite(state, favorite.id);
+    const ranked = rankVideoRecommendations(candidates, state, 4);
+    const leadingThreeCreators = ranked.slice(0, 3).map((item) => item.creator);
+    expect(leadingThreeCreators.filter((creator) => creator === 'AI Research Lab')).toHaveLength(2);
+    expect(ranked).toHaveLength(4);
   });
 
   it('uses popularity as a cold-start signal and respects the requested result limit', () => {

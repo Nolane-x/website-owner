@@ -4,7 +4,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react';
 import {
   ArrowLeft,
+  BookOpen,
   Bookmark,
+  Bot,
+  BrainCircuit,
+  Calculator,
+  Code2,
   ChevronDown,
   ChevronUp,
   Clapperboard,
@@ -12,17 +17,24 @@ import {
   Compass,
   ExternalLink,
   Film,
+  FlaskConical,
+  Gamepad2,
+  GraduationCap,
   Heart,
   Link2,
+  Languages,
   ListVideo,
   Loader2,
   Music2,
   Play,
+  Palette,
   Plus,
   Search,
   Settings2,
   ShieldCheck,
   Sparkles,
+  Telescope,
+  Trophy,
   Trash2,
   X,
 } from 'lucide-react';
@@ -49,7 +61,9 @@ import {
   type VideoLibraryItem,
   type VideoLibraryState,
   type VideoLibraryTab,
+  type VideoSearchOrder,
 } from '@/lib/video/video-library';
+import { VIDEO_TOPIC_GROUPS, VIDEO_TOPICS, type VideoTopicIcon } from '@/lib/video/video-topics';
 import { VideoEmbedPlayer } from './video-embed-player';
 
 interface YouTubeApiItem {
@@ -94,9 +108,33 @@ const TRENDING_CATEGORIES = [
 
 const TAB_ITEMS: Array<{ id: VideoLibraryTab; label: string; icon: React.ElementType }> = [
   { id: 'discover', label: 'Khám phá', icon: Compass },
+  { id: 'topics', label: 'Chủ đề', icon: Sparkles },
   { id: 'shorts', label: 'Shorts', icon: Clapperboard },
   { id: 'library', label: 'Thư viện', icon: Film },
   { id: 'playlists', label: 'Playlist', icon: ListVideo },
+];
+
+const TOPIC_ICON_MAP: Record<VideoTopicIcon, React.ElementType> = {
+  brain: BrainCircuit,
+  code: Code2,
+  robot: Bot,
+  math: Calculator,
+  science: FlaskConical,
+  language: Languages,
+  graduation: GraduationCap,
+  space: Telescope,
+  design: Palette,
+  film: Clapperboard,
+  music: Music2,
+  gaming: Gamepad2,
+  sports: Trophy,
+  history: BookOpen,
+};
+
+const SEARCH_SORT_OPTIONS: Array<{ id: VideoSearchOrder; label: string }> = [
+  { id: 'relevance', label: 'Liên quan' },
+  { id: 'date', label: 'Mới nhất' },
+  { id: 'viewCount', label: 'Lượt xem' },
 ];
 
 function VideoThumbnail({ item }: { item: VideoLibraryItem }) {
@@ -279,6 +317,11 @@ export function VideoApp() {
   const [tab, setTab] = useState<VideoLibraryTab>('discover');
   const [provider, setProvider] = useState<Provider>('youtube');
   const [query, setQuery] = useState('');
+  const [topicSearch, setTopicSearch] = useState('');
+  const [topicGroup, setTopicGroup] = useState<(typeof VIDEO_TOPIC_GROUPS)[number]>('Tất cả');
+  const [activeTopic, setActiveTopic] = useState<{ id: string; label: string; query: string } | null>(null);
+  const [searchOrder, setSearchOrder] = useState<VideoSearchOrder>('relevance');
+  const [resultSort, setResultSort] = useState<VideoSearchOrder>('relevance');
   const [apiKey, setApiKey] = useState('');
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKeySource, setApiKeySource] = useState<'personal' | 'environment' | null>(null);
@@ -474,6 +517,13 @@ export function VideoApp() {
     return rankVideoRecommendations([...candidates.values()], library, 6);
   }, [results, library]);
 
+  const visibleTopics = useMemo(
+    () => topicGroup === 'Tất cả'
+      ? VIDEO_TOPICS
+      : VIDEO_TOPICS.filter((topic) => topic.group === topicGroup),
+    [topicGroup],
+  );
+
   const continueWatching = useMemo(() => {
     return library.history
       .filter((entry) => entry.progressSeconds > 5 && (!entry.durationSeconds || entry.progressSeconds < entry.durationSeconds - 10))
@@ -516,8 +566,9 @@ export function VideoApp() {
     ));
   };
 
-  const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '', queryOverride?: string, headingOverride?: string) => {
+  const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '', queryOverride?: string, headingOverride?: string, orderOverride?: VideoSearchOrder) => {
     const requestQuery = pageToken ? resultQuery : mode === 'search' ? (queryOverride ?? query.trim()) : mode === 'shorts' ? (query.trim().length >= 2 ? query.trim() : 'shorts') : '';
+    const requestOrder: VideoSearchOrder = mode === 'shorts' ? 'viewCount' : pageToken ? resultSort : orderOverride ?? searchOrder;
     setLoading(true);
     setError(null);
     setNeedsApiKey(false);
@@ -525,7 +576,7 @@ export function VideoApp() {
       const response = await fetch('/api/video-library/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, query: requestQuery, regionCode: 'VN', categoryId, pageToken: pageToken || '' }),
+        body: JSON.stringify({ mode, query: requestQuery, regionCode: 'VN', categoryId, pageToken: pageToken || '', order: requestOrder }),
       });
       const payload = await response.json() as SearchResponse & { error?: string };
       if (response.status === 428) {
@@ -547,6 +598,7 @@ export function VideoApp() {
       setResultMode(mode);
       setResultCategoryId(categoryId);
       setResultQuery(requestQuery);
+      setResultSort(requestOrder);
       setNextPageToken(payload.nextPageToken ?? null);
       if (!pageToken) {
         setResultHeading(headingOverride || (mode === 'trending'
@@ -599,6 +651,34 @@ export function VideoApp() {
     void executeYouTubeRequest(
       'search', null, '', recommendationQuery,
       'Gợi ý theo sở thích: ' + recommendationQuery,
+    );
+  };
+
+  const loadTopic = (topic: { id: string; label: string; query: string }, order = searchOrder) => {
+    setProvider('youtube');
+    setActiveTopic(topic);
+    setTab('topics');
+    setResults([]);
+    setNextPageToken(null);
+    void executeYouTubeRequest('search', null, '', topic.query, 'Chủ đề · ' + topic.label, order);
+  };
+
+  const submitTopicSearch = (event?: FormEvent) => {
+    event?.preventDefault();
+    const value = topicSearch.trim();
+    if (value.length < 2) return;
+    loadTopic({ id: 'custom-topic', label: value, query: value });
+  };
+
+  const changeTopicSort = (order: VideoSearchOrder) => {
+    if (!activeTopic || order === resultSort) return;
+    setSearchOrder(order);
+    setResults([]);
+    setNextPageToken(null);
+    void executeYouTubeRequest(
+      'search', null, '', activeTopic.query,
+      'Chủ đề · ' + activeTopic.label,
+      order,
     );
   };
 
@@ -900,6 +980,142 @@ export function VideoApp() {
                 </div>
               )}
             </section>
+          </div>
+        )}
+
+        {tab === 'topics' && (
+          <div className="space-y-5">
+            <section className="relative overflow-hidden rounded-2xl border border-sky-900/60 bg-gradient-to-br from-slate-900 via-stone-950 to-indigo-950/35 p-4 sm:p-5">
+              <div className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
+              <div className="relative">
+                <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-sky-300">Explore · Learn · Discover</p>
+                <h1 className="mt-2 text-xl font-bold text-white sm:text-2xl">Khám phá video theo chủ đề</h1>
+                <p className="mt-2 max-w-2xl text-[10px] leading-relaxed text-stone-400 sm:text-[11px]">
+                  Chọn một lĩnh vực để tìm nội dung mới từ YouTube, hoặc tự nhập chủ đề bạn đang tò mò. Chỉ gọi API khi bạn chọn tìm kiếm.
+                </p>
+                <form onSubmit={submitTopicSearch} className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={topicSearch}
+                    onChange={(event) => setTopicSearch(event.target.value)}
+                    maxLength={120}
+                    placeholder="Ví dụ: AI agents, thiên văn, IELTS Writing, Blender..."
+                    className="min-w-0 flex-1 rounded-xl border border-stone-700 bg-black/40 px-3 py-3 text-xs text-white outline-none placeholder:text-stone-600 focus:border-sky-500"
+                    aria-label="Tìm video theo chủ đề tùy chỉnh"
+                  />
+                  <button type="submit" disabled={loading || topicSearch.trim().length < 2} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-[10px] font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Khám phá chủ đề
+                  </button>
+                </form>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-semibold text-stone-100">Chọn lĩnh vực</h3>
+                  <p className="mt-1 text-[9px] text-stone-500">{visibleTopics.length} bộ khám phá · Nội dung được tải khi bạn mở chủ đề</p>
+                </div>
+                <span className="text-[9px] text-stone-600">YouTube · Việt Nam & quốc tế</span>
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {VIDEO_TOPIC_GROUPS.map((group) => (
+                  <button
+                    key={group}
+                    type="button"
+                    onClick={() => setTopicGroup(group)}
+                    aria-pressed={topicGroup === group}
+                    className={topicGroup === group
+                      ? 'shrink-0 rounded-full bg-sky-500/15 px-3 py-2 text-[10px] font-semibold text-sky-300 ring-1 ring-sky-500/30'
+                      : 'shrink-0 rounded-full border border-stone-800 px-3 py-2 text-[10px] text-stone-500 hover:border-stone-600 hover:text-stone-200'}
+                  >
+                    {group}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {visibleTopics.map((topic) => {
+                  const Icon = TOPIC_ICON_MAP[topic.icon];
+                  const active = activeTopic?.id === topic.id;
+                  return (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      onClick={() => loadTopic(topic)}
+                      disabled={loading}
+                      aria-pressed={active}
+                      className={active
+                        ? 'group flex min-h-[104px] items-start gap-3 rounded-xl border border-sky-500/60 bg-sky-950/35 p-3 text-left transition'
+                        : 'group flex min-h-[104px] items-start gap-3 rounded-xl border border-stone-800 bg-stone-900/55 p-3 text-left transition hover:border-sky-800 hover:bg-slate-900/80 disabled:opacity-50'}
+                    >
+                      <span className={active ? 'rounded-xl bg-sky-500/15 p-2.5 text-sky-300' : 'rounded-xl bg-stone-800 p-2.5 text-stone-400 group-hover:bg-sky-950/60 group-hover:text-sky-300'}>
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[11px] font-semibold text-stone-100">{topic.label}</span>
+                        <span className="mt-1 block text-[9px] leading-relaxed text-stone-500">{topic.description}</span>
+                        <span className="mt-2 inline-flex items-center gap-1 text-[8px] font-semibold uppercase tracking-wider text-sky-400/80">{topic.group} <ChevronDown className="h-3 w-3 -rotate-90" /></span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {activeTopic && (
+              <section className="space-y-3">
+                <div className="flex flex-col gap-3 rounded-xl border border-stone-800 bg-stone-900/55 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-sky-400">Đang khám phá</p>
+                    <h3 className="mt-1 truncate text-sm font-bold text-white">{activeTopic.label}</h3>
+                    <p className="mt-1 text-[9px] text-stone-500">{results.length} kết quả tải được · Sắp xếp theo {SEARCH_SORT_OPTIONS.find((option) => option.id === resultSort)?.label.toLowerCase()}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5" aria-label="Sắp xếp kết quả chủ đề">
+                    {SEARCH_SORT_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => changeTopicSort(option.id)}
+                        disabled={loading}
+                        aria-pressed={resultSort === option.id}
+                        className={resultSort === option.id
+                          ? 'rounded-lg bg-sky-500/15 px-3 py-2 text-[9px] font-semibold text-sky-300 ring-1 ring-sky-500/30'
+                          : 'rounded-lg border border-stone-800 px-3 py-2 text-[9px] text-stone-500 hover:text-stone-200 disabled:opacity-40'}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {results.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {results.map((item) => renderCard(item, { shortAction: true }))}
+                    </div>
+                    {nextPageToken && (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => void executeYouTubeRequest('search', nextPageToken, resultCategoryId)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-700 py-3 text-[10px] text-stone-300 hover:border-sky-600 hover:text-sky-300 disabled:opacity-50"
+                      >
+                        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronDown className="h-3.5 w-3.5" />} Tải thêm video chủ đề
+                      </button>
+                    )}
+                  </>
+                ) : loading ? (
+                  <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-stone-800 py-12 text-[10px] text-stone-500">
+                    <Loader2 className="h-4 w-4 animate-spin text-sky-400" /> Đang tìm nội dung phù hợp…
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-stone-800 px-4 py-10 text-center">
+                    <Sparkles className="mx-auto h-6 w-6 text-sky-400/70" />
+                    <p className="mt-2 text-[10px] text-stone-300">Chưa có kết quả cho chủ đề này.</p>
+                    <p className="mt-1 text-[9px] text-stone-600">Thử chủ đề khác hoặc thay đổi từ khóa tìm kiếm.</p>
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         )}
 
