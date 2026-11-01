@@ -37,5 +37,6 @@ describe('read-only overdue report', () => {
     expect(report.overdueCount).toBe(150);
     expect(report.overdueTasks).toHaveLength(100);
     expect(report.overdueTasks[0].id).toBe('overdue-0');
+    expect(report.overdueTasksTruncated).toBe(true);
   });
 });
