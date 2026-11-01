@@ -1,4 +1,4 @@
-# Living World v2 — model notes
+# Living World v3 — model notes
 
 Living World is a deterministic, discrete-time, agent-based ecology experiment. It is intentionally a compact simulation, not a biological prediction model.
 
@@ -10,7 +10,7 @@ Living World is a deterministic, discrete-time, agent-based ecology experiment. 
 - At most 420 active organisms are simulated. A generation shuffles the existing agent order before applying actions.
 - One generation is one complete environment update and one action opportunity per organism that was alive at the start of that generation. Newborns start acting on the next generation.
 - The engine is pure with respect to its input: `stepLivingWorld(world)` creates a new state and does not mutate the supplied world.
-- The seed, PRNG state, terrain arrays, organisms, genomes, rules and event history are included in version-2 snapshots. Imports validate lengths, ranges, IDs, positions, genomes and parasite-host links before a state is accepted.
+- Version-3 snapshots include the seed, PRNG state, terrain/resource arrays (including the seed bank), organisms, genomes, rules and event history. Imports validate lengths, ranges, IDs, positions, genomes and parasite-host links before a state is accepted. Legacy version-2 snapshots without a seed bank remain importable; migration initializes that array to zero without changing the other saved world state.
 
 ## Terrain, resources and climate
 
@@ -27,7 +27,7 @@ The generated world contains six modeled biomes:
 
 A seed-based terrain field creates the initial elevation/moisture pattern. A continuous meandering water corridor is then carved across the map. The terrain brush changes unoccupied cells and resets the local food, fertility, humidity, temperature and elevation fields to that biome's starting profile.
 
-Vegetation is represented as a cell resource with values from 0 to 15, not as individual plant agents. Dead organisms and wildfire damage add detritus, represented by a second 0–15 cell resource. Microbes consume detritus and increase local soil fertility.
+Vegetation is represented as a cell resource with values from 0 to 15, not as individual plant agents. A separate 0–15 seed bank models dormant seeds: suitable warm/moist conditions can germinate seeds into vegetation, while mature vegetation can disperse seeds into nearby eligible land cells. This is a compact plant-population proxy, not an individual plant life cycle. Dead organisms and wildfire damage add detritus, represented by a third 0–15 cell resource. Microbes consume detritus and increase local soil fertility.
 
 The climate uses four seasons, each lasting 80 generations. The seasonal cycle therefore repeats every 320 generations. Weather states are clear, rain, drought, storm, heatwave and wildfire; weather episodes last 8–20 generations. Temperature, humidity and fertility are normalized simulation values, not real Celsius, rainfall or measured soil units.
 
@@ -74,7 +74,7 @@ Offspring inherit the parent's genome with independent bounded random mutations.
 - A 1,000-generation climate-only stress test checks seeded reproducibility, seasonal wraparound and bounded resource values.
 - The event log records season/weather changes, births, predation, booms, crashes, extinctions and genetic lineage branches. It retains the most recent 64 events in a snapshot.
 - Automatic checkpoints are created at roughly 40-generation intervals; manual checkpoints can be created at any paused state. The browser stores at most 12.
-- A checkpoint can be restored as a branch. Named experiments store up to six independent versioned snapshots.
+- A checkpoint can be restored as a branch. Named experiments store up to six independent version-3 snapshots; import remains backward-compatible with legacy version-2 snapshots.
 - Comparison shows differences between two saved worlds in population, species counts, resources, births/deaths, lineage diversity and selected mean genome traits.
 - Research notes use explicit heuristic thresholds. They are descriptive hints from the current state, not causal inference or statistical significance tests.
 
