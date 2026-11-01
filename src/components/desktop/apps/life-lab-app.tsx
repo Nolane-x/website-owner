@@ -312,7 +312,18 @@ export function LifeLabApp() {
     const x = Math.floor(((event.clientX - bounds.left) / bounds.width) * simulationRef.current.width);
     const y = Math.floor(((event.clientY - bounds.top) / bounds.height) * simulationRef.current.height);
     const next = paintSimulation(simulationRef.current, x, y, preferencesRef.current.brushRadius);
-    commitWorld(next);
+    simulationRef.current = next;
+    drawWorld(canvas, next);
+  };
+
+  const savePaintedWorld = () => {
+    const world = simulationRef.current;
+    setSimulation(world);
+    setPreferences((current) => ({
+      ...current,
+      mode: world.mode,
+      lastSnapshot: serializeSimulation(world),
+    }));
   };
 
   const saveExperiment = (event: React.FormEvent<HTMLFormElement>) => {
@@ -435,10 +446,16 @@ export function LifeLabApp() {
                     if (paintingRef.current) paintAt(event);
                   }}
                   onPointerUp={(event) => {
+                    const wasPainting = paintingRef.current;
                     paintingRef.current = false;
                     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                    if (wasPainting) savePaintedWorld();
                   }}
-                  onPointerCancel={() => { paintingRef.current = false; }}
+                  onPointerCancel={(event) => {
+                    const wasPainting = paintingRef.current;
+                    paintingRef.current = false;
+                    if (wasPainting) savePaintedWorld();
+                  }}
                   className="block h-auto max-h-[54vh] w-full touch-none cursor-crosshair object-contain"
                 />
                 <div className="pointer-events-none absolute bottom-2 left-2 rounded-lg border border-white/10 bg-black/65 px-2.5 py-1.5 text-[8px] text-stone-400 backdrop-blur">
@@ -520,7 +537,7 @@ export function LifeLabApp() {
                 <div className="flex h-1.5 overflow-hidden rounded-full bg-black/30">
                   <div className="h-full bg-stone-600" style={{ width: formatPercent(currentStates[0] / Math.max(1, hud.stats.total)) }} />
                 </div>
-                {currentStates.slice(1, simulation.mode === 'brain' ? 3 : 3).map((count, index) => (
+                {currentStates.slice(1, 3).map((count, index) => (
                   <div key={index}>
                     <div className="flex items-center justify-between text-[9px] text-stone-500">
                       <span>Trạng thái {index + 1}</span><span className="font-mono text-stone-300">{count.toLocaleString('vi-VN')}</span>
