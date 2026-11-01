@@ -3,7 +3,7 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
 import postgres from 'postgres';
 import { PGlite } from '@electric-sql/pglite';
 import * as schema from './schema';
-import { resolveDatabaseUrl } from './config';
+import { POSTGRES_POOL_MAX, resolveDatabaseUrl } from './config';
 import { createSingleFlight } from './single-flight';
 import path from 'path';
 import fs from 'fs';
@@ -33,7 +33,7 @@ export function getDb() {
     // Keep that per-instance pool deliberately small to avoid multiplying idle/direct
     // connections across instances; short idle timeout also releases them promptly.
     postgresClient = postgres(databaseUrl, {
-      max: 2,
+      max: POSTGRES_POOL_MAX,
       idle_timeout: 5,
       connect_timeout: 10,
       prepare: false,
