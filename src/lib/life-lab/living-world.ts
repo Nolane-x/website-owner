@@ -61,6 +61,7 @@ export interface LivingWorld {
   nextId: number;
   nextLineageId: number;
   food: Uint8Array;
+  seedBank: Uint8Array;
   detritus: Uint8Array;
   fertility: Uint8Array;
   humidity: Uint8Array;
@@ -81,6 +82,7 @@ export interface LivingWorldStats {
   population: number;
   counts: Record<SpeciesId, number>;
   foodUnits: number;
+  seedUnits: number;
   detritusUnits: number;
   averageEnergy: number;
   averageTraits: WorldGenome;
@@ -376,6 +378,7 @@ export function createLivingWorld(
   const normalizedSeed = (Math.floor(Number.isFinite(seed) ? seed : 1) >>> 0) || 1;
   const random = createRandom(normalizedSeed);
   const food = new Uint8Array(total);
+  const seedBank = new Uint8Array(total);
   const detritus = new Uint8Array(total);
   const fertility = new Uint8Array(total);
   const humidity = new Uint8Array(total);
@@ -403,6 +406,12 @@ export function createLivingWorld(
             : terrain.biome === BIOME.desert ? 2
               : terrain.biome === BIOME.mountain ? 1 : 0;
       food[index] = Math.round(clamp(foodBase + (random.next() - 0.5) * 7, 0, 15));
+      const seedBase = terrain.biome === BIOME.forest ? 8
+        : terrain.biome === BIOME.wetland ? 7
+          : terrain.biome === BIOME.plains ? 6
+            : terrain.biome === BIOME.desert ? 3
+              : terrain.biome === BIOME.mountain ? 2 : 0;
+      seedBank[index] = Math.round(clamp(seedBase + (random.next() - 0.5) * 3, 0, 15));
     }
   }
 
@@ -445,6 +454,7 @@ export function createLivingWorld(
       humidity[index] = 255;
       fertility[index] = 0;
       food[index] = 0;
+      seedBank[index] = 0;
     }
   }
 
@@ -457,6 +467,7 @@ export function createLivingWorld(
     nextId,
     nextLineageId: SPECIES_IDS.length + 1,
     food,
+    seedBank,
     detritus,
     fertility,
     humidity,
@@ -709,7 +720,7 @@ function updateClimate(world: LivingWorld, random: () => number): { season: Seas
   return { season, weather, remaining, events };
 }
 
-function growEnvironment(world: LivingWorld, food: Uint8Array, detritus: Uint8Array, humidity: Uint8Array, temperature: Uint8Array, fertility: Uint8Array, random: () => number, season: SeasonId, weather: WeatherId): void {
+function growEnvironment(world: LivingWorld, food: Uint8Array, seedBank: Uint8Array, detritus: Uint8Array, humidity: Uint8Array, temperature: Uint8Array, fertility: Uint8Array, random: () => number, season: SeasonId, weather: WeatherId): void {
   const seasonalGrowth = season === 'spring' ? 1.35 : season === 'summer' ? 0.95 : season === 'autumn' ? 0.82 : 0.42;
   for (let index = 0; index < food.length; index++) {
     const biome = world.biomes[index];
@@ -718,8 +729,16 @@ function growEnvironment(world: LivingWorld, food: Uint8Array, detritus: Uint8Ar
     const weatherFactor = weather === 'rain' ? 2.2 : weather === 'drought' ? 0.14 : weather === 'heatwave' ? 0.22 : weather === 'storm' ? 0.75 : weather === 'wildfire' ? 0.28 : 1;
     const probability = world.rules.foodRegrowth * seasonalGrowth * base * (0.25 + climate) * (0.35 + fertility[index] / 170) * weatherFactor;
     if (food[index] < 15 && random() < probability) food[index]++;
+    const germinationSeason = season === 'spring' ? 1.8 : season === 'summer' ? 0.75 : season === 'autumn' ? 0.55 : 0.18;
+    const germinationWeather = weather === 'rain' ? 2.2 : weather === 'drought' || weather === 'heatwave' || weather === 'wildfire' ? 0.16 : 1;
+    const germination = 0.018 * germinationSeason * germinationWeather * (humidity[index] / 255) * (0.35 + fertility[index] / 220);
+    if (seedBank[index] > 0 && food[index] < 3 && temperature[index] > 35 && random() < germination) {
+      seedBank[index]--;
+      food[index]++;
+    }
     if (biome === BIOME.forest && weather === 'wildfire' && random() < 0.085) {
       food[index] = Math.max(0, food[index] - 7);
+      seedBank[index] = Math.max(0, seedBank[index] - 1);
       detritus[index] = Math.min(15, detritus[index] + 2);
       fertility[index] = Math.max(0, fertility[index] - 4);
     }
@@ -729,6 +748,18 @@ function growEnvironment(world: LivingWorld, food: Uint8Array, detritus: Uint8Ar
     const weatherOffset = weather === 'heatwave' ? 34 : weather === 'storm' ? -14 : weather === 'rain' ? -5 : 0;
     temperature[index] = Math.round(clamp(temperature[index] + (128 + seasonOffset + weatherOffset - temperature[index]) * 0.035 * world.rules.climateIntensity, 0, 255));
     if (detritus[index] > 0 && random() < 0.03) detritus[index]--;
+  }
+
+  // Mature plant cover disperses a small seed sample to a neighboring land cell.
+  for (let index = 0; index < food.length; index++) {
+    if (food[index] < 10 || seedBank[index] < 2 || random() >= 0.012 * seasonalGrowth) continue;
+    const x = index % world.width;
+    const y = Math.floor(index / world.width);
+    const targetX = wrap(x + Math.floor(random() * 3) - 1, world.width);
+    const targetY = wrap(y + Math.floor(random() * 3) - 1, world.height);
+    const target = indexOf(targetX, targetY, world.width);
+    const targetBiome = world.biomes[target];
+    if (targetBiome !== BIOME.water && targetBiome !== BIOME.mountain && seedBank[target] < 15) seedBank[target]++;
   }
 }
 
@@ -794,6 +825,7 @@ function preferredTarget(animal: WorldOrganism, world: LivingWorld): { x: number
 
 export function stepLivingWorld(world: LivingWorld): LivingWorld {
   const food = new Uint8Array(world.food);
+  const seedBank = new Uint8Array(world.seedBank);
   const detritus = new Uint8Array(world.detritus);
   const humidity = new Uint8Array(world.humidity);
   const temperature = new Uint8Array(world.temperature);
@@ -813,7 +845,7 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
   const randomState = createRandom(world.rngState);
   const random = randomState.next;
   const climate = updateClimate(world, random);
-  growEnvironment(world, food, detritus, humidity, temperature, fertility, random, climate.season, climate.weather);
+  growEnvironment(world, food, seedBank, detritus, humidity, temperature, fertility, random, climate.season, climate.weather);
 
   const order = Array.from({ length: organisms.length }, (_, index) => index);
   for (let i = order.length - 1; i > 0; i--) {
@@ -1088,6 +1120,7 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
     nextId: world.nextId + birthsNow,
     nextLineageId,
     food,
+    seedBank,
     detritus,
     humidity,
     temperature,
@@ -1116,10 +1149,12 @@ export function getLivingWorldStats(world: LivingWorld): LivingWorldStats {
   const population = world.organisms.length;
   if (population > 0) for (const key of Object.keys(sums) as Array<keyof WorldGenome>) sums[key] /= population;
   let foodUnits = 0;
+  let seedUnits = 0;
   let detritusUnits = 0;
   let fertileTiles = 0;
   for (let index = 0; index < world.food.length; index++) {
     foodUnits += world.food[index];
+    seedUnits += world.seedBank[index];
     detritusUnits += world.detritus[index];
     if (world.fertility[index] >= 128) fertileTiles++;
   }
@@ -1129,6 +1164,7 @@ export function getLivingWorldStats(world: LivingWorld): LivingWorldStats {
     population,
     counts,
     foodUnits,
+    seedUnits,
     detritusUnits,
     averageEnergy: population ? energy / population : 0,
     averageTraits: sums,
@@ -1155,6 +1191,7 @@ export function serializeLivingWorld(world: LivingWorld): string {
     nextId: world.nextId,
     nextLineageId: world.nextLineageId,
     food: encode(world.food),
+    seedBank: encode(world.seedBank),
     detritus: encode(world.detritus),
     fertility: encode(world.fertility),
     humidity: encode(world.humidity),
@@ -1237,13 +1274,14 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
     if (!finite(parsed.weatherRemaining) || !Number.isInteger(parsed.weatherRemaining) || parsed.weatherRemaining < 0 || parsed.weatherRemaining > 30) return null;
     if (!validRules(parsed.rules)) return null;
     const food = decodeArray(parsed.food, total, 15);
+    const seedBank = decodeArray(parsed.seedBank, total, 15);
     const detritus = decodeArray(parsed.detritus, total, 15);
     const fertility = decodeArray(parsed.fertility, total);
     const humidity = decodeArray(parsed.humidity, total);
     const temperature = decodeArray(parsed.temperature, total);
     const elevation = decodeArray(parsed.elevation, total);
     const biomes = decodeArray(parsed.biomes, total, BIOME_IDS.length - 1);
-    if (!food || !detritus || !fertility || !humidity || !temperature || !elevation || !biomes) return null;
+    if (!food || !seedBank || !detritus || !fertility || !humidity || !temperature || !elevation || !biomes) return null;
     if (!Array.isArray(parsed.organisms) || parsed.organisms.length > MAX_POPULATION) return null;
     const organisms: WorldOrganism[] = [];
     const ids = new Set<number>();
@@ -1344,6 +1382,7 @@ export function compareLivingWorlds(left: LivingWorld, right: LivingWorld): {
   populationDelta: number;
   species: Record<SpeciesId, number>;
   foodDelta: number;
+  seedDelta: number;
   birthDelta: number;
   deathDelta: number;
   diversityDelta: number;
@@ -1363,6 +1402,7 @@ export function compareLivingWorlds(left: LivingWorld, right: LivingWorld): {
     populationDelta: b.population - a.population,
     species,
     foodDelta: b.foodUnits - a.foodUnits,
+    seedDelta: b.seedUnits - a.seedUnits,
     birthDelta: b.births - a.births,
     deathDelta: b.deaths - a.deaths,
     diversityDelta: b.diversity - a.diversity,
