@@ -8,6 +8,7 @@ import {
   serializeLivingWorld,
   stepLivingWorld,
   type LivingWorld,
+  type WorldGenome,
   type WorldOrganism,
 } from '@/lib/life-lab/living-world';
 
@@ -15,9 +16,11 @@ function withChanges(world: LivingWorld, changes: Partial<LivingWorld>): LivingW
   return { ...world, ...changes };
 }
 
+type OrganismChanges = Omit<Partial<WorldOrganism>, 'genome'> & { genome?: Partial<WorldGenome> };
+
 function makeOrganism(
   base: WorldOrganism,
-  changes: Partial<WorldOrganism>,
+  changes: OrganismChanges,
 ): WorldOrganism {
   return {
     ...base,
