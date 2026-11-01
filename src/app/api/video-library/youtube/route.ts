@@ -108,7 +108,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (rawBody.length > 12_000) return jsonError('Yêu cầu tìm kiếm vượt dung lượng cho phép.', 413);
     const body = JSON.parse(rawBody) as Record<string, unknown>;
 
-    const mode = body.mode === 'trending' ? 'trending' : 'search';
+    const mode = body.mode === 'trending' ? 'trending' : body.mode === 'shorts' ? 'shorts' : 'search';
     const query = typeof body.query === 'string'
       ? body.query.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120)
       : '';
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
     if (mode === 'search' && query.length < 2) return jsonError('Nhập ít nhất 2 ký tự để tìm video.', 400);
 
-    const endpoint = mode === 'search' ? 'search' : 'videos';
+    const endpoint = mode === 'trending' ? 'videos' : 'search';
     const requestUrl = new URL('https://www.googleapis.com/youtube/v3/' + endpoint);
     requestUrl.searchParams.set('key', apiKey);
     requestUrl.searchParams.set('maxResults', '24');
@@ -142,14 +142,16 @@ export async function POST(request: NextRequest): Promise<Response> {
     let nextPageToken: string | null = null;
     let details: YouTubeSearchResult[] = [];
 
-    if (mode === 'search') {
+    if (mode !== 'trending') {
       requestUrl.searchParams.set('part', 'snippet');
       requestUrl.searchParams.set('type', 'video');
-      requestUrl.searchParams.set('q', query);
-      requestUrl.searchParams.set('order', 'relevance');
+      requestUrl.searchParams.set('q', mode === 'shorts' ? (query || 'shorts') : query);
+      requestUrl.searchParams.set('order', mode === 'shorts' ? 'viewCount' : 'relevance');
       requestUrl.searchParams.set('safeSearch', 'moderate');
       requestUrl.searchParams.set('videoEmbeddable', 'true');
       requestUrl.searchParams.set('videoSyndicated', 'true');
+      if (mode === 'shorts') requestUrl.searchParams.set('videoDuration', 'short');
+      if (categoryId) requestUrl.searchParams.set('videoCategoryId', categoryId);
       if (pageToken) requestUrl.searchParams.set('pageToken', pageToken);
 
       const response = await fetchGoogleJson(requestUrl) as {
@@ -213,9 +215,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         durationSeconds: parseIsoDuration(detail?.contentDetails?.duration),
         viewCount: countValue(detail?.statistics?.viewCount),
         publishedAt: typeof item.snippet.publishedAt === 'string' ? item.snippet.publishedAt : null,
-        isShort: false,
+        isShort: mode === 'shorts',
       }];
-    });
+    }).filter((item) => mode !== 'shorts' || (item.durationSeconds !== null && item.durationSeconds > 0 && item.durationSeconds <= 180));
 
     return NextResponse.json(
       { items, nextPageToken, regionCode: region, mode },
