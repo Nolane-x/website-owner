@@ -433,6 +433,22 @@ describe('Evolution Lab Living World engine', () => {
     expect(restored?.nextLineageId).toBe(world.nextLineageId);
   });
 
+  it('writes v3 snapshots and migrates legacy v2 worlds without losing their state', () => {
+    const world = createLivingWorld(3_031, 32, 20, { grazer: 4, hunter: 1, omnivore: 2, parasite: 1, microbe: 3 });
+    const current = JSON.parse(serializeLivingWorld(world)) as Record<string, unknown>;
+    expect(current.version).toBe(3);
+
+    const legacy = { ...current, version: 2 };
+    delete legacy.seedBank;
+    const restored = deserializeLivingWorld(JSON.stringify(legacy));
+
+    expect(restored).not.toBeNull();
+    expect(restored?.food).toEqual(world.food);
+    expect(restored?.biomes).toEqual(world.biomes);
+    expect(restored?.organisms).toEqual(world.organisms);
+    expect(restored?.seedBank).toEqual(new Uint8Array(world.width * world.height));
+  });
+
   it('rejects malformed, oversized, overlapping and invalid-genome world snapshots', () => {
     const world = createLivingWorld(88, 32, 20, { grazer: 2, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
     const valid = JSON.parse(serializeLivingWorld(world)) as Record<string, unknown>;
