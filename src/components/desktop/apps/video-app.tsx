@@ -16,6 +16,7 @@ import {
   Clock3,
   Compass,
   ExternalLink,
+  EyeOff,
   Film,
   FlaskConical,
   Gamepad2,
@@ -34,6 +35,7 @@ import {
   ShieldCheck,
   Sparkles,
   Telescope,
+  ThumbsDown,
   Trophy,
   Trash2,
   X,
@@ -46,6 +48,9 @@ import {
   emptyVideoLibrary,
   formatVideoCount,
   formatVideoDuration,
+  isVideoCreatorHidden,
+  isVideoExcludedFromRecommendations,
+  isVideoNotInterested,
   loadVideoLibrary,
   mergeVideoLibraries,
   normalizeVideoLibrary,
@@ -57,6 +62,11 @@ import {
   setVideoShort,
   toggleVideoFavorite,
   toggleFollowedVideoTopic,
+  toggleHiddenVideoCreator,
+  toggleMutedVideoTopic,
+  toggleNotInterestedVideo,
+  restoreHiddenVideoCreator,
+  restoreNotInterestedVideo,
   toggleVideoInPlaylist,
   toggleVideoWatchLater,
   type VideoLibraryItem,
@@ -73,6 +83,7 @@ interface YouTubeApiItem {
   title: string;
   description: string;
   creator: string;
+  creatorId: string | null;
   thumbnailUrl: string | null;
   durationSeconds: number | null;
   viewCount: number | null;
@@ -176,7 +187,11 @@ interface VideoCardProps {
   onSave?: (item: VideoLibraryItem) => void;
   onMarkShort?: (item: VideoLibraryItem) => void;
   onRemove?: (item: VideoLibraryItem) => void;
+  onNotInterested?: (item: VideoLibraryItem) => void;
+  onHideCreator?: (item: VideoLibraryItem) => void;
   favorite?: boolean;
+  notInterested?: boolean;
+  creatorHidden?: boolean;
   saved?: boolean;
   removable?: boolean;
   showShortAction?: boolean;
@@ -189,7 +204,11 @@ function VideoCard({
   onSave,
   onMarkShort,
   onRemove,
+  onNotInterested,
+  onHideCreator,
   favorite = false,
+  notInterested = false,
+  creatorHidden = false,
   saved = false,
   removable = false,
   showShortAction = false,
@@ -212,6 +231,16 @@ function VideoCard({
             {showShortAction && onMarkShort && !item.isShort && (
               <button type="button" title="Đưa vào Shorts" onClick={() => onMarkShort(item)} className="rounded-md p-1.5 text-stone-500 hover:bg-stone-800 hover:text-fuchsia-300">
                 <Clapperboard className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onNotInterested && (
+              <button type="button" title={notInterested ? 'Bỏ đánh dấu không quan tâm' : 'Không quan tâm video này'} aria-pressed={notInterested} onClick={() => onNotInterested(item)} className={notInterested ? 'rounded-md bg-amber-950/60 p-1.5 text-amber-300' : 'rounded-md p-1.5 text-stone-500 hover:bg-stone-800 hover:text-amber-300'}>
+                <ThumbsDown className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onHideCreator && item.creator && (
+              <button type="button" title={creatorHidden ? 'Hiện lại nhà sáng tạo này' : 'Ẩn nhà sáng tạo này'} aria-pressed={creatorHidden} onClick={() => onHideCreator(item)} className={creatorHidden ? 'rounded-md bg-rose-950/60 p-1.5 text-rose-300' : 'rounded-md p-1.5 text-stone-500 hover:bg-stone-800 hover:text-rose-300'}>
+                <EyeOff className="h-3.5 w-3.5" />
               </button>
             )}
             {onSave && (
@@ -508,8 +537,13 @@ export function VideoApp() {
   );
 
   const shortsQueue = useMemo(
-    () => library.items.filter((item) => item.isShort),
-    [library.items],
+    () => library.items.filter((item) => item.isShort && !isVideoExcludedFromRecommendations(item, library)),
+    [library.items, library.notInterestedVideos, library.hiddenCreators],
+  );
+
+  const visibleResults = useMemo(
+    () => results.filter((item) => !isVideoExcludedFromRecommendations(item, library)),
+    [results, library],
   );
 
   const recommendedVideos = useMemo(() => {
@@ -576,6 +610,18 @@ export function VideoApp() {
     setLibrary((previous) => toggleFollowedVideoTopic(previous, topicId));
   };
 
+  const toggleMutedTopic = (topicId: string) => {
+    setLibrary((previous) => toggleMutedVideoTopic(previous, topicId));
+  };
+
+  const markNotInterested = (item: VideoLibraryItem) => {
+    setLibrary((previous) => toggleNotInterestedVideo(previous, item));
+  };
+
+  const hideCreator = (item: VideoLibraryItem) => {
+    setLibrary((previous) => toggleHiddenVideoCreator(previous, item));
+  };
+
   const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '', queryOverride?: string, headingOverride?: string, orderOverride?: VideoSearchOrder) => {
     const requestQuery = pageToken ? resultQuery : mode === 'search' ? (queryOverride ?? query.trim()) : mode === 'shorts' ? (query.trim().length >= 2 ? query.trim() : 'shorts') : '';
     const requestOrder: VideoSearchOrder = mode === 'shorts' ? 'viewCount' : pageToken ? resultSort : orderOverride ?? searchOrder;
@@ -598,7 +644,7 @@ export function VideoApp() {
       const items = (payload.items ?? []).flatMap((result) => {
         const item = createVideoLibraryItem({
           platform: 'youtube', videoId: result.videoId, title: result.title,
-          description: result.description, creator: result.creator, thumbnailUrl: result.thumbnailUrl,
+          description: result.description, creator: result.creator, creatorId: result.creatorId, thumbnailUrl: result.thumbnailUrl,
           durationSeconds: result.durationSeconds, viewCount: result.viewCount,
           publishedAt: result.publishedAt, isShort: result.isShort,
         });
@@ -804,7 +850,11 @@ export function VideoApp() {
       onSave={(video) => toggleWatchLater(video)}
       onMarkShort={(video) => setLibrary((previous) => setVideoShort(addVideoToLibrary(previous, video), video.id, true))}
       onRemove={options.removable ? removeVideo : undefined}
+      onNotInterested={markNotInterested}
+      onHideCreator={hideCreator}
       favorite={library.favorites.includes(item.id)}
+      notInterested={isVideoNotInterested(item, library)}
+      creatorHidden={isVideoCreatorHidden(item, library)}
       saved={library.watchLater.includes(item.id)}
       removable={options.removable}
       showShortAction={options.shortAction}
@@ -991,13 +1041,13 @@ export function VideoApp() {
 
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <div><h3 className="text-xs font-semibold text-stone-100">{resultHeading}</h3><p className="mt-1 text-[9px] text-stone-500">{results.length} kết quả trên trang</p></div>
+                <div><h3 className="text-xs font-semibold text-stone-100">{resultHeading}</h3><p className="mt-1 text-[9px] text-stone-500">{visibleResults.length} kết quả hiển thị</p></div>
                 {loading && <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />}
               </div>
-              {results.length > 0 ? (
+              {visibleResults.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {results.map((item) => renderCard(item, { shortAction: true }))}
+                    {visibleResults.map((item) => renderCard(item, { shortAction: true }))}
                   </div>
                   {nextPageToken && (
                     <button type="button" disabled={loading} onClick={() => void executeYouTubeRequest(resultMode, nextPageToken, resultCategoryId)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-700 py-2.5 text-[10px] text-stone-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-50">
@@ -1113,7 +1163,7 @@ export function VideoApp() {
                   <div className="min-w-0">
                     <p className="text-[9px] font-semibold uppercase tracking-wider text-sky-400">Đang khám phá</p>
                     <h3 className="mt-1 truncate text-sm font-bold text-white">{activeTopic.label}</h3>
-                    <p className="mt-1 text-[9px] text-stone-500">{results.length} kết quả tải được · Sắp xếp theo {SEARCH_SORT_OPTIONS.find((option) => option.id === resultSort)?.label.toLowerCase()}</p>
+                    <p className="mt-1 text-[9px] text-stone-500">{visibleResults.length} kết quả tải được · Sắp xếp theo {SEARCH_SORT_OPTIONS.find((option) => option.id === resultSort)?.label.toLowerCase()}</p>
                     {activeTopic.id !== 'custom-topic' && (
                       <button type="button" onClick={() => toggleFollowTopic(activeTopic.id)} className={library.followedTopics.includes(activeTopic.id)
                         ? 'mt-2 inline-flex items-center gap-1.5 rounded-lg bg-sky-500/15 px-2.5 py-1.5 text-[9px] font-semibold text-sky-300'
@@ -1141,10 +1191,10 @@ export function VideoApp() {
                   </div>
                 </div>
 
-                {results.length > 0 ? (
+                {visibleResults.length > 0 ? (
                   <>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {results.map((item) => renderCard(item, { shortAction: true }))}
+                      {visibleResults.map((item) => renderCard(item, { shortAction: true }))}
                     </div>
                     {nextPageToken && (
                       <button
@@ -1270,6 +1320,8 @@ export function VideoApp() {
                         <button type="button" onClick={() => playExisting(item)} className="rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-emerald-500">Mở trang xem</button>
                         <button type="button" onClick={() => toggleFavorite(item)} className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-300 hover:text-rose-300"><Heart className="mr-1 inline h-3 w-3" /> Yêu thích</button>
                         <button type="button" onClick={() => toggleWatchLater(item)} className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-300 hover:text-emerald-300"><Bookmark className="mr-1 inline h-3 w-3" /> {library.watchLater.includes(item.id) ? 'Đã lưu' : 'Xem sau'}</button>
+                        <button type="button" onClick={() => markNotInterested(item)} className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-400 hover:text-amber-300"><ThumbsDown className="mr-1 inline h-3 w-3" /> Không quan tâm</button>
+                        {item.creator && <button type="button" onClick={() => hideCreator(item)} className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-400 hover:text-rose-300"><EyeOff className="mr-1 inline h-3 w-3" /> Ẩn kênh</button>}
                         <a href={item.canonicalUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-300 hover:text-white">Mở gốc <ExternalLink className="ml-1 inline h-3 w-3" /></a>
                       </div>
                       <p className="text-[9px] leading-relaxed text-stone-600">Cuộn dọc hoặc dùng nút mũi tên để chuyển video. Player chỉ được tạo cho mục đang hiển thị nhằm giảm số iframe hoạt động.</p>
