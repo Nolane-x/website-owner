@@ -34,6 +34,8 @@ import {
   formatVideoCount,
   formatVideoDuration,
   loadVideoLibrary,
+  mergeVideoLibraries,
+  normalizeVideoLibrary,
   parseVideoUrl,
   recordVideoProgress,
   rankVideoRecommendations,
@@ -232,6 +234,9 @@ function ApiKeyNotice({ apiKey, setApiKey }: { apiKey: string; setApiKey: (value
 export function VideoApp() {
   const [library, setLibrary] = useState<VideoLibraryState>(() => emptyVideoLibrary());
   const [hydrated, setHydrated] = useState(false);
+  const [remoteHydrated, setRemoteHydrated] = useState(false);
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'loading' | 'local' | 'pending' | 'syncing' | 'synced' | 'error'>('loading');
   const [tab, setTab] = useState<VideoLibraryTab>('discover');
   const [provider, setProvider] = useState<Provider>('youtube');
   const [query, setQuery] = useState('');
@@ -257,16 +262,77 @@ export function VideoApp() {
   const shortsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const hydrationFrame = window.requestAnimationFrame(() => {
-      setLibrary(loadVideoLibrary());
+      const localLibrary = loadVideoLibrary();
+      setLibrary(localLibrary);
       setHydrated(true);
+
+      void fetch('/api/video-library', { cache: 'no-store' })
+        .then(async (response) => {
+          if (!response.ok) {
+            if (!cancelled) {
+              setCloudSyncStatus(response.status === 401 ? 'local' : 'error');
+              setRemoteHydrated(true);
+            }
+            return;
+          }
+          const payload = await response.json() as {
+            library?: unknown;
+            hasSavedLibrary?: boolean;
+            updatedAt?: string | null;
+          };
+          if (cancelled) return;
+          const remoteLibrary = normalizeVideoLibrary(payload.library);
+          const merged = payload.hasSavedLibrary
+            ? mergeVideoLibraries(localLibrary, remoteLibrary)
+            : localLibrary;
+          setLibrary(merged);
+          setCloudSyncEnabled(true);
+          setCloudSyncStatus(payload.hasSavedLibrary ? 'synced' : 'pending');
+          setRemoteHydrated(true);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setCloudSyncStatus('error');
+            setRemoteHydrated(true);
+          }
+        });
     });
-    return () => window.cancelAnimationFrame(hydrationFrame);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(hydrationFrame);
+    };
   }, []);
 
   useEffect(() => {
     if (hydrated) saveVideoLibrary(library);
   }, [hydrated, library]);
+
+  useEffect(() => {
+    if (!hydrated || !remoteHydrated || !cloudSyncEnabled) return;
+    setCloudSyncStatus('pending');
+    const syncTimer = window.setTimeout(async () => {
+      setCloudSyncStatus('syncing');
+      try {
+        const response = await fetch('/api/video-library', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ library }),
+        });
+        if (response.status === 401) {
+          setCloudSyncEnabled(false);
+          setCloudSyncStatus('local');
+          return;
+        }
+        if (!response.ok) throw new Error('Cloud sync failed');
+        setCloudSyncStatus('synced');
+      } catch {
+        setCloudSyncStatus('error');
+      }
+    }, 1800);
+    return () => window.clearTimeout(syncTimer);
+  }, [hydrated, remoteHydrated, cloudSyncEnabled, library]);
 
   const libraryItemsById = useMemo(
     () => new Map(library.items.map((item) => [item.id, item])),
@@ -568,6 +634,15 @@ export function VideoApp() {
                 <h1 className="mt-2 text-xl font-bold text-white sm:text-2xl">Mọi video bạn muốn xem, ở cùng một nơi.</h1>
                 <p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-stone-400">
                   Tìm video YouTube, mở video TikTok bằng liên kết chia sẻ, tạo playlist riêng và lướt Shorts theo chiều dọc. Video phát từ nền tảng gốc — website không tải hay lưu tệp media.
+                </p>
+                <p className="mt-2 flex items-center gap-1.5 text-[9px] text-stone-500" aria-live="polite">
+                  <span className={cloudSyncStatus === 'synced' ? 'h-1.5 w-1.5 rounded-full bg-emerald-400' : cloudSyncStatus === 'error' ? 'h-1.5 w-1.5 rounded-full bg-amber-400' : 'h-1.5 w-1.5 rounded-full bg-stone-500'} />
+                  {cloudSyncStatus === 'loading' ? 'Đang kết nối thư viện riêng…'
+                    : cloudSyncStatus === 'local' ? 'Đang lưu trên thiết bị này · Đăng nhập owner để đồng bộ cloud'
+                      : cloudSyncStatus === 'pending' ? 'Có thay đổi đang chờ đồng bộ'
+                        : cloudSyncStatus === 'syncing' ? 'Đang đồng bộ metadata với PostgreSQL…'
+                          : cloudSyncStatus === 'synced' ? 'Đã đồng bộ metadata với PostgreSQL'
+                            : 'Đồng bộ cloud tạm lỗi · Bản lưu trên thiết bị vẫn được giữ'} 
                 </p>
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <div className="rounded-xl border border-stone-800 bg-black/20 p-2.5"><p className="text-lg font-bold tabular-nums text-white">{library.items.length}</p><p className="text-[9px] text-stone-500">Video đã lưu</p></div>
