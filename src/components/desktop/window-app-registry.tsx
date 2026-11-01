@@ -122,6 +122,11 @@ export const DynamicVideoApp = dynamic(
   { loading: LoadingFallback, ssr: false }
 );
 
+export const DynamicLifeLabApp = dynamic(
+  () => import('@/components/desktop/apps/life-lab-app').then((m) => m.LifeLabApp),
+  { loading: LoadingFallback, ssr: false }
+);
+
 export function renderAppContent(appId: string) {
   switch (appId) {
     case 'inbox':
