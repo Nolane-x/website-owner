@@ -51,6 +51,7 @@ export interface VideoLibraryState {
   watchLater: string[];
   history: VideoWatchRecord[];
   playlists: VideoPlaylist[];
+  followedTopics: string[];
 }
 
 const STORAGE_KEY = 'webos:video-library:v1';
@@ -59,6 +60,8 @@ const MAX_ITEMS = 500;
 const MAX_HISTORY = 120;
 const MAX_PLAYLISTS = 60;
 const MAX_PLAYLIST_ITEMS = 250;
+const MAX_FOLLOWED_TOPICS = 40;
+const VIDEO_TOPIC_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 const TIKTOK_ID = /^\d{10,24}$/;
 
@@ -231,7 +234,7 @@ export function formatVideoCount(value: number | null | undefined): string {
 }
 
 export function emptyVideoLibrary(): VideoLibraryState {
-  return { items: [], favorites: [], watchLater: [], history: [], playlists: [] };
+  return { items: [], favorites: [], watchLater: [], history: [], playlists: [], followedTopics: [] };
 }
 
 function uniqueIds(values: unknown, allowed: Set<string>, max: number): string[] {
@@ -287,6 +290,11 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
       .sort((a, b) => b.watchedAt - a.watchedAt)
       .slice(0, MAX_HISTORY)
     : [];
+  const followedTopics = Array.isArray(raw.followedTopics)
+    ? [...new Set(raw.followedTopics.filter((topicId): topicId is string =>
+      typeof topicId === 'string' && VIDEO_TOPIC_ID.test(topicId)
+    ))].slice(0, MAX_FOLLOWED_TOPICS)
+    : [];
   const playlists = Array.isArray(raw.playlists)
     ? raw.playlists.slice(0, MAX_PLAYLISTS)
       .filter((entry): entry is Record<string, unknown> =>
@@ -301,7 +309,7 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
       }))
       .filter((playlist) => Boolean(playlist.id))
     : [];
-  return { items, favorites, watchLater, history, playlists };
+  return { items, favorites, watchLater, history, playlists, followedTopics };
 }
 
 /** Merge a local snapshot with the cloud snapshot without losing unique saved items. */
@@ -338,6 +346,7 @@ export function mergeVideoLibraries(primary: VideoLibraryState, secondary: Video
     watchLater: [...primary.watchLater, ...secondary.watchLater],
     history: [...historyByItemId.values()].sort((a, b) => b.watchedAt - a.watchedAt),
     playlists: [...playlistsById.values()],
+    followedTopics: [...primary.followedTopics, ...secondary.followedTopics],
   });
 }
 
@@ -389,6 +398,16 @@ export function toggleVideoFavorite(state: VideoLibraryState, itemId: string): V
       ? state.favorites.filter((id) => id !== itemId)
       : [itemId, ...state.favorites].slice(0, MAX_ITEMS),
   };
+}
+
+/** Toggle a curated or user-defined topic in the persistent discovery profile. */
+export function toggleFollowedVideoTopic(state: VideoLibraryState, topicId: string): VideoLibraryState {
+  const normalizedId = cleanText(topicId, 64).toLowerCase();
+  if (!VIDEO_TOPIC_ID.test(normalizedId)) return state;
+  const followedTopics = state.followedTopics.includes(normalizedId)
+    ? state.followedTopics.filter((id) => id !== normalizedId)
+    : [...state.followedTopics, normalizedId];
+  return normalizeVideoLibrary({ ...state, followedTopics });
 }
 
 export function toggleVideoWatchLater(state: VideoLibraryState, itemId: string): VideoLibraryState {
@@ -480,6 +499,7 @@ export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms
       weights.set(token, (weights.get(token) ?? 0) + weight);
     }
   };
+  for (const topicId of state.followedTopics.slice(0, 20)) add(topicId.replace(/-/g, ' '), 4.5);
   for (const id of state.favorites.slice(0, 20)) {
     const item = byId.get(id);
     if (item) { add(item.title, 4); add(item.creator, 1.8); }
