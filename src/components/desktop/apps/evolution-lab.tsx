@@ -291,6 +291,10 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const createRandomWorld = () => {
+    newWorld(Date.now() >>> 0 || 1);
+  };
+
   const stepOnce = () => {
     setRunning(false);
     const next = stepEcosystem(worldRef.current);
@@ -403,7 +407,7 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
               <button type="button" onClick={stepOnce} disabled={running} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40">
                 <StepForward className="h-3.5 w-3.5" /> Một thế hệ
               </button>
-              <button type="button" onClick={() => newWorld(Date.now() >>> 0 || 1)} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300">
+              <button type="button" onClick={createRandomWorld} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300">
                 <RotateCcw className="h-3.5 w-3.5" /> Thế giới mới
               </button>
               <div className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
