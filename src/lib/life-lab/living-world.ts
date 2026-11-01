@@ -1357,6 +1357,7 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
       nextId: parsed.nextId,
       nextLineageId: parsed.nextLineageId,
       food,
+      seedBank,
       detritus,
       fertility,
       humidity,
