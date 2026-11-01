@@ -93,14 +93,20 @@ describe('Video Library cloud merge', () => {
     const cloud = addVideoToLibrary(emptyVideoLibrary(), cloudItem);
     const localWithFavorite = toggleVideoFavorite(local, localItem.id);
     const cloudWithLater = toggleVideoWatchLater(cloud, cloudItem.id);
-    const localHistory = recordVideoProgress(localWithFavorite, localItem.id, 12, 60);
-    const cloudHistory = recordVideoProgress(cloudWithLater, cloudItem.id, 24, 60);
+    const localPlaylist = createVideoPlaylist(localWithFavorite, 'Local playlist');
+    const localPlaylistWithItem = toggleVideoInPlaylist(localPlaylist, localPlaylist.playlists[0].id, localItem.id);
+    const cloudPlaylist = createVideoPlaylist(cloudWithLater, 'Cloud playlist');
+    const cloudPlaylistWithItem = toggleVideoInPlaylist(cloudPlaylist, cloudPlaylist.playlists[0].id, cloudItem.id);
+    const localHistory = recordVideoProgress(localPlaylistWithItem, localItem.id, 12, 60);
+    const cloudHistory = recordVideoProgress(cloudPlaylistWithItem, cloudItem.id, 24, 60);
     const merged = mergeVideoLibraries(localHistory, cloudHistory);
 
     expect(merged.items.map((item) => item.id)).toEqual([localItem.id, cloudItem.id]);
     expect(merged.favorites).toContain(localItem.id);
     expect(merged.watchLater).toContain(cloudItem.id);
     expect(merged.history.map((entry) => entry.itemId)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
+    expect(merged.playlists).toHaveLength(2);
+    expect(merged.playlists.flatMap((playlist) => playlist.itemIds)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
   });
 });
 
