@@ -15,7 +15,6 @@ import {
   Shuffle,
   Sparkles,
   StepForward,
-  Trash2,
   WandSparkles,
   X,
 } from 'lucide-react';
@@ -193,7 +192,6 @@ export function LifeLabApp() {
     stats: getSimulationStats(simulation),
   }));
   const [experimentName, setExperimentName] = useState('');
-  const [storageWarning, setStorageWarning] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const simulationRef = useRef(simulation);
   const preferencesRef = useRef(preferences);
@@ -208,12 +206,11 @@ export function LifeLabApp() {
   useEffect(() => {
     simulationRef.current = simulation;
     drawWorld(canvasRef.current, simulation);
-    setHud({ generation: simulation.generation, stats: getSimulationStats(simulation) });
   }, [simulation]);
 
   useEffect(() => {
     preferencesRef.current = preferences;
-    setStorageWarning(!persistPreferences(preferences));
+    persistPreferences(preferences);
   }, [preferences]);
 
   useEffect(() => () => {
@@ -260,6 +257,7 @@ export function LifeLabApp() {
   const commitWorld = (next: LifeLabSimulation, save = true) => {
     simulationRef.current = next;
     setSimulation(next);
+    setHud({ generation: next.generation, stats: getSimulationStats(next) });
     if (save) {
       setPreferences((current) => ({
         ...current,
@@ -341,6 +339,7 @@ export function LifeLabApp() {
   const savePaintedWorld = () => {
     const world = simulationRef.current;
     setSimulation(world);
+    setHud({ generation: world.generation, stats: getSimulationStats(world) });
     setPreferences((current) => ({
       ...current,
       mode: world.mode,
@@ -470,7 +469,7 @@ export function LifeLabApp() {
                     if (wasPainting) savePaintedWorld();
                     paintModeRef.current = null;
                   }}
-                  onPointerCancel={(event) => {
+                  onPointerCancel={() => {
                     const wasPainting = paintingRef.current;
                     paintingRef.current = false;
                     if (wasPainting) savePaintedWorld();
@@ -628,7 +627,6 @@ export function LifeLabApp() {
                 />
               </div>
               <p className="mt-3 text-[9px] leading-relaxed text-stone-600">Chạm hoặc kéo trên lưới để thay đổi trạng thái các ô. Tốc độ thấp phù hợp khi quan sát từng quá trình chuyển tiếp.</p>
-              {storageWarning && <p className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/5 p-2 text-[8px] leading-relaxed text-amber-200">Trình duyệt không cho phép lưu dữ liệu. Các thay đổi sẽ mất khi đóng cửa sổ.</p>}
             </section>
           </aside>
         </div>
