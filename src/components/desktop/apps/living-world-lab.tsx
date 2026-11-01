@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import {
   BIOMES,
-  DEFAULT_WORLD_RULES,
   SEASONS,
   SPECIES,
   WEATHER,
@@ -34,7 +33,6 @@ import {
   getLivingWorldStats,
   serializeLivingWorld,
   stepLivingWorld,
-  type BiomeId,
   type LivingWorld,
   type LivingWorldStats,
   type SpeciesId,
@@ -368,7 +366,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
             const sample = sampleWorld(next);
             setPopulationHistory((current) => [...current.slice(-99), sample]);
           }
-          if (next.generation >= lastCheckpointRef.current + 40 && next.generation % 40 === 0) {
+          if (next.generation >= lastCheckpointRef.current + 40) {
             const snapshot = serializeLivingWorld(next);
             setCheckpoints((current) => [{
               id: 'auto-' + next.seed + '-' + next.generation,
@@ -415,7 +413,6 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
     commitWorld(next);
     setSeedInput(String(next.seed));
     lastCheckpointRef.current = 0;
-    setCheckpoints((current) => current);
   };
 
   const createRandomWorld = () => {
