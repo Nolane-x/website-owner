@@ -93,6 +93,28 @@ describe('Evolution Lab Living World engine', () => {
     expect(left.rngState).toBe(right.rngState);
     expect(left.eventLog.length).toBeLessThanOrEqual(64);
     expect(Array.from(left.food).every((value) => value >= 0 && value <= 15)).toBe(true);
+    expect(Array.from(left.seedBank).every((value) => value >= 0 && value <= 15)).toBe(true);
+    expect(Array.from(left.detritus).every((value) => value >= 0 && value <= 15)).toBe(true);
+    expect(Array.from(left.fertility).every((value) => value >= 0 && value <= 255)).toBe(true);
+    expect(Array.from(left.humidity).every((value) => value >= 0 && value <= 255)).toBe(true);
+    expect(Array.from(left.temperature).every((value) => value >= 0 && value <= 255)).toBe(true);
+    expect(Array.from(left.elevation).every((value) => value >= 0 && value <= 255)).toBe(true);
+  });
+
+  it('does not mutate the source world when advancing one generation', () => {
+    const world = createLivingWorld(20261101, 40, 26, {
+      grazer: 12, hunter: 3, omnivore: 4, parasite: 3, microbe: 8,
+    });
+    const before = serializeLivingWorld(world);
+
+    const next = stepLivingWorld(world);
+
+    expect(next).not.toBe(world);
+    expect(next.food).not.toBe(world.food);
+    expect(next.seedBank).not.toBe(world.seedBank);
+    expect(next.organisms).not.toBe(world.organisms);
+    expect(serializeLivingWorld(world)).toBe(before);
+    expect(next.generation).toBe(world.generation + 1);
   });
 
   it('advances seasons and records weather changes in the world event timeline', () => {
