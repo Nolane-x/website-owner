@@ -766,6 +766,25 @@ function habitatPenalty(animal: WorldOrganism, world: LivingWorld): number {
   return 1;
 }
 
+function environmentPenalty(animal: WorldOrganism, world: LivingWorld): number {
+  const index = indexOf(animal.x, animal.y, world.width);
+  let penalty = habitatPenalty(animal, world);
+  if (animal.species === 'microbe') return penalty;
+
+  const temperature = world.temperature[index];
+  const humidity = world.humidity[index];
+  const elevation = world.elevation[index];
+  if (temperature > 210) penalty *= 1 + Math.min(0.35, (temperature - 210) * 0.0035);
+  if (temperature < 55) penalty *= 1 + Math.min(0.3, (55 - temperature) * 0.005);
+  if ((animal.species === 'grazer' || animal.species === 'omnivore') && humidity < 50) {
+    penalty *= 1 + Math.min(0.3, (50 - humidity) * 0.004);
+  }
+  if (elevation > 225) penalty *= 1.08;
+  if (world.weather === 'storm') penalty *= 1.04;
+  if (world.weather === 'wildfire' && world.biomes[index] === BIOME.forest) penalty *= 1.12;
+  return penalty;
+}
+
 function preferredTarget(animal: WorldOrganism, world: LivingWorld): { x: number; y: number } | null {
   if (animal.memoryX < 0 || animal.memoryY < 0) return null;
   const index = indexOf(animal.memoryX, animal.memoryY, world.width);
@@ -860,7 +879,7 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
       : animal.species === 'hunter' ? 0.68
         : animal.species === 'omnivore' ? 0.55
           : animal.species === 'microbe' ? 0.16 : 0.35;
-    animal.energy -= baseMetabolism * animal.genome.metabolism * world.rules.metabolism * habitatPenalty(animal, world);
+    animal.energy -= baseMetabolism * animal.genome.metabolism * world.rules.metabolism * environmentPenalty(animal, world);
     const lifespan = animal.species === 'microbe' ? 240 : animal.species === 'parasite' ? 300 : animal.species === 'hunter' ? 480 : 560;
     if (animal.energy <= 0 || animal.age > lifespan) {
       alive[organismIndex] = false;
