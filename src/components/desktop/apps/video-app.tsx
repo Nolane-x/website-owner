@@ -539,7 +539,7 @@ export function VideoApp() {
 
   const shortsQueue = useMemo(
     () => library.items.filter((item) => item.isShort && !isVideoExcludedFromRecommendations(item, library)),
-    [library.items, library.notInterestedVideos, library.hiddenCreators],
+    [library],
   );
 
   const visibleResults = useMemo(
