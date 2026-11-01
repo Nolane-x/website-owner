@@ -14,6 +14,7 @@ import {
   Database,
   Quote,
   Calculator,
+  Clapperboard,
 } from 'lucide-react';
 
 interface DesktopIconItem {
@@ -52,6 +53,11 @@ const DESKTOP_ICONS: DesktopIconItem[] = [
     appId: 'wallpapers',
     title: 'Wallpaper Studio',
     icon: <ImageIcon className="w-8 h-8 text-teal-400 group-hover:scale-110 transition-transform" />,
+  },
+  {
+    appId: 'video',
+    title: 'Video Library',
+    icon: <Clapperboard className="w-8 h-8 text-fuchsia-300 group-hover:scale-110 transition-transform" />,
   },
   {
     appId: 'research',
