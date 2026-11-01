@@ -438,7 +438,7 @@ describe('Evolution Lab Living World engine', () => {
     const current = JSON.parse(serializeLivingWorld(world)) as Record<string, unknown>;
     expect(current.version).toBe(3);
 
-    const legacy = { ...current, version: 2 };
+    const legacy: Record<string, unknown> = { ...current, version: 2 };
     delete legacy.seedBank;
     const restored = deserializeLivingWorld(JSON.stringify(legacy));
 
