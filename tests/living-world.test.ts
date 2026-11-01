@@ -76,6 +76,25 @@ describe('Evolution Lab Living World engine', () => {
     expect(left.generation).toBe(60);
   });
 
+  it('keeps a seeded climate-only world deterministic and bounded for 1,000 generations', () => {
+    const empty = { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 };
+    let left = createLivingWorld(1_000_777, 32, 20, empty);
+    let right = createLivingWorld(1_000_777, 32, 20, empty);
+    for (let generation = 0; generation < 1_000; generation++) {
+      left = stepLivingWorld(left);
+      right = stepLivingWorld(right);
+    }
+    expect(left.generation).toBe(1_000);
+    expect(left.season).toBe('spring');
+    expect(left.organisms).toHaveLength(0);
+    expect(left.food).toEqual(right.food);
+    expect(left.humidity).toEqual(right.humidity);
+    expect(left.temperature).toEqual(right.temperature);
+    expect(left.rngState).toBe(right.rngState);
+    expect(left.eventLog.length).toBeLessThanOrEqual(64);
+    expect(Array.from(left.food).every((value) => value >= 0 && value <= 15)).toBe(true);
+  });
+
   it('advances seasons and records weather changes in the world event timeline', () => {
     const base = createLivingWorld(88, 32, 20, { grazer: 2, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
     const world = withChanges(base, {
