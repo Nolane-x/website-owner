@@ -307,7 +307,7 @@ describe('Evolution Lab Living World engine', () => {
         reproductionThreshold: 30,
       },
     });
-    for (let generation = 0; generation < 100 && world.births === 0; generation++) {
+    for (let generation = 0; generation < 500 && getLivingWorldStats(world).lineageDiversity === 1; generation++) {
       world = stepLivingWorld(world);
     }
     expect(world.births).toBeGreaterThan(0);
