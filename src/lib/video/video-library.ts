@@ -1,3 +1,5 @@
+import { VIDEO_TOPICS } from './video-topics';
+
 export type VideoPlatform = 'youtube' | 'tiktok';
 export type VideoLibraryTab = 'discover' | 'topics' | 'watch' | 'shorts' | 'library' | 'playlists';
 export type VideoSearchOrder = 'relevance' | 'date' | 'viewCount';
@@ -22,6 +24,7 @@ export interface VideoLibraryItem {
   title: string;
   description: string;
   creator: string;
+  creatorId: string | null;
   thumbnailUrl: string | null;
   durationSeconds: number | null;
   viewCount: number | null;
@@ -45,6 +48,19 @@ export interface VideoPlaylist {
   updatedAt: number;
 }
 
+export interface VideoNotInterestedRecord {
+  id: string;
+  title: string;
+  description: string;
+  creator: string;
+  updatedAt: number;
+}
+
+export interface HiddenVideoCreator {
+  key: string;
+  label: string;
+}
+
 export interface VideoLibraryState {
   items: VideoLibraryItem[];
   favorites: string[];
@@ -52,6 +68,9 @@ export interface VideoLibraryState {
   history: VideoWatchRecord[];
   playlists: VideoPlaylist[];
   followedTopics: string[];
+  mutedTopics: string[];
+  notInterestedVideos: VideoNotInterestedRecord[];
+  hiddenCreators: HiddenVideoCreator[];
 }
 
 const STORAGE_KEY = 'webos:video-library:v1';
@@ -61,8 +80,13 @@ const MAX_HISTORY = 120;
 const MAX_PLAYLISTS = 60;
 const MAX_PLAYLIST_ITEMS = 250;
 const MAX_FOLLOWED_TOPICS = 40;
+const MAX_NOT_INTERESTED_VIDEOS = 100;
+const MAX_HIDDEN_CREATORS = 80;
 const VIDEO_TOPIC_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const VALID_VIDEO_TOPIC_IDS = new Set(VIDEO_TOPICS.map((topic) => topic.id));
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
+const VIDEO_FEEDBACK_ID = /^(youtube:[A-Za-z0-9_-]{11}|tiktok:\d{10,24})$/;
 const TIKTOK_ID = /^\d{10,24}$/;
 
 const YOUTUBE_HOSTS = new Set([
@@ -171,6 +195,7 @@ export function createVideoLibraryItem(input: {
   title?: string;
   description?: string;
   creator?: string;
+  creatorId?: string | null;
   thumbnailUrl?: string | null;
   durationSeconds?: number | null;
   viewCount?: number | null;
@@ -192,6 +217,9 @@ export function createVideoLibraryItem(input: {
     title: cleanText(input.title, 240, input.platform === 'youtube' ? 'Video YouTube' : 'Video TikTok'),
     description: cleanText(input.description, 600),
     creator: cleanText(input.creator, 120),
+    creatorId: input.platform === 'youtube' && typeof input.creatorId === 'string' && YOUTUBE_CHANNEL_ID.test(input.creatorId)
+      ? input.creatorId
+      : null,
     thumbnailUrl: safeHttpsImage(input.thumbnailUrl),
     durationSeconds: typeof input.durationSeconds === 'number' &&
       Number.isFinite(input.durationSeconds) &&
@@ -234,7 +262,30 @@ export function formatVideoCount(value: number | null | undefined): string {
 }
 
 export function emptyVideoLibrary(): VideoLibraryState {
-  return { items: [], favorites: [], watchLater: [], history: [], playlists: [], followedTopics: [] };
+  return {
+    items: [], favorites: [], watchLater: [], history: [], playlists: [],
+    followedTopics: [], mutedTopics: [], notInterestedVideos: [], hiddenCreators: [],
+  };
+}
+
+function normalizeCreatorName(value: string): string {
+  return cleanText(value, 120)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+function videoCreatorKeys(item: VideoLibraryItem): string[] {
+  const keys: string[] = [];
+  if (item.creatorId && YOUTUBE_CHANNEL_ID.test(item.creatorId)) keys.push('yt:' + item.creatorId);
+  const normalizedName = normalizeCreatorName(item.creator);
+  if (normalizedName && normalizedName !== 'youtube' && normalizedName !== 'tiktok') {
+    keys.push('name:' + normalizedName);
+  }
+  return keys;
 }
 
 function uniqueIds(values: unknown, allowed: Set<string>, max: number): string[] {
@@ -259,6 +310,7 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
         title: item.title as string,
         description: item.description as string,
         creator: item.creator as string,
+        creatorId: item.creatorId as string | null,
         thumbnailUrl: item.thumbnailUrl as string | null,
         durationSeconds: item.durationSeconds as number | null,
         viewCount: item.viewCount as number | null,
@@ -295,6 +347,46 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
       typeof topicId === 'string' && VIDEO_TOPIC_ID.test(topicId)
     ))].slice(0, MAX_FOLLOWED_TOPICS)
     : [];
+  const mutedTopics = Array.isArray(raw.mutedTopics)
+    ? [...new Set(raw.mutedTopics.filter((topicId): topicId is string =>
+      typeof topicId === 'string' && VIDEO_TOPIC_ID.test(topicId) && VALID_VIDEO_TOPIC_IDS.has(topicId)
+    ))].slice(0, MAX_FOLLOWED_TOPICS)
+    : [];
+  const notInterestedById = new Map<string, VideoNotInterestedRecord>();
+  if (Array.isArray(raw.notInterestedVideos)) {
+    for (const entry of raw.notInterestedVideos.slice(0, MAX_NOT_INTERESTED_VIDEOS * 3)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      if (typeof record.id !== 'string' || !VIDEO_FEEDBACK_ID.test(record.id)) continue;
+      const candidate: VideoNotInterestedRecord = {
+        id: record.id,
+        title: cleanText(record.title, 240, 'Video không quan tâm'),
+        description: cleanText(record.description, 600),
+        creator: cleanText(record.creator, 120),
+        updatedAt: Number.isFinite(record.updatedAt) ? Number(record.updatedAt) : Date.now(),
+      };
+      const existing = notInterestedById.get(candidate.id);
+      if (!existing || candidate.updatedAt >= existing.updatedAt) notInterestedById.set(candidate.id, candidate);
+    }
+  }
+  const notInterestedVideos = [...notInterestedById.values()]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_NOT_INTERESTED_VIDEOS);
+  const hiddenByKey = new Map<string, HiddenVideoCreator>();
+  if (Array.isArray(raw.hiddenCreators)) {
+    for (const entry of raw.hiddenCreators.slice(0, MAX_HIDDEN_CREATORS * 3)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      if (typeof record.key !== 'string') continue;
+      const key = record.key;
+      const validKey = key.startsWith('yt:')
+        ? YOUTUBE_CHANNEL_ID.test(key.slice(3))
+        : key.startsWith('name:') && /^[a-z0-9][a-z0-9 ._-]{0,119}$/.test(key.slice(5));
+      if (!validKey) continue;
+      hiddenByKey.set(key, { key, label: cleanText(record.label, 120, 'Nhà sáng tạo đã ẩn') });
+    }
+  }
+  const hiddenCreators = [...hiddenByKey.values()].slice(0, MAX_HIDDEN_CREATORS);
   const playlists = Array.isArray(raw.playlists)
     ? raw.playlists.slice(0, MAX_PLAYLISTS)
       .filter((entry): entry is Record<string, unknown> =>
@@ -309,7 +401,7 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
       }))
       .filter((playlist) => Boolean(playlist.id))
     : [];
-  return { items, favorites, watchLater, history, playlists, followedTopics };
+  return { items, favorites, watchLater, history, playlists, followedTopics, mutedTopics, notInterestedVideos, hiddenCreators };
 }
 
 /** Merge a local snapshot with the cloud snapshot without losing unique saved items. */
@@ -347,6 +439,9 @@ export function mergeVideoLibraries(primary: VideoLibraryState, secondary: Video
     history: [...historyByItemId.values()].sort((a, b) => b.watchedAt - a.watchedAt),
     playlists: [...playlistsById.values()],
     followedTopics: [...primary.followedTopics, ...secondary.followedTopics],
+    mutedTopics: [...primary.mutedTopics, ...secondary.mutedTopics],
+    notInterestedVideos: [...primary.notInterestedVideos, ...secondary.notInterestedVideos],
+    hiddenCreators: [...primary.hiddenCreators, ...secondary.hiddenCreators],
   });
 }
 
@@ -415,6 +510,65 @@ export function toggleFollowedVideoTopic(state: VideoLibraryState, topicId: stri
   // Update only the preference field. Normalizing the entire library here
   // would recreate item metadata (including addedAt) during a simple toggle.
   return { ...state, followedTopics };
+}
+
+export function toggleMutedVideoTopic(state: VideoLibraryState, topicId: string): VideoLibraryState {
+  if (!VALID_VIDEO_TOPIC_IDS.has(topicId)) return state;
+  const mutedTopics = state.mutedTopics.includes(topicId)
+    ? state.mutedTopics.filter((id) => id !== topicId)
+    : [...state.mutedTopics, topicId].slice(-MAX_FOLLOWED_TOPICS);
+  return { ...state, mutedTopics };
+}
+
+export function toggleNotInterestedVideo(state: VideoLibraryState, item: VideoLibraryItem): VideoLibraryState {
+  if (!VIDEO_FEEDBACK_ID.test(item.id)) return state;
+  const existing = state.notInterestedVideos.some((record) => record.id === item.id);
+  const notInterestedVideos = existing
+    ? state.notInterestedVideos.filter((record) => record.id !== item.id)
+    : [{ id: item.id, title: cleanText(item.title, 240, 'Video không quan tâm'), description: cleanText(item.description, 600), creator: cleanText(item.creator, 120), updatedAt: Date.now() }, ...state.notInterestedVideos]
+      .slice(0, MAX_NOT_INTERESTED_VIDEOS);
+  return { ...state, notInterestedVideos };
+}
+
+export function toggleHiddenVideoCreator(state: VideoLibraryState, item: VideoLibraryItem): VideoLibraryState {
+  const key = videoCreatorKeys(item)[0];
+  if (!key) return state;
+  const exists = state.hiddenCreators.some((entry) => entry.key === key);
+  const hiddenCreators = exists
+    ? state.hiddenCreators.filter((entry) => entry.key !== key)
+    : [{ key, label: cleanText(item.creator, 120, 'Nhà sáng tạo đã ẩn') }, ...state.hiddenCreators].slice(0, MAX_HIDDEN_CREATORS);
+  return { ...state, hiddenCreators };
+}
+
+export function isVideoNotInterested(item: VideoLibraryItem, state: VideoLibraryState): boolean {
+  return state.notInterestedVideos.some((record) => record.id === item.id);
+}
+
+export function canHideVideoCreator(item: VideoLibraryItem): boolean {
+  return videoCreatorKeys(item).length > 0;
+}
+
+export function isVideoCreatorHidden(item: VideoLibraryItem, state: VideoLibraryState): boolean {
+  const keys = new Set(videoCreatorKeys(item));
+  return state.hiddenCreators.some((entry) => keys.has(entry.key));
+}
+
+export function isVideoExcludedFromRecommendations(item: VideoLibraryItem, state: VideoLibraryState): boolean {
+  return isVideoNotInterested(item, state) || isVideoCreatorHidden(item, state);
+}
+
+export function restoreNotInterestedVideo(state: VideoLibraryState, videoId: string): VideoLibraryState {
+  return {
+    ...state,
+    notInterestedVideos: state.notInterestedVideos.filter((record) => record.id !== videoId),
+  };
+}
+
+export function restoreHiddenVideoCreator(state: VideoLibraryState, key: string): VideoLibraryState {
+  return {
+    ...state,
+    hiddenCreators: state.hiddenCreators.filter((entry) => entry.key !== key),
+  };
 }
 
 export function toggleVideoWatchLater(state: VideoLibraryState, itemId: string): VideoLibraryState {
@@ -506,7 +660,10 @@ export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms
       weights.set(token, (weights.get(token) ?? 0) + weight);
     }
   };
-  for (const topicId of state.followedTopics.slice(0, 20)) add(topicId.replace(/-/g, ' '), 4.5);
+  for (const topicId of state.followedTopics.slice(0, 20)) {
+    const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
+    add(topic ? topic.query + ' ' + topic.id.replace(/-/g, ' ') : topicId.replace(/-/g, ' '), 2.8);
+  }
   for (const id of state.favorites.slice(0, 20)) {
     const item = byId.get(id);
     if (item) { add(item.title, 4); add(item.creator, 1.8); }
@@ -523,7 +680,12 @@ export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms
       add(item.creator, weight * 0.55);
     }
   });
+  const mutedTokens = new Set(state.mutedTopics.flatMap((topicId) => {
+    const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
+    return topic ? recommendationTokens(topic.query + ' ' + topic.label + ' ' + topic.id.replace(/-/g, ' ')) : [];
+  }));
   return [...weights.entries()]
+    .filter(([token]) => !mutedTokens.has(token))
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, safeLimit)
     .map(([token]) => token)
@@ -539,11 +701,27 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
   const addProfile = (text: string, weight: number) => {
     for (const token of new Set(recommendationTokens(text))) profile.set(token, (profile.get(token) ?? 0) + weight);
   };
-  for (const topicId of state.followedTopics.slice(0, 20)) addProfile(topicId.replace(/-/g, ' '), 4.5);
+  for (const topicId of state.followedTopics.slice(0, 20)) {
+    if (state.mutedTopics.includes(topicId)) continue;
+    const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
+    addProfile(topic ? topic.query + ' ' + topic.id.replace(/-/g, ' ') : topicId.replace(/-/g, ' '), 4.5);
+  }
   for (const id of state.favorites.slice(0, 30)) {
     const item = byId.get(id);
     if (item) { addProfile(item.title, 4); addProfile(item.creator, 2.5); addProfile(item.description, 0.8); }
   }
+  const negativeProfile = new Map<string, number>();
+  const addNegative = (text: string, weight: number) => {
+    for (const token of new Set(recommendationTokens(text))) {
+      negativeProfile.set(token, (negativeProfile.get(token) ?? 0) + weight);
+    }
+  };
+  for (const record of state.notInterestedVideos.slice(0, 30)) {
+    addNegative(record.title, 1.25);
+    addNegative(record.description, 0.3);
+    addNegative(record.creator, 0.35);
+  }
+
   for (const id of state.watchLater.slice(0, 30)) {
     const item = byId.get(id);
     if (item) { addProfile(item.title, 3); addProfile(item.creator, 2); addProfile(item.description, 0.6); }
@@ -556,9 +734,23 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
     addProfile(item.creator, weight * 0.65);
     addProfile(item.description, weight * 0.25);
   });
+  // Explicitly muted interests override positive signals from follows,
+  // favorites, watch-later and viewing history.
+  const mutedProfileTokens = new Set(state.mutedTopics.flatMap((topicId) => {
+    const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
+    return topic ? recommendationTokens(topic.query + ' ' + topic.label + ' ' + topic.id.replace(/-/g, ' ')) : [];
+  }));
+  for (const token of mutedProfileTokens) profile.delete(token);
+
   const recentlyWatched = new Set(state.history.slice(0, 3).map((entry) => entry.itemId));
+  const mutedTopicTokens = state.mutedTopics.map((topicId) => {
+    const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
+    return topic ? new Set(recommendationTokens(topic.query + ' ' + topic.label + ' ' + topic.id.replace(/-/g, ' '))) : new Set<string>();
+  });
   const unique = new Map<string, VideoLibraryItem>();
-  for (const item of candidates) if (item && !recentlyWatched.has(item.id)) unique.set(item.id, item);
+  for (const item of candidates) {
+    if (item && !recentlyWatched.has(item.id) && !isVideoExcludedFromRecommendations(item, state)) unique.set(item.id, item);
+  }
   const now = Date.now();
   const ranked = [...unique.values()].map((item, originalIndex) => {
     const titleTokens = new Set(recommendationTokens(item.title));
@@ -568,6 +760,16 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
     for (const token of titleTokens) score += (profile.get(token) ?? 0) * 3;
     for (const token of creatorTokens) score += (profile.get(token) ?? 0) * 2;
     for (const token of descriptionTokens) score += (profile.get(token) ?? 0) * 0.35;
+    for (const token of titleTokens) score -= (negativeProfile.get(token) ?? 0) * 1.8;
+    for (const token of creatorTokens) score -= (negativeProfile.get(token) ?? 0) * 0.8;
+    for (const token of descriptionTokens) score -= (negativeProfile.get(token) ?? 0) * 0.15;
+    const mutedTitleHits = mutedTopicTokens.reduce((total, tokens) =>
+      total + [...titleTokens].filter((token) => tokens.has(token)).length, 0);
+    const mutedDescriptionHits = mutedTopicTokens.reduce((total, tokens) =>
+      total + [...descriptionTokens].filter((token) => tokens.has(token)).length, 0);
+    if (mutedTitleHits >= 2) score -= Math.min(36, mutedTitleHits * 9);
+    else if (mutedTitleHits === 1 && [...titleTokens].some((token) => token.length >= 9 && mutedTopicTokens.some((tokens) => tokens.has(token)))) score -= 12;
+    if (mutedDescriptionHits >= 3) score -= Math.min(18, mutedDescriptionHits * 3);
     score += Math.log10((item.viewCount ?? 0) + 1) * 0.22;
     if (item.publishedAt) {
       const ageDays = Math.max(0, (now - Date.parse(item.publishedAt)) / 86_400_000);
