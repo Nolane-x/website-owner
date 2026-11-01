@@ -274,6 +274,45 @@ describe('Evolution Lab Living World engine', () => {
     expect(next.deaths).toBe(1);
   });
 
+  it('germinates dormant seeds in warm, wet spring conditions', () => {
+    const base = createLivingWorld(6_006, 32, 20, { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const world = withChanges(base, {
+      biomes: new Uint8Array(base.biomes.length).fill(0),
+      food: new Uint8Array(base.food.length),
+      seedBank: new Uint8Array(base.seedBank.length).fill(15),
+      fertility: new Uint8Array(base.fertility.length).fill(255),
+      humidity: new Uint8Array(base.humidity.length).fill(255),
+      temperature: new Uint8Array(base.temperature.length).fill(160),
+      season: 'spring',
+      weather: 'rain',
+      weatherRemaining: 8,
+      rules: { ...base.rules, foodRegrowth: 0.001, climateIntensity: 0.3 },
+    });
+    const beforeSeeds = world.seedBank.reduce((sum, value) => sum + value, 0);
+    const next = stepLivingWorld(world);
+    const afterSeeds = next.seedBank.reduce((sum, value) => sum + value, 0);
+    const newBiomass = next.food.reduce((sum, value) => sum + value, 0);
+    expect(afterSeeds).toBeLessThan(beforeSeeds);
+    expect(newBiomass).toBeGreaterThan(0);
+  });
+
+  it('disperses seeds from mature plant cover into nearby land cells', () => {
+    const base = createLivingWorld(6_007, 32, 20, { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const world = withChanges(base, {
+      biomes: new Uint8Array(base.biomes.length).fill(0),
+      food: new Uint8Array(base.food.length).fill(15),
+      seedBank: new Uint8Array(base.seedBank.length).fill(2),
+      season: 'spring',
+      weather: 'clear',
+      weatherRemaining: 8,
+      rules: { ...base.rules, foodRegrowth: 0.001 },
+    });
+    const beforeSeeds = world.seedBank.reduce((sum, value) => sum + value, 0);
+    const next = stepLivingWorld(world);
+    const afterSeeds = next.seedBank.reduce((sum, value) => sum + value, 0);
+    expect(afterSeeds).toBeGreaterThan(beforeSeeds);
+  });
+
   it('lets microbes consume detritus and improve soil fertility', () => {
     const base = createLivingWorld(19, 32, 20, { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 1 });
     const microbe = makeOrganism(base.organisms[0], { x: 8, y: 8, energy: 55, age: 3 });
@@ -382,6 +421,7 @@ describe('Evolution Lab Living World engine', () => {
     const restored = deserializeLivingWorld(serializeLivingWorld(world));
     expect(restored).not.toBeNull();
     expect(restored?.food).toEqual(world.food);
+    expect(restored?.seedBank).toEqual(world.seedBank);
     expect(restored?.detritus).toEqual(world.detritus);
     expect(restored?.biomes).toEqual(world.biomes);
     expect(restored?.temperature).toEqual(world.temperature);
@@ -435,6 +475,9 @@ describe('Evolution Lab Living World engine', () => {
     expect(comparison.lineageDiversityDelta).toBe(-1);
     expect(comparison.species.grazer).toBe(2);
     expect(comparison.species.parasite).toBe(-1);
+    expect(comparison.seedDelta).toBe(
+      getLivingWorldStats(right).seedUnits - getLivingWorldStats(left).seedUnits,
+    );
     expect(Number.isFinite(comparison.traitDifferences.sociality)).toBe(true);
   });
 
