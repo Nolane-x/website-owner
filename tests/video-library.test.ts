@@ -16,6 +16,7 @@ import {
   removeVideoFromLibrary,
   setVideoShort,
   toggleVideoFavorite,
+  toggleFollowedVideoTopic,
   toggleVideoInPlaylist,
   toggleVideoWatchLater,
 } from '@/lib/video/video-library';
@@ -99,8 +100,10 @@ describe('Video Library cloud merge', () => {
     const localPlaylistWithItem = toggleVideoInPlaylist(localPlaylist, localPlaylist.playlists[0].id, localItem.id);
     const cloudPlaylist = createVideoPlaylist(cloudWithLater, 'Cloud playlist');
     const cloudPlaylistWithItem = toggleVideoInPlaylist(cloudPlaylist, cloudPlaylist.playlists[0].id, cloudItem.id);
-    const localHistory = recordVideoProgress(localPlaylistWithItem, localItem.id, 12, 60);
-    const cloudHistory = recordVideoProgress(cloudPlaylistWithItem, cloudItem.id, 24, 60);
+    const localWithFollowedTopic = toggleFollowedVideoTopic(localPlaylistWithItem, 'artificial-intelligence');
+    const cloudWithFollowedTopic = toggleFollowedVideoTopic(cloudPlaylistWithItem, 'robotics');
+    const localHistory = recordVideoProgress(localWithFollowedTopic, localItem.id, 12, 60);
+    const cloudHistory = recordVideoProgress(cloudWithFollowedTopic, cloudItem.id, 24, 60);
     const merged = mergeVideoLibraries(localHistory, cloudHistory);
 
     expect(merged.items.map((item) => item.id)).toEqual([localItem.id, cloudItem.id]);
@@ -109,6 +112,31 @@ describe('Video Library cloud merge', () => {
     expect(merged.history.map((entry) => entry.itemId)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
     expect(merged.playlists).toHaveLength(2);
     expect(merged.playlists.flatMap((playlist) => playlist.itemIds)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
+    expect(merged.followedTopics).toEqual(expect.arrayContaining(['artificial-intelligence', 'robotics']));
+  });
+});
+
+describe('Followed video topics', () => {
+  it('toggles a topic in the persistent discovery profile and rejects malformed IDs', () => {
+    let state = emptyVideoLibrary();
+    state = toggleFollowedVideoTopic(state, 'artificial-intelligence');
+    expect(state.followedTopics).toEqual(['artificial-intelligence']);
+
+    state = toggleFollowedVideoTopic(state, 'robotics');
+    expect(state.followedTopics).toEqual(['artificial-intelligence', 'robotics']);
+
+    state = toggleFollowedVideoTopic(state, 'artificial-intelligence');
+    expect(state.followedTopics).toEqual(['robotics']);
+    expect(toggleFollowedVideoTopic(state, '../admin')).toBe(state);
+  });
+
+  it('normalizes duplicate and invalid followed-topic values and supports older library snapshots', () => {
+    const normalized = normalizeVideoLibrary({
+      items: [],
+      followedTopics: ['artificial-intelligence', 'robotics', 'artificial-intelligence', '../admin', ''],
+    });
+    expect(normalized.followedTopics).toEqual(['artificial-intelligence', 'robotics']);
+    expect(normalizeVideoLibrary({ items: [], favorites: [], watchLater: [], history: [], playlists: [] }).followedTopics).toEqual([]);
   });
 });
 
@@ -140,10 +168,12 @@ describe('Video Library recommendations', () => {
   it('builds a focused YouTube query from favorites, watch-later and viewing history', () => {
     const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning neural networks', creator: 'AI Research Lab' })!;
     const saved = addVideoToLibrary(emptyVideoLibrary(), favorite);
-    const interested = toggleVideoFavorite(saved, favorite.id);
+    const interested = toggleFollowedVideoTopic(toggleVideoFavorite(saved, favorite.id), 'artificial-intelligence');
     const query = buildVideoRecommendationQuery(interested, 4);
     expect(query).toContain('learning');
     expect(query).toContain('neural');
+    expect(query).toContain('artificial');
+    expect(query).toContain('intelligence');
     expect(query.split(' ')).toHaveLength(4);
     expect(buildVideoRecommendationQuery(emptyVideoLibrary())).toBe('');
   });
