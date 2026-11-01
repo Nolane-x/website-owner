@@ -1,11 +1,10 @@
 'use client';
 
-import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
 import {
   ArrowLeft,
-  ArrowRight,
   Bookmark,
-  Check,
   ChevronDown,
   ChevronUp,
   Clapperboard,
@@ -25,7 +24,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
-  TrendingUp,
   X,
   Youtube,
 } from 'lucide-react';
@@ -242,6 +240,8 @@ export function VideoApp() {
   const [needsApiKey, setNeedsApiKey] = useState(false);
   const [results, setResults] = useState<VideoLibraryItem[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [resultMode, setResultMode] = useState<'search' | 'trending'>('search');
+  const [resultCategoryId, setResultCategoryId] = useState('');
   const [resultHeading, setResultHeading] = useState('Khám phá video');
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -295,6 +295,7 @@ export function VideoApp() {
   };
 
   const playExisting = (item: VideoLibraryItem) => {
+    setLibrary((previous) => addVideoToLibrary(previous, item));
     setSelectedVideo(item);
     setPlayerStatus('ready');
     setTab('watch');
@@ -355,6 +356,8 @@ export function VideoApp() {
         return item ? [item] : [];
       });
       setResults((previous) => pageToken ? [...previous, ...items.filter((item) => !previous.some((entry) => entry.id === item.id))] : items);
+      setResultMode(mode);
+      setResultCategoryId(categoryId);
       setNextPageToken(payload.nextPageToken ?? null);
       setResultHeading(mode === 'trending'
         ? categoryId ? 'Video thịnh hành theo chủ đề' : 'Đang thịnh hành tại Việt Nam'
@@ -459,7 +462,6 @@ export function VideoApp() {
   };
 
   const shorts = shortsQueue;
-  const activeShort = shorts[shortIndex] ?? null;
 
   const scrollShortsTo = (index: number) => {
     const next = Math.max(0, Math.min(shorts.length - 1, index));
@@ -487,7 +489,7 @@ export function VideoApp() {
       onWatch={playExisting}
       onFavorite={(video) => toggleFavorite(video)}
       onSave={(video) => toggleWatchLater(video)}
-      onMarkShort={(video) => setLibrary((previous) => setVideoShort(previous, video.id, true))}
+      onMarkShort={(video) => setLibrary((previous) => setVideoShort(addVideoToLibrary(previous, video), video.id, true))}
       onRemove={options.removable ? removeVideo : undefined}
       favorite={library.favorites.includes(item.id)}
       saved={library.watchLater.includes(item.id)}
@@ -634,7 +636,7 @@ export function VideoApp() {
                     {results.map((item) => renderCard(item, { shortAction: true }))}
                   </div>
                   {nextPageToken && (
-                    <button type="button" disabled={loading} onClick={() => void executeYouTubeRequest('search', nextPageToken)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-700 py-2.5 text-[10px] text-stone-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-50">
+                    <button type="button" disabled={loading} onClick={() => void executeYouTubeRequest(resultMode, nextPageToken, resultCategoryId)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-700 py-2.5 text-[10px] text-stone-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-50">
                       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronDown className="h-3.5 w-3.5" />} Tải thêm kết quả
                     </button>
                   )}
