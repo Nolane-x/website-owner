@@ -66,6 +66,7 @@ const DEFAULT_APPS: Record<string, { title: string; icon?: string; defaultSize?:
   notes: { title: 'Ghi chú nháp Scratchpad', defaultSize: { width: 720, height: 520 } },
   snippets: { title: 'Kho Code Snippets', defaultSize: { width: 860, height: 580 } },
   music: { title: 'Phòng thẩm âm & Lo-Fi Studio', defaultSize: { width: 840, height: 560 } },
+  video: { title: 'Video Library — YouTube & TikTok', defaultSize: { width: 1120, height: 760 } },
   wallpapers: { title: 'Custom Wallpaper Studio', defaultSize: { width: 940, height: 620 } },
   research: { title: 'Kho nghiên cứu & Bằng chứng', defaultSize: { width: 960, height: 640 } },
   ai: { title: 'AI Copilot Dock', defaultSize: { width: 800, height: 620 } },
