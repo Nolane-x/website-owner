@@ -998,6 +998,61 @@ export function VideoApp() {
               )}
             </section>
 
+            <details className="rounded-xl border border-stone-800 bg-stone-900/45 p-3">
+              <summary className="cursor-pointer list-none text-[10px] font-semibold text-stone-300 marker:hidden">
+                Sở thích & bộ lọc nội dung
+                <span className="ml-2 text-[9px] font-normal text-stone-600">
+                  {library.mutedTopics.length + library.hiddenCreators.length + library.notInterestedVideos.length} quy tắc đang áp dụng
+                </span>
+              </summary>
+              <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                <section className="min-w-0">
+                  <h4 className="text-[9px] font-semibold uppercase tracking-wider text-sky-300">Chủ đề giảm ưu tiên</h4>
+                  {library.mutedTopics.length > 0 ? (
+                    <div className="mt-2 space-y-1.5">
+                      {library.mutedTopics.map((topicId) => {
+                        const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
+                        return (
+                          <div key={topicId} className="flex items-center justify-between gap-2 rounded-lg bg-black/20 px-2.5 py-2">
+                            <span className="min-w-0 truncate text-[9px] text-stone-300">{topic?.label ?? topicId}</span>
+                            <button type="button" onClick={() => toggleMutedTopic(topicId)} className="shrink-0 text-[9px] text-sky-300 hover:text-white">Ưu tiên lại</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : <p className="mt-2 text-[9px] text-stone-600">Chưa giảm ưu tiên chủ đề nào.</p>}
+                </section>
+                <section className="min-w-0">
+                  <h4 className="text-[9px] font-semibold uppercase tracking-wider text-rose-300">Nhà sáng tạo đã ẩn</h4>
+                  {library.hiddenCreators.length > 0 ? (
+                    <div className="mt-2 space-y-1.5">
+                      {library.hiddenCreators.map((creator) => (
+                        <div key={creator.key} className="flex items-center justify-between gap-2 rounded-lg bg-black/20 px-2.5 py-2">
+                          <span className="min-w-0 truncate text-[9px] text-stone-300">{creator.label}</span>
+                          <button type="button" onClick={() => setLibrary((previous) => restoreHiddenVideoCreator(previous, creator.key))} className="shrink-0 text-[9px] text-rose-300 hover:text-white">Hiện lại</button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="mt-2 text-[9px] text-stone-600">Chưa ẩn nhà sáng tạo nào.</p>}
+                </section>
+                <section className="min-w-0">
+                  <h4 className="text-[9px] font-semibold uppercase tracking-wider text-amber-300">Video không quan tâm</h4>
+                  {library.notInterestedVideos.length > 0 ? (
+                    <div className="mt-2 space-y-1.5">
+                      {library.notInterestedVideos.slice(0, 8).map((record) => (
+                        <div key={record.id} className="flex items-center justify-between gap-2 rounded-lg bg-black/20 px-2.5 py-2">
+                          <span className="min-w-0 truncate text-[9px] text-stone-300" title={record.title}>{record.title}</span>
+                          <button type="button" onClick={() => setLibrary((previous) => restoreNotInterestedVideo(previous, record.id))} className="shrink-0 text-[9px] text-amber-300 hover:text-white">Hoàn tác</button>
+                        </div>
+                      ))}
+                      {library.notInterestedVideos.length > 8 && <p className="text-[8px] text-stone-600">Hiển thị 8 trong {library.notInterestedVideos.length} video gần đây nhất.</p>}
+                    </div>
+                  ) : <p className="mt-2 text-[9px] text-stone-600">Chưa đánh dấu video nào.</p>}
+                </section>
+              </div>
+              <p className="mt-3 text-[8px] leading-relaxed text-stone-600">Các lựa chọn này được lưu trong thư viện cá nhân và đồng bộ khi đăng nhập owner. Chúng có thể được khôi phục bất cứ lúc nào.</p>
+            </details>
+
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div><h3 className="text-xs font-semibold text-stone-100">Thịnh hành tại Việt Nam</h3><p className="mt-1 text-[9px] text-stone-500">Dữ liệu cập nhật trực tiếp từ YouTube Data API</p></div>
@@ -1140,17 +1195,30 @@ export function VideoApp() {
                           <span className="mt-2 inline-flex items-center gap-1 text-[8px] font-semibold uppercase tracking-wider text-sky-400/80">{topic.group} <ChevronDown className="h-3 w-3 -rotate-90" /></span>
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleFollowTopic(topic.id)}
-                        aria-pressed={followed}
-                        className={followed
-                          ? 'mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-500/15 px-2.5 py-2 text-[9px] font-semibold text-sky-300 ring-1 ring-sky-500/30'
-                          : 'mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-800 px-2.5 py-2 text-[9px] text-stone-500 transition hover:border-sky-700 hover:text-sky-300'}
-                      >
-                        <Bookmark className="h-3 w-3" fill={followed ? 'currentColor' : 'none'} />
-                        {followed ? 'Đang theo dõi' : 'Theo dõi chủ đề'}
-                      </button>
+                      <div className="mt-3 grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleFollowTopic(topic.id)}
+                          aria-pressed={followed}
+                          className={followed
+                            ? 'inline-flex items-center justify-center gap-1 rounded-lg bg-sky-500/15 px-2 py-2 text-[8px] font-semibold text-sky-300 ring-1 ring-sky-500/30'
+                            : 'inline-flex items-center justify-center gap-1 rounded-lg border border-stone-800 px-2 py-2 text-[8px] text-stone-500 transition hover:border-sky-700 hover:text-sky-300'}
+                        >
+                          <Bookmark className="h-3 w-3" fill={followed ? 'currentColor' : 'none'} />
+                          {followed ? 'Đang theo dõi' : 'Theo dõi'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleMutedTopic(topic.id)}
+                          aria-pressed={library.mutedTopics.includes(topic.id)}
+                          className={library.mutedTopics.includes(topic.id)
+                            ? 'inline-flex items-center justify-center gap-1 rounded-lg bg-amber-950/50 px-2 py-2 text-[8px] font-semibold text-amber-300 ring-1 ring-amber-900/60'
+                            : 'inline-flex items-center justify-center gap-1 rounded-lg border border-stone-800 px-2 py-2 text-[8px] text-stone-500 transition hover:border-amber-800 hover:text-amber-300'}
+                        >
+                          <ThumbsDown className="h-3 w-3" />
+                          {library.mutedTopics.includes(topic.id) ? 'Đã giảm' : 'Ít nội dung hơn'}
+                        </button>
+                      </div>
                     </article>
                   );
                 })}
@@ -1165,12 +1233,20 @@ export function VideoApp() {
                     <h3 className="mt-1 truncate text-sm font-bold text-white">{activeTopic.label}</h3>
                     <p className="mt-1 text-[9px] text-stone-500">{visibleResults.length} kết quả tải được · Sắp xếp theo {SEARCH_SORT_OPTIONS.find((option) => option.id === resultSort)?.label.toLowerCase()}</p>
                     {activeTopic.id !== 'custom-topic' && (
-                      <button type="button" onClick={() => toggleFollowTopic(activeTopic.id)} className={library.followedTopics.includes(activeTopic.id)
-                        ? 'mt-2 inline-flex items-center gap-1.5 rounded-lg bg-sky-500/15 px-2.5 py-1.5 text-[9px] font-semibold text-sky-300'
-                        : 'mt-2 inline-flex items-center gap-1.5 rounded-lg border border-stone-700 px-2.5 py-1.5 text-[9px] text-stone-400 hover:border-sky-700 hover:text-sky-300'}>
-                        <Bookmark className="h-3 w-3" fill={library.followedTopics.includes(activeTopic.id) ? 'currentColor' : 'none'} />
-                        {library.followedTopics.includes(activeTopic.id) ? 'Đang theo dõi' : 'Theo dõi chủ đề này'}
-                      </button>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <button type="button" onClick={() => toggleFollowTopic(activeTopic.id)} aria-pressed={library.followedTopics.includes(activeTopic.id)} className={library.followedTopics.includes(activeTopic.id)
+                          ? 'inline-flex items-center gap-1.5 rounded-lg bg-sky-500/15 px-2.5 py-1.5 text-[9px] font-semibold text-sky-300'
+                          : 'inline-flex items-center gap-1.5 rounded-lg border border-stone-700 px-2.5 py-1.5 text-[9px] text-stone-400 hover:border-sky-700 hover:text-sky-300'}>
+                          <Bookmark className="h-3 w-3" fill={library.followedTopics.includes(activeTopic.id) ? 'currentColor' : 'none'} />
+                          {library.followedTopics.includes(activeTopic.id) ? 'Đang theo dõi' : 'Theo dõi chủ đề này'}
+                        </button>
+                        <button type="button" onClick={() => toggleMutedTopic(activeTopic.id)} aria-pressed={library.mutedTopics.includes(activeTopic.id)} className={library.mutedTopics.includes(activeTopic.id)
+                          ? 'inline-flex items-center gap-1.5 rounded-lg bg-amber-950/50 px-2.5 py-1.5 text-[9px] font-semibold text-amber-300'
+                          : 'inline-flex items-center gap-1.5 rounded-lg border border-stone-700 px-2.5 py-1.5 text-[9px] text-stone-400 hover:border-amber-800 hover:text-amber-300'}>
+                          <ThumbsDown className="h-3 w-3" />
+                          {library.mutedTopics.includes(activeTopic.id) ? 'Đã giảm ưu tiên' : 'Ít chủ đề này hơn'}
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5" aria-label="Sắp xếp kết quả chủ đề">
