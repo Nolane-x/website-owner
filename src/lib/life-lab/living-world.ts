@@ -1148,35 +1148,40 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
       for (const key of ['memoryX', 'memoryY', 'threatX', 'threatY', 'territoryX', 'territoryY', 'hostId'] as const) {
         if (!finite(animal[key]) || !Number.isInteger(animal[key])) return null;
       }
-      if (animal.memoryX < -1 || animal.memoryX >= width || animal.memoryY < -1 || animal.memoryY >= height) return null;
-      if (animal.threatX < -1 || animal.threatX >= width || animal.threatY < -1 || animal.threatY >= height) return null;
-      if (animal.territoryX < 0 || animal.territoryX >= width || animal.territoryY < 0 || animal.territoryY >= height) return null;
-      if (!finite(animal.lineageId) || !Number.isInteger(animal.lineageId) || animal.lineageId < 1 || animal.lineageId >= Number(parsed.nextLineageId)) return null;
+      if (!finite(animal.lineageId) || !Number.isInteger(animal.lineageId)
+        || animal.lineageId < 1 || animal.lineageId >= Number(parsed.nextLineageId)) return null;
+
+      // All numeric properties below have been validated above; use a narrowed view
+      // rather than allowing untrusted JSON values to flow into the world model.
+      const numeric = animal as Record<string, number>;
+      if (numeric.memoryX < -1 || numeric.memoryX >= width || numeric.memoryY < -1 || numeric.memoryY >= height) return null;
+      if (numeric.threatX < -1 || numeric.threatX >= width || numeric.threatY < -1 || numeric.threatY >= height) return null;
+      if (numeric.territoryX < 0 || numeric.territoryX >= width || numeric.territoryY < 0 || numeric.territoryY >= height) return null;
       if (animal.species === 'parasite') {
-        if (animal.hostId < -1 || (animal.hostId >= 0 && animal.hostId === animal.id)) return null;
-      } else if (animal.hostId !== -1) return null;
-      const position = indexOf(animal.x, animal.y, width);
-      if (animal.species !== 'parasite' || animal.hostId < 0) {
+        if (numeric.hostId < -1 || (numeric.hostId >= 0 && numeric.hostId === numeric.id)) return null;
+      } else if (numeric.hostId !== -1) return null;
+      const position = indexOf(numeric.x, numeric.y, width);
+      if (animal.species !== 'parasite' || numeric.hostId < 0) {
         if (occupied.has(position)) return null;
         occupied.add(position);
       }
-      ids.add(animal.id);
+      ids.add(numeric.id);
       organisms.push({
-        id: animal.id,
+        id: numeric.id,
         species: animal.species as SpeciesId,
-        x: animal.x,
-        y: animal.y,
-        energy: animal.energy,
-        age: animal.age,
+        x: numeric.x,
+        y: numeric.y,
+        energy: numeric.energy,
+        age: numeric.age,
         genome: { ...(animal.genome as WorldGenome) },
-        memoryX: animal.memoryX,
-        memoryY: animal.memoryY,
-        threatX: animal.threatX,
-        threatY: animal.threatY,
-        territoryX: animal.territoryX,
-        territoryY: animal.territoryY,
-        hostId: animal.hostId,
-        lineageId: animal.lineageId,
+        memoryX: numeric.memoryX,
+        memoryY: numeric.memoryY,
+        threatX: numeric.threatX,
+        threatY: numeric.threatY,
+        territoryX: numeric.territoryX,
+        territoryY: numeric.territoryY,
+        hostId: numeric.hostId,
+        lineageId: numeric.lineageId,
       });
     }
     const validIds = new Set(organisms.map((animal) => animal.id));
