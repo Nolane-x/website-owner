@@ -49,7 +49,9 @@ export function buildOverdueReport(
   return {
     totalTasks: tasks.length,
     overdueCount: overdueTasks.length,
-    overdueTasks,
+    // Keep history/API payloads bounded even when a profile has a very large backlog.
+    // The count remains exact; this is only a display sample for the report.
+    overdueTasks: overdueTasks.slice(0, 100),
     sideEffects: false,
   };
 }
