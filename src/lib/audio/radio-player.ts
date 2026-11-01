@@ -61,6 +61,8 @@ let snapshot: RadioPlayerSnapshot = {
 };
 
 let audioElement: HTMLAudioElement | null = null;
+let playbackRequested = false;
+let playGeneration = 0;
 
 function emit(): void {
   const current = getRadioPlayerSnapshot();
@@ -128,20 +130,29 @@ function getAudioElement(): HTMLAudioElement {
   const audio = new Audio();
   audio.preload = 'none';
   audio.volume = snapshot.volume;
-  audio.addEventListener('playing', () => update({ status: 'playing', error: null }));
+  audio.addEventListener('playing', () => {
+    if (playbackRequested) update({ status: 'playing', error: null });
+    else audio.pause();
+  });
   audio.addEventListener('waiting', () => {
-    if (!audio.paused) update({ status: 'loading' });
+    if (playbackRequested && !audio.paused) update({ status: 'loading' });
   });
   audio.addEventListener('stalled', () => {
-    if (!audio.paused) update({ status: 'loading' });
+    if (playbackRequested && !audio.paused) update({ status: 'loading' });
   });
   audio.addEventListener('pause', () => {
-    if (snapshot.status !== 'error' && snapshot.status !== 'idle') {
+    if (!playbackRequested && snapshot.status !== 'error' && snapshot.status !== 'idle') {
       update({ status: 'paused' });
     }
   });
-  audio.addEventListener('ended', () => update({ status: 'paused' }));
+  audio.addEventListener('ended', () => {
+    playbackRequested = false;
+    update({ status: 'paused' });
+  });
   audio.addEventListener('error', () => {
+    if (!playbackRequested) return;
+    playbackRequested = false;
+    playGeneration += 1;
     update({ status: 'error', error: mediaErrorMessage(audio) });
   });
 
@@ -170,15 +181,18 @@ export function setRadioPlayerVolume(value: number): void {
 export async function playRadioStream(sourceUrl: string, stationName: string): Promise<void> {
   const safeUrl = normalizeRadioStreamUrl(sourceUrl);
   const audio = getAudioElement();
+  const generation = ++playGeneration;
   const alreadySelected = snapshot.sourceUrl === safeUrl && audio.src === safeUrl;
 
   if (!alreadySelected) {
-    audio.pause();
+    playbackRequested = false;
+    if (!audio.paused) audio.pause();
     audio.src = safeUrl;
     audio.load();
   }
 
   audio.volume = snapshot.volume;
+  playbackRequested = true;
   update({
     sourceUrl: safeUrl,
     stationName: stationName.trim().slice(0, 80) || 'Luồng radio bên ngoài',
@@ -188,8 +202,16 @@ export async function playRadioStream(sourceUrl: string, stationName: string): P
 
   try {
     await audio.play();
+    if (generation !== playGeneration) {
+      // A user may pause while play() is still pending. Do not let that
+      // stale promise resurrect playback after the pause action.
+      if (!playbackRequested && !audio.paused) audio.pause();
+      return;
+    }
     if (!audio.paused) update({ status: 'playing', error: null });
   } catch (error) {
+    if (generation !== playGeneration) return;
+    playbackRequested = false;
     const blocked = error instanceof Error && error.name === 'NotAllowedError';
     update({
       status: 'error',
@@ -201,6 +223,8 @@ export async function playRadioStream(sourceUrl: string, stationName: string): P
 }
 
 export function pauseRadioStream(): void {
+  playGeneration += 1;
+  playbackRequested = false;
   if (audioElement && !audioElement.paused) audioElement.pause();
   update({ status: 'paused', error: null });
 }
