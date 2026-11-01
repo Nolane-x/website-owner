@@ -297,7 +297,7 @@ export function deserializeSimulation(value: unknown): LifeLabSimulation | null 
     const height = clampDimension(Number(parsed.height), 72);
     if (typeof parsed.cells !== 'string' || parsed.cells.length !== width * height) return null;
     const cells = new Uint8Array(width * height);
-    const maxState = parsed.mode === 'brain' || parsed.mode === 'forest' || parsed.mode === 'life' || parsed.mode === 'ant' ? 3 : 0;
+    const maxState = parsed.mode === 'brain' || parsed.mode === 'forest' ? 2 : 1;
     for (let i = 0; i < parsed.cells.length; i++) {
       const cell = parsed.cells.charCodeAt(i) - 48;
       if (!Number.isInteger(cell) || cell < 0 || cell > maxState) return null;
