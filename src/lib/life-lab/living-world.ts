@@ -1000,7 +1000,7 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
         child.energy = 35;
         child.genome = mutateGenome(animal.genome, world.rules.mutationRate, random);
         child.lineageId = animal.lineageId;
-        if (splitLineage(animal, child, world.rules.mutationRate, random)) {
+        if (splitLineage(animal, child, world.rules.mutationRate)) {
           child.lineageId = nextLineageId++;
           newLineages.add(child.lineageId);
         }
