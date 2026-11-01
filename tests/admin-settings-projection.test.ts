@@ -36,6 +36,7 @@ describe('admin settings key projection', () => {
     routeMocks.rows = [
       { key: 'nav_config', valueJson: { items: [{ id: 'home', label: 'Home', href: '/admin' }] } },
       { key: 'theme_private', valueJson: { backgroundImage: 'data:image/jpeg;base64,very-large-payload' } },
+      { key: 'youtube_api_key_encrypted', valueJson: { ciphertext: 'never-project-this' } },
     ];
     routeMocks.profileRows = [{
       id: 'owner-1',
@@ -70,7 +71,18 @@ describe('admin settings key projection', () => {
     const body = await response.json();
     expect(body.settings).toHaveProperty('nav_config');
     expect(body.settings).toHaveProperty('theme_private');
+    expect(body.settings).not.toHaveProperty('youtube_api_key_encrypted');
     expect(body.profile).toHaveProperty('username', 'owner');
+  });
+
+  it('never projects the encrypted YouTube credential, even when explicitly requested', async () => {
+    routeMocks.rows = [{ key: 'youtube_api_key_encrypted', valueJson: { ciphertext: 'never-project-this' } }];
+    const response = await GET(new NextRequest(
+      'https://site.example/api/admin/settings?keys=youtube_api_key_encrypted',
+    ));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.settings).toEqual({});
   });
 
   it('returns compact fields and profile data for the settings screen without large legacy backgrounds', async () => {

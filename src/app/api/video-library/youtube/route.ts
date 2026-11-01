@@ -3,6 +3,7 @@ import { requireOwner } from '@/lib/auth/guard';
 import { assertValidOrigin } from '@/lib/security/origin-guard';
 import { getClientIp, rateLimiter } from '@/lib/security/rate-limit';
 import { parseIsoDuration } from '@/lib/video/video-library';
+import { getStoredYouTubeApiKey } from '@/lib/video/youtube-api-key-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -121,14 +122,13 @@ export async function POST(request: NextRequest): Promise<Response> {
     const pageToken = typeof body.pageToken === 'string' && /^[A-Za-z0-9_=-]{1,2048}$/.test(body.pageToken)
       ? body.pageToken
       : '';
-    const apiKey = validApiKey(process.env.YOUTUBE_API_KEY)
-      ? process.env.YOUTUBE_API_KEY
-      : validApiKey(body.apiKey)
-        ? body.apiKey
-        : null;
+    const savedApiKey = await getStoredYouTubeApiKey(auth.profile.id);
+    const apiKey = savedApiKey ?? (
+      validApiKey(process.env.YOUTUBE_API_KEY) ? process.env.YOUTUBE_API_KEY : null
+    );
 
     if (!apiKey) {
-      return jsonError('Cần YouTube Data API key để tìm kiếm và lấy video thịnh hành. Bạn có thể nhập key dùng tạm trong Video Library; key không được lưu.', 428);
+      return jsonError('Cần YouTube Data API key. Hãy nhập và lưu key trong phần cài đặt của Video Library.', 428);
     }
     if (mode === 'search' && query.length < 2) return jsonError('Nhập ít nhất 2 ký tự để tìm video.', 400);
 

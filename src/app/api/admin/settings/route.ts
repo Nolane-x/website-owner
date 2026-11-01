@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
 
     const settingsMap: Record<string, unknown> = {};
     for (const s of allSettings) {
+      // API credentials are served only by their dedicated owner-only endpoint.
+      if (s.key === 'youtube_api_key_encrypted') continue;
       settingsMap[s.key] = s.valueJson;
     }
 
@@ -134,6 +136,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const { key, value, profileUpdates } = body;
+    if (key === 'youtube_api_key_encrypted') {
+      return NextResponse.json({ error: 'Khóa API này chỉ được quản lý qua cài đặt Video Library.' }, { status: 403 });
+    }
     const ip = getClientIp(req.headers);
     const userAgent = req.headers.get('user-agent') || 'Unknown';
 
