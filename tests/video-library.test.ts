@@ -173,7 +173,8 @@ describe('Negative video discovery preferences', () => {
     const imported = createVideoLibraryItem({
       platform: 'youtube', videoId: YOUTUBE_ID, title: 'Imported video', creator: 'YouTube',
     })!;
-    expect(toggleHiddenVideoCreator(emptyVideoLibrary(), imported)).toBe(emptyVideoLibrary());
+    const initial = emptyVideoLibrary();
+    expect(toggleHiddenVideoCreator(initial, imported)).toBe(initial);
   });
 
   it('uses a normalized creator-name fallback when a channel ID is unavailable', () => {
