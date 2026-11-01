@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DATABASE_URL_KEYS, resolveDatabaseUrl } from '@/lib/db/config';
+import { DATABASE_URL_KEYS, POSTGRES_POOL_MAX, resolveDatabaseUrl } from '@/lib/db/config';
 
 describe('PostgreSQL environment resolution', () => {
+  it('keeps per-instance pool size small for serverless scale-out', () => {
+    expect(POSTGRES_POOL_MAX).toBe(2);
+  });
+
   it('prefers the documented DATABASE_URL and trims surrounding whitespace', () => {
     expect(resolveDatabaseUrl({
       DATABASE_URL: '  postgres://primary/db  ',
