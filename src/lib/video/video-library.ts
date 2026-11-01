@@ -404,10 +404,17 @@ export function toggleVideoFavorite(state: VideoLibraryState, itemId: string): V
 export function toggleFollowedVideoTopic(state: VideoLibraryState, topicId: string): VideoLibraryState {
   const normalizedId = cleanText(topicId, 64).toLowerCase();
   if (!VIDEO_TOPIC_ID.test(normalizedId)) return state;
-  const followedTopics = state.followedTopics.includes(normalizedId)
-    ? state.followedTopics.filter((id) => id !== normalizedId)
-    : [...state.followedTopics, normalizedId].slice(-MAX_FOLLOWED_TOPICS);
-  return normalizeVideoLibrary({ ...state, followedTopics });
+
+  const currentTopics = Array.isArray(state.followedTopics)
+    ? [...new Set(state.followedTopics.filter((id) => typeof id === 'string' && VIDEO_TOPIC_ID.test(id)))].slice(-MAX_FOLLOWED_TOPICS)
+    : [];
+  const followedTopics = currentTopics.includes(normalizedId)
+    ? currentTopics.filter((id) => id !== normalizedId)
+    : [...currentTopics, normalizedId].slice(-MAX_FOLLOWED_TOPICS);
+
+  // Update only the preference field. Normalizing the entire library here
+  // would recreate item metadata (including addedAt) during a simple toggle.
+  return { ...state, followedTopics };
 }
 
 export function toggleVideoWatchLater(state: VideoLibraryState, itemId: string): VideoLibraryState {
