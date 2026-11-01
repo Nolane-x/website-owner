@@ -406,7 +406,7 @@ export function toggleFollowedVideoTopic(state: VideoLibraryState, topicId: stri
   if (!VIDEO_TOPIC_ID.test(normalizedId)) return state;
   const followedTopics = state.followedTopics.includes(normalizedId)
     ? state.followedTopics.filter((id) => id !== normalizedId)
-    : [...state.followedTopics, normalizedId];
+    : [...state.followedTopics, normalizedId].slice(-MAX_FOLLOWED_TOPICS);
   return normalizeVideoLibrary({ ...state, followedTopics });
 }
 
