@@ -293,6 +293,34 @@ describe('Evolution Lab Living World engine', () => {
     expect(next.fertility[position]).toBeGreaterThan(80);
   });
 
+  it('makes dry heat increase grazer energy costs under the same random stream', () => {
+    const base = createLivingWorld(55, 32, 20, { grazer: 1, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const grazer = makeOrganism(base.organisms[0], { energy: 100, age: 30, genome: { metabolism: 1, efficiency: 1, fertility: 0.008 } });
+    const biomes = new Uint8Array(base.biomes.length).fill(0);
+    const food = new Uint8Array(base.food.length);
+    const comfortable = withChanges(base, {
+      biomes: new Uint8Array(biomes),
+      food: new Uint8Array(food),
+      temperature: new Uint8Array(base.temperature.length).fill(128),
+      humidity: new Uint8Array(base.humidity.length).fill(128),
+      organisms: [makeOrganism(grazer, {})],
+      rules: { ...base.rules, metabolism: 1, climateIntensity: 0.3, reproductionThreshold: 150 },
+    });
+    const stressed = withChanges(base, {
+      biomes: new Uint8Array(biomes),
+      food: new Uint8Array(food),
+      temperature: new Uint8Array(base.temperature.length).fill(250),
+      humidity: new Uint8Array(base.humidity.length).fill(10),
+      organisms: [makeOrganism(grazer, {})],
+      rules: { ...base.rules, metabolism: 1, climateIntensity: 0.3, reproductionThreshold: 150 },
+    });
+    const comfortableNext = stepLivingWorld(comfortable);
+    const stressedNext = stepLivingWorld(stressed);
+    const comfortableEnergy = comfortableNext.organisms.find((animal) => animal.species === 'grazer')?.energy ?? 0;
+    const stressedEnergy = stressedNext.organisms.find((animal) => animal.species === 'grazer')?.energy ?? 0;
+    expect(stressedEnergy).toBeLessThan(comfortableEnergy);
+  });
+
   it('turns wildfire damage into detritus in forest tiles', () => {
     const base = createLivingWorld(1234, 40, 24, { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
     const biomes = new Uint8Array(base.biomes.length).fill(1);
