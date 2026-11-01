@@ -23,7 +23,7 @@ export function isValidYouTubeApiKey(value: unknown): value is string {
     value.trim() === value &&
     value.length >= 20 &&
     value.length <= 256 &&
-    !/[\\r\\n\\u0000-\\u001f\\u007f]/.test(value);
+    !/[^\\x21-\\x7e]/.test(value);
 }
 
 export async function saveYouTubeApiKey(profileId: string, apiKey: string): Promise<void> {
