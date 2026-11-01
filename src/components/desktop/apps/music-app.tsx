@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Radio, Play, Pause, Volume2, VolumeX, CloudRain, Waves, Flame, Wind, Disc, AlertTriangle, Loader2 } from 'lucide-react';
 import { ambientMixer } from '@/lib/audio/ambient-mixer';
 import type { AmbientSoundType } from '@/lib/audio/ambient-synth';
@@ -42,7 +42,7 @@ export function MusicApp() {
   const [audioSupported, setAudioSupported] = useState(true);
   const [preferencesWarning, setPreferencesWarning] = useState<string | null>(null);
 
-  const [radioState, setRadioState] = useState(() => getRadioPlayerSnapshot());
+  const radioState = useSyncExternalStore(subscribeRadioPlayer, getRadioPlayerSnapshot, getRadioPlayerSnapshot);
   const [radioVolume, setRadioVolume] = useState(initialPreferences.radioVolume);
   const [radioSourceUrl, setRadioSourceUrl] = useState(initialPreferences.radioSourceUrl);
   const [radioStationName, setRadioStationName] = useState(initialPreferences.radioStationName);
@@ -81,12 +81,6 @@ export function MusicApp() {
   useEffect(() => {
     setRadioPlayerVolume(radioVolume);
   }, [radioVolume]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeRadioPlayer(setRadioState);
-    setRadioState(getRadioPlayerSnapshot());
-    return unsubscribe;
-  }, []);
 
   useEffect(() => {
     mixer.setMasterVolume(masterVolume);
