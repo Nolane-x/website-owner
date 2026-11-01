@@ -327,7 +327,7 @@ export function VideoApp() {
   };
 
   const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '') => {
-    const requestQuery = pageToken ? resultQuery : mode === 'search' ? query.trim() : mode === 'shorts' ? 'shorts' : '';
+    const requestQuery = pageToken ? resultQuery : mode === 'search' ? query.trim() : mode === 'shorts' ? (query.trim().length >= 2 ? query.trim() : 'shorts') : '';
     setLoading(true);
     setError(null);
     setNeedsApiKey(false);
@@ -743,7 +743,7 @@ export function VideoApp() {
         {tab === 'shorts' && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div><h3 className="text-sm font-bold text-white">Shorts Feed</h3><p className="mt-1 text-[9px] text-stone-500">Vuốt dọc để chuyển video. Player đang hiển thị sẽ tự phát im lặng khi trình duyệt cho phép; bạn có thể bật âm thanh trực tiếp trong player.</p></div>
+              <div><h3 className="text-sm font-bold text-white">Shorts Feed</h3><p className="mt-1 text-[9px] text-stone-500">Vuốt dọc để chuyển video. Player tự phát im lặng khi có thể. Kết quả YouTube được lọc tối đa 3 phút nhưng không phải video nào cũng chắc chắn là định dạng Shorts dọc.</p></div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={discoverShorts} disabled={loading} className="inline-flex items-center gap-1.5 rounded-lg bg-fuchsia-600 px-3 py-2 text-[9px] font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-40">{loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} Khám phá Shorts</button>
                 <span className="text-[9px] text-stone-500">{shorts.length ? (shortIndex + 1) + ' / ' + shorts.length : 'Chưa có video'}</span>
