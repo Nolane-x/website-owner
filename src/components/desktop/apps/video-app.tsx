@@ -255,8 +255,11 @@ export function VideoApp() {
   const shortsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setLibrary(loadVideoLibrary());
-    setHydrated(true);
+    const hydrationFrame = window.requestAnimationFrame(() => {
+      setLibrary(loadVideoLibrary());
+      setHydrated(true);
+    });
+    return () => window.cancelAnimationFrame(hydrationFrame);
   }, []);
 
   useEffect(() => {
