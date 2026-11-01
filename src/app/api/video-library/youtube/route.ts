@@ -212,6 +212,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         title: typeof item.snippet.title === 'string' ? item.snippet.title.slice(0, 240) : 'Video YouTube',
         description: typeof item.snippet.description === 'string' ? item.snippet.description.slice(0, 600) : '',
         creator: typeof item.snippet.channelTitle === 'string' ? item.snippet.channelTitle.slice(0, 120) : '',
+        creatorId: typeof item.snippet.channelId === 'string' && /^UC[A-Za-z0-9_-]{22}$/.test(item.snippet.channelId) ? item.snippet.channelId : null,
         thumbnailUrl,
         durationSeconds: parseIsoDuration(detail?.contentDetails?.duration),
         viewCount: countValue(detail?.statistics?.viewCount),
