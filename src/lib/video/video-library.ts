@@ -301,8 +301,7 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
 
 /** Merge a local snapshot with the cloud snapshot without losing unique saved items. */
 export function mergeVideoLibraries(primary: VideoLibraryState, secondary: VideoLibraryState): VideoLibraryState {
-  const itemsById = new Map<string, VideoLibraryItem>();
-  for (const item of [...secondary.items, ...primary.items]) itemsById.set(item.id, item);
+  const itemIds = new Set<string>([...secondary.items, ...primary.items].map((item) => item.id));
   const items = [
     ...primary.items,
     ...secondary.items.filter((item) => !primary.items.some((saved) => saved.id === item.id)),
@@ -329,7 +328,6 @@ export function mergeVideoLibraries(primary: VideoLibraryState, secondary: Video
     });
   }
 
-  const validIds = new Set(itemsById.keys());
   return normalizeVideoLibrary({
     items,
     favorites: [...primary.favorites, ...secondary.favorites],
