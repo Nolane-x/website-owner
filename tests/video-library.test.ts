@@ -59,7 +59,7 @@ describe('Video Library URL parsing', () => {
     expect(parseVideoUrl('http://www.youtube.com/watch?v=' + YOUTUBE_ID)).toBeNull();
     expect(parseVideoUrl('https://youtube.com.evil.example/watch?v=' + YOUTUBE_ID)).toBeNull();
     expect(parseVideoUrl('https://user:pass@www.youtube.com/watch?v=' + YOUTUBE_ID)).toBeNull();
-    expect(parseVideoUrl('https://www.youtube.com/watch?v=not-a-video')).toBeNull();
+    expect(parseVideoUrl('https://www.youtube.com/watch?v=short-id')).toBeNull();
     expect(parseVideoUrl('https://example.com/video/' + YOUTUBE_ID)).toBeNull();
   });
 
