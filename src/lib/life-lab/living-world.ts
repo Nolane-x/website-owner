@@ -571,6 +571,36 @@ function nearestThreat(
   return best;
 }
 
+function nearestTerritoryRival(
+  animal: WorldOrganism,
+  organisms: WorldOrganism[],
+  alive: boolean[],
+  occupancy: Int16Array,
+  world: LivingWorld,
+): { x: number; y: number; distance: number; rivalIndex: number } | null {
+  let best: { x: number; y: number; distance: number; rivalIndex: number } | null = null;
+  const radius = Math.min(4, animal.genome.vision);
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const distance = Math.max(Math.abs(dx), Math.abs(dy));
+      if (distance === 0 || distance > radius) continue;
+      const x = wrap(animal.x + dx, world.width);
+      const y = wrap(animal.y + dy, world.height);
+      const rivalIndex = occupancy[indexOf(x, y, world.width)];
+      if (rivalIndex < 0 || !alive[rivalIndex]) continue;
+      const rival = organisms[rivalIndex];
+      if (!rival || rival.species !== 'hunter' || rival.id === animal.id) continue;
+      const territoryDistance = Math.max(
+        Math.abs(wrappedDelta(animal.territoryX, rival.territoryX, world.width)),
+        Math.abs(wrappedDelta(animal.territoryY, rival.territoryY, world.height)),
+      );
+      if (territoryDistance > 7) continue;
+      if (!best || distance < best.distance) best = { x, y, distance, rivalIndex };
+    }
+  }
+  return best;
+}
+
 function moveOneStep(
   organismIndex: number,
   animal: WorldOrganism,
@@ -904,12 +934,32 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
           }
         } else moveToward(organismIndex, animal, prey.x, prey.y, occupancy, world, random);
       } else if (animal.species === 'hunter') {
-        const dx = wrappedDelta(animal.x, animal.territoryX, world.width);
-        const dy = wrappedDelta(animal.y, animal.territoryY, world.height);
-        if (Math.max(Math.abs(dx), Math.abs(dy)) > 8) moveToward(organismIndex, animal, animal.territoryX, animal.territoryY, occupancy, world, random);
-        else if (random() < 0.16) {
-          const position = findNeighborPosition(animal, occupancy, world, random);
-          if (position) { occupancy[here] = -1; animal.x = position.x; animal.y = position.y; occupancy[indexOf(animal.x, animal.y, world.width)] = organismIndex; }
+        const rival = nearestTerritoryRival(animal, organisms, alive, occupancy, world);
+        if (rival) {
+          const opponent = organisms[rival.rivalIndex];
+          if (animal.genome.aggression >= opponent.genome.aggression) {
+            const wound = 2.5 + animal.genome.aggression * 5;
+            opponent.energy -= wound;
+            animal.energy -= 1.2 + opponent.genome.aggression * 1.5;
+            if (opponent.energy <= 0) {
+              alive[rival.rivalIndex] = false;
+              const rivalCell = indexOf(opponent.x, opponent.y, world.width);
+              occupancy[rivalCell] = -1;
+              detritus[rivalCell] = Math.min(15, detritus[rivalCell] + 3);
+              deathsNow++;
+              predationsNow++;
+            }
+          } else {
+            moveOneStep(organismIndex, animal, rival.x, rival.y, occupancy, world, random, true);
+          }
+        } else {
+          const dx = wrappedDelta(animal.x, animal.territoryX, world.width);
+          const dy = wrappedDelta(animal.y, animal.territoryY, world.height);
+          if (Math.max(Math.abs(dx), Math.abs(dy)) > 8) moveToward(organismIndex, animal, animal.territoryX, animal.territoryY, occupancy, world, random);
+          else if (random() < 0.16) {
+            const position = findNeighborPosition(animal, occupancy, world, random);
+            if (position) { occupancy[here] = -1; animal.x = position.x; animal.y = position.y; occupancy[indexOf(animal.x, animal.y, world.width)] = organismIndex; }
+          }
         }
       } else if (random() < 0.08) {
         const position = findNeighborPosition(animal, occupancy, world, random);
