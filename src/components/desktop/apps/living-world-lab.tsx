@@ -8,7 +8,7 @@ import {
   GitBranch,
   History,
   Leaf,
-  Map,
+  Map as MapIcon,
   Pause,
   Play,
   Plus,
@@ -797,7 +797,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
 
         <aside className="flex min-w-0 flex-col gap-3">
           <section className="rounded-2xl border border-white/10 bg-[#0d191b] p-4">
-            <div className="flex items-center gap-2"><Map className="h-4 w-4 text-cyan-100" /><h3 className="text-[11px] font-semibold text-white">Bản đồ sinh cảnh</h3></div>
+            <div className="flex items-center gap-2"><MapIcon className="h-4 w-4 text-cyan-100" /><h3 className="text-[11px] font-semibold text-white">Bản đồ sinh cảnh</h3></div>
             <div className="mt-3 space-y-2">
               {BIOMES.map((biome, index) => {
                 const count = world.biomes.reduce((sum, value) => sum + (value === index ? 1 : 0), 0);
