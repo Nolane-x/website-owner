@@ -155,6 +155,8 @@ export function renderAppContent(appId: string) {
       return <DynamicWallpapersApp />;
     case 'music':
       return <DynamicMusicApp />;
+    case 'life-lab':
+      return <DynamicLifeLabApp />;
     case 'video':
       return <DynamicVideoApp />;
     case 'calculator':
