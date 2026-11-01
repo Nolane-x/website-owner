@@ -17,12 +17,21 @@ import {
   setVideoShort,
   toggleVideoFavorite,
   toggleFollowedVideoTopic,
+  toggleHiddenVideoCreator,
+  toggleMutedVideoTopic,
+  toggleNotInterestedVideo,
+  isVideoCreatorHidden,
+  isVideoExcludedFromRecommendations,
+  isVideoNotInterested,
+  restoreHiddenVideoCreator,
+  restoreNotInterestedVideo,
   toggleVideoInPlaylist,
   toggleVideoWatchLater,
 } from '@/lib/video/video-library';
 
 const YOUTUBE_ID = 'dQw4w9WgXcQ';
 const TIKTOK_ID = '6718335390845095173';
+const YOUTUBE_CHANNEL_ID = 'UCabcdefghijABCDEFGHIJ12';
 
 function youtubeItem() {
   return createVideoLibraryItem({
@@ -100,8 +109,12 @@ describe('Video Library cloud merge', () => {
     const localPlaylistWithItem = toggleVideoInPlaylist(localPlaylist, localPlaylist.playlists[0].id, localItem.id);
     const cloudPlaylist = createVideoPlaylist(cloudWithLater, 'Cloud playlist');
     const cloudPlaylistWithItem = toggleVideoInPlaylist(cloudPlaylist, cloudPlaylist.playlists[0].id, cloudItem.id);
-    const localWithFollowedTopic = toggleFollowedVideoTopic(localPlaylistWithItem, 'artificial-intelligence');
-    const cloudWithFollowedTopic = toggleFollowedVideoTopic(cloudPlaylistWithItem, 'robotics');
+    const localWithFollowedTopic = toggleMutedVideoTopic(
+      toggleFollowedVideoTopic(localPlaylistWithItem, 'artificial-intelligence'), 'robotics',
+    );
+    const cloudWithFollowedTopic = toggleNotInterestedVideo(
+      toggleFollowedVideoTopic(cloudPlaylistWithItem, 'robotics'), cloudItem,
+    );
     const localHistory = recordVideoProgress(localWithFollowedTopic, localItem.id, 12, 60);
     const cloudHistory = recordVideoProgress(cloudWithFollowedTopic, cloudItem.id, 24, 60);
     const merged = mergeVideoLibraries(localHistory, cloudHistory);
@@ -113,6 +126,109 @@ describe('Video Library cloud merge', () => {
     expect(merged.playlists).toHaveLength(2);
     expect(merged.playlists.flatMap((playlist) => playlist.itemIds)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
     expect(merged.followedTopics).toEqual(expect.arrayContaining(['artificial-intelligence', 'robotics']));
+    expect(merged.mutedTopics).toContain('robotics');
+    expect(merged.notInterestedVideos.map((record) => record.id)).toContain(cloudItem.id);
+  });
+});
+
+describe('Negative video discovery preferences', () => {
+  it('stores and restores individual not-interested videos without deleting saved metadata', () => {
+    const item = createVideoLibraryItem({
+      platform: 'youtube', videoId: YOUTUBE_ID, title: 'A video to avoid', creator: 'Creator',
+    })!;
+    const saved = addVideoToLibrary(emptyVideoLibrary(), item);
+    const marked = toggleNotInterestedVideo(saved, item);
+
+    expect(isVideoNotInterested(item, marked)).toBe(true);
+    expect(isVideoExcludedFromRecommendations(item, marked)).toBe(true);
+    expect(marked.items).toEqual(saved.items);
+    expect(marked.notInterestedVideos[0]).toMatchObject({ id: item.id, title: item.title, creator: item.creator });
+
+    const restored = restoreNotInterestedVideo(marked, item.id);
+    expect(isVideoNotInterested(item, restored)).toBe(false);
+    expect(restored.items).toEqual(saved.items);
+  });
+
+  it('hides a YouTube creator by stable channel ID instead of an ambiguous display name', () => {
+    const creatorVideo = createVideoLibraryItem({
+      platform: 'youtube', videoId: YOUTUBE_ID, title: 'Creator video',
+      creator: 'Same channel title', creatorId: YOUTUBE_CHANNEL_ID,
+    })!;
+    const anotherChannel = createVideoLibraryItem({
+      platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Another creator video',
+      creator: 'Same channel title', creatorId: 'UC1234567890123456789012',
+    })!;
+    const hidden = toggleHiddenVideoCreator(emptyVideoLibrary(), creatorVideo);
+
+    expect(isVideoCreatorHidden(creatorVideo, hidden)).toBe(true);
+    expect(isVideoExcludedFromRecommendations(creatorVideo, hidden)).toBe(true);
+    expect(isVideoCreatorHidden(anotherChannel, hidden)).toBe(false);
+    expect(hidden.hiddenCreators).toEqual([{ key: 'yt:' + YOUTUBE_CHANNEL_ID, label: 'Same channel title' }]);
+
+    const restored = restoreHiddenVideoCreator(hidden, hidden.hiddenCreators[0].key);
+    expect(isVideoCreatorHidden(creatorVideo, restored)).toBe(false);
+  });
+
+  it('uses a normalized creator-name fallback when a channel ID is unavailable', () => {
+    const first = createVideoLibraryItem({ platform: 'youtube', videoId: YOUTUBE_ID, creator: 'Kênh Thử Nghiệm' })!;
+    const second = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', creator: 'kenh thu nghiem' })!;
+    const hidden = toggleHiddenVideoCreator(emptyVideoLibrary(), first);
+
+    expect(isVideoCreatorHidden(second, hidden)).toBe(true);
+    expect(hidden.hiddenCreators[0].key).toBe('name:kenh thu nghiem');
+  });
+
+  it('reduces muted-topic signals in recommendation ranking and query generation', () => {
+    const robotics = createVideoLibraryItem({
+      platform: 'youtube', videoId: YOUTUBE_ID, title: 'Humanoid robotics and robotics engineering',
+    })!;
+    const unrelated = createVideoLibraryItem({
+      platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'English speaking practice for IELTS',
+    })!;
+    const state = toggleMutedVideoTopic(emptyVideoLibrary(), 'robotics');
+
+    expect(rankVideoRecommendations([robotics, unrelated], state, 2).map((item) => item.id))
+      .toEqual([unrelated.id, robotics.id]);
+    expect(toggleMutedVideoTopic(state, 'robotics').mutedTopics).toEqual([]);
+    expect(toggleMutedVideoTopic(state, '../bad')).toBe(state);
+  });
+
+  it('excludes dismissed videos and hidden creators from recommendations', () => {
+    const dismissed = createVideoLibraryItem({ platform: 'youtube', videoId: YOUTUBE_ID, title: 'Dismissed video' })!;
+    const hiddenCreatorVideo = createVideoLibraryItem({
+      platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Hidden channel upload',
+      creator: 'Hidden channel', creatorId: YOUTUBE_CHANNEL_ID,
+    })!;
+    const eligible = createVideoLibraryItem({ platform: 'youtube', videoId: 'jNQXAC9IVRw', title: 'Fresh discovery' })!;
+    let state = toggleNotInterestedVideo(emptyVideoLibrary(), dismissed);
+    state = toggleHiddenVideoCreator(state, hiddenCreatorVideo);
+
+    expect(rankVideoRecommendations([dismissed, hiddenCreatorVideo, eligible], state, 10).map((item) => item.id))
+      .toEqual([eligible.id]);
+  });
+
+  it('normalizes malformed feedback, deduplicates records and remains backward compatible', () => {
+    const normalized = normalizeVideoLibrary({
+      items: [],
+      mutedTopics: ['robotics', '../admin', 'robotics'],
+      notInterestedVideos: [
+        { id: 'youtube:' + YOUTUBE_ID, title: 'First', updatedAt: 10 },
+        { id: 'youtube:' + YOUTUBE_ID, title: 'Latest', updatedAt: 20 },
+        { id: 'youtube:bad', title: 'Invalid', updatedAt: 30 },
+      ],
+      hiddenCreators: [
+        { key: 'yt:' + YOUTUBE_CHANNEL_ID, label: 'Known channel' },
+        { key: 'yt:invalid', label: 'Invalid channel' },
+      ],
+    });
+
+    expect(normalized.mutedTopics).toEqual(['robotics']);
+    expect(normalized.notInterestedVideos).toEqual([
+      { id: 'youtube:' + YOUTUBE_ID, title: 'Latest', creator: '', updatedAt: 20 },
+    ]);
+    expect(normalized.hiddenCreators).toEqual([{ key: 'yt:' + YOUTUBE_CHANNEL_ID, label: 'Known channel' }]);
+    expect(normalizeVideoLibrary({ items: [], favorites: [], watchLater: [], history: [], playlists: [] }))
+      .toMatchObject({ mutedTopics: [], notInterestedVideos: [], hiddenCreators: [] });
   });
 });
 
