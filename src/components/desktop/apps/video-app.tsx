@@ -36,6 +36,7 @@ import {
   loadVideoLibrary,
   parseVideoUrl,
   recordVideoProgress,
+  rankVideoRecommendations,
   removeVideoFromLibrary,
   saveVideoLibrary,
   setVideoShort,
@@ -239,7 +240,8 @@ export function VideoApp() {
   const [needsApiKey, setNeedsApiKey] = useState(false);
   const [results, setResults] = useState<VideoLibraryItem[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [resultMode, setResultMode] = useState<'search' | 'trending'>('search');
+  const [resultMode, setResultMode] = useState<'search' | 'trending' | 'shorts'>('search');
+  const [resultQuery, setResultQuery] = useState('');
   const [resultCategoryId, setResultCategoryId] = useState('');
   const [resultHeading, setResultHeading] = useState('Khám phá video');
   const [loading, setLoading] = useState(false);
@@ -275,6 +277,12 @@ export function VideoApp() {
     () => library.items.filter((item) => item.isShort),
     [library.items],
   );
+
+  const recommendedVideos = useMemo(() => {
+    const candidates = new Map<string, VideoLibraryItem>();
+    for (const item of [...results, ...library.items]) candidates.set(item.id, item);
+    return rankVideoRecommendations([...candidates.values()], library, 6);
+  }, [results, library]);
 
   const continueWatching = useMemo(() => {
     return library.history
@@ -318,7 +326,8 @@ export function VideoApp() {
     ));
   };
 
-  const executeYouTubeRequest = async (mode: 'search' | 'trending', pageToken?: string | null, categoryId = '') => {
+  const executeYouTubeRequest = async (mode: 'search' | 'trending' | 'shorts', pageToken?: string | null, categoryId = '') => {
+    const requestQuery = pageToken ? resultQuery : mode === 'search' ? query.trim() : mode === 'shorts' ? 'shorts' : '';
     setLoading(true);
     setError(null);
     setNeedsApiKey(false);
@@ -326,14 +335,7 @@ export function VideoApp() {
       const response = await fetch('/api/video-library/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode,
-          query: mode === 'search' ? query : '',
-          regionCode: 'VN',
-          categoryId,
-          pageToken: pageToken || '',
-          apiKey,
-        }),
+        body: JSON.stringify({ mode, query: requestQuery, regionCode: 'VN', categoryId, pageToken: pageToken || '', apiKey }),
       });
       const payload = await response.json() as SearchResponse & { error?: string };
       if (response.status === 428) {
@@ -344,26 +346,35 @@ export function VideoApp() {
       if (!response.ok) throw new Error(payload.error || 'Không thể tải video từ YouTube.');
       const items = (payload.items ?? []).flatMap((result) => {
         const item = createVideoLibraryItem({
-          platform: 'youtube',
-          videoId: result.videoId,
-          title: result.title,
-          description: result.description,
-          creator: result.creator,
-          thumbnailUrl: result.thumbnailUrl,
-          durationSeconds: result.durationSeconds,
-          viewCount: result.viewCount,
-          publishedAt: result.publishedAt,
-          isShort: result.isShort,
+          platform: 'youtube', videoId: result.videoId, title: result.title,
+          description: result.description, creator: result.creator, thumbnailUrl: result.thumbnailUrl,
+          durationSeconds: result.durationSeconds, viewCount: result.viewCount,
+          publishedAt: result.publishedAt, isShort: result.isShort,
         });
         return item ? [item] : [];
       });
       setResults((previous) => pageToken ? [...previous, ...items.filter((item) => !previous.some((entry) => entry.id === item.id))] : items);
       setResultMode(mode);
       setResultCategoryId(categoryId);
+      setResultQuery(requestQuery);
       setNextPageToken(payload.nextPageToken ?? null);
       setResultHeading(mode === 'trending'
         ? categoryId ? 'Video thịnh hành theo chủ đề' : 'Đang thịnh hành tại Việt Nam'
-        : 'Kết quả YouTube: ' + query);
+        : mode === 'shorts' ? 'Video ngắn đủ điều kiện nhúng từ YouTube' : 'Kết quả YouTube: ' + requestQuery);
+      if (mode === 'shorts' && items.length > 0) {
+        setLibrary((previous) => {
+          const newIds = new Set(items.map((item) => item.id));
+          const existing = previous.items.filter((item) => !newIds.has(item.id));
+          const merged = pageToken
+            ? [...previous.items, ...items.filter((item) => !previous.items.some((saved) => saved.id === item.id))]
+            : [...items, ...existing];
+          return { ...previous, items: merged.slice(0, 500) };
+        });
+        if (!pageToken) {
+          setShortIndex(0);
+          window.requestAnimationFrame(() => shortsContainerRef.current?.scrollTo({ top: 0 }));
+        }
+      }
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể tải danh sách video.');
@@ -371,7 +382,6 @@ export function VideoApp() {
       setLoading(false);
     }
   };
-
   const submitSearch = (event?: FormEvent) => {
     event?.preventDefault();
     if (provider === 'youtube') {
@@ -385,6 +395,12 @@ export function VideoApp() {
   const loadTrending = (categoryId = '') => {
     setProvider('youtube');
     void executeYouTubeRequest('trending', null, categoryId);
+  };
+
+  const discoverShorts = () => {
+    setProvider('youtube');
+    setTab('shorts');
+    void executeYouTubeRequest('shorts');
   };
 
   const importVideoUrl = async (event?: FormEvent) => {
@@ -565,6 +581,7 @@ export function VideoApp() {
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => setProvider('youtube')} className={provider === 'youtube' ? 'inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-[10px] font-semibold text-white' : 'inline-flex items-center gap-2 rounded-lg border border-stone-800 px-3 py-2 text-[10px] text-stone-400 hover:text-white'}><Play className="h-3.5 w-3.5" /> Tìm trên YouTube</button>
                 <button type="button" onClick={() => setProvider('tiktok')} className={provider === 'tiktok' ? 'inline-flex items-center gap-2 rounded-lg bg-pink-600 px-3 py-2 text-[10px] font-semibold text-white' : 'inline-flex items-center gap-2 rounded-lg border border-stone-800 px-3 py-2 text-[10px] text-stone-400 hover:text-white'}><Music2 className="h-3.5 w-3.5" /> Khám phá TikTok</button>
+                <button type="button" onClick={discoverShorts} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-fuchsia-800/70 bg-fuchsia-950/25 px-3 py-2 text-[10px] text-fuchsia-200 hover:bg-fuchsia-900/40 disabled:opacity-40"><Clapperboard className="h-3.5 w-3.5" /> Tìm Shorts</button>
               </div>
               <form onSubmit={submitSearch} className="flex gap-2">
                 <div className="relative min-w-0 flex-1">
@@ -582,6 +599,24 @@ export function VideoApp() {
                     <p className="mt-1 text-[9px] leading-relaxed text-pink-200/60">TikTok chưa cấp API tìm mọi video công khai cho ứng dụng phổ thông. Mở kết quả trên TikTok, dùng Chia sẻ → Sao chép liên kết rồi dán lại ở đây để xem trong Video Library.</p>
                   </div>
                   <button type="button" onClick={openTikTokSearch} disabled={query.trim().length < 2} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-pink-800 px-3 py-2 text-[10px] text-pink-200 hover:bg-pink-900/30 disabled:opacity-40">Mở TikTok <ExternalLink className="h-3 w-3" /></button>
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><h3 className="text-xs font-semibold text-stone-100">Dành cho bạn</h3><p className="mt-1 text-[9px] text-stone-500">Gợi ý dựa trên video yêu thích, xem sau và lịch sử gần đây; khi chưa có dữ liệu cá nhân sẽ dùng độ phổ biến và độ mới.</p></div>
+                <button type="button" onClick={() => loadTrending()} disabled={loading} className="rounded-lg border border-stone-800 px-3 py-2 text-[9px] text-stone-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40">Làm mới gợi ý</button>
+              </div>
+              {recommendedVideos.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {recommendedVideos.map((item) => renderCard(item, { shortAction: true }))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-stone-800 px-4 py-5 text-center">
+                  <Sparkles className="mx-auto h-5 w-5 text-emerald-400/70" />
+                  <p className="mt-2 text-[10px] text-stone-400">Tìm hoặc thêm vài video để tạo gợi ý theo sở thích của bạn.</p>
+                  <button type="button" onClick={() => loadTrending()} disabled={loading} className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-[9px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40">Khám phá video thịnh hành</button>
                 </div>
               )}
             </section>
@@ -708,8 +743,9 @@ export function VideoApp() {
         {tab === 'shorts' && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div><h3 className="text-sm font-bold text-white">Shorts Feed</h3><p className="mt-1 text-[9px] text-stone-500">Lướt dọc các video ngắn bạn đã thêm vào thư viện. Không tự phát tiếng khi cuộn.</p></div>
-              <div className="flex items-center gap-2">
+              <div><h3 className="text-sm font-bold text-white">Shorts Feed</h3><p className="mt-1 text-[9px] text-stone-500">Vuốt dọc để chuyển video. Player đang hiển thị sẽ tự phát im lặng khi trình duyệt cho phép; bạn có thể bật âm thanh trực tiếp trong player.</p></div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={discoverShorts} disabled={loading} className="inline-flex items-center gap-1.5 rounded-lg bg-fuchsia-600 px-3 py-2 text-[9px] font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-40">{loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} Khám phá Shorts</button>
                 <span className="text-[9px] text-stone-500">{shorts.length ? (shortIndex + 1) + ' / ' + shorts.length : 'Chưa có video'}</span>
                 <button type="button" onClick={() => scrollShortsTo(shortIndex - 1)} disabled={shortIndex <= 0} className="rounded-lg border border-stone-800 p-2 text-stone-400 hover:text-white disabled:opacity-30"><ChevronUp className="h-3.5 w-3.5" /></button>
                 <button type="button" onClick={() => scrollShortsTo(shortIndex + 1)} disabled={shortIndex >= shorts.length - 1} className="rounded-lg border border-stone-800 p-2 text-stone-400 hover:text-white disabled:opacity-30"><ChevronDown className="h-3.5 w-3.5" /></button>
@@ -731,7 +767,10 @@ export function VideoApp() {
                   <section key={item.id} className="flex h-full min-h-full snap-start flex-col items-center justify-center gap-3 p-3 md:flex-row md:gap-6 md:p-5">
                     <div className="h-[min(58vh,640px)] w-full max-w-[360px] shrink-0 overflow-hidden rounded-2xl bg-stone-900">
                       {index === shortIndex ? (
-                        <VideoEmbedPlayer item={item} shortMode onProgress={(current, duration) => handleProgress(item.id, current, duration)} onStateChange={setPlayerStatus} />
+                        <VideoEmbedPlayer item={item} shortMode onProgress={(current, duration) => handleProgress(item.id, current, duration)} onStateChange={(state) => {
+                          setPlayerStatus(state);
+                          if (state === 'ended' && index < shorts.length - 1) scrollShortsTo(index + 1);
+                        }} />
                       ) : (
                         <button type="button" onClick={() => scrollShortsTo(index)} className="relative flex h-full w-full items-center justify-center bg-stone-900">
                           <VideoThumbnail item={item} />
@@ -746,6 +785,7 @@ export function VideoApp() {
                       <div className="flex flex-wrap gap-2">
                         <button type="button" onClick={() => playExisting(item)} className="rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-emerald-500">Mở trang xem</button>
                         <button type="button" onClick={() => toggleFavorite(item)} className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-300 hover:text-rose-300"><Heart className="mr-1 inline h-3 w-3" /> Yêu thích</button>
+                        <button type="button" onClick={() => toggleWatchLater(item)} className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-300 hover:text-emerald-300"><Bookmark className="mr-1 inline h-3 w-3" /> {library.watchLater.includes(item.id) ? 'Đã lưu' : 'Xem sau'}</button>
                         <a href={item.canonicalUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-stone-700 px-3 py-2 text-[10px] text-stone-300 hover:text-white">Mở gốc <ExternalLink className="ml-1 inline h-3 w-3" /></a>
                       </div>
                       <p className="text-[9px] leading-relaxed text-stone-600">Cuộn dọc hoặc dùng nút mũi tên để chuyển video. Player chỉ được tạo cho mục đang hiển thị nhằm giảm số iframe hoạt động.</p>
@@ -758,8 +798,14 @@ export function VideoApp() {
                 <Clapperboard className="mx-auto h-8 w-8 text-fuchsia-400/70" />
                 <p className="mt-3 text-xs font-semibold text-stone-200">Shorts Feed đang chờ video đầu tiên</p>
                 <p className="mx-auto mt-1 max-w-md text-[10px] leading-relaxed text-stone-500">Thêm link TikTok hoặc YouTube Shorts bằng ô liên kết ở Khám phá. Với video YouTube thường, bạn cũng có thể chọn “Đưa vào Shorts” trong thẻ video.</p>
-                <button type="button" onClick={() => setTab('discover')} className="mt-4 rounded-lg bg-fuchsia-600 px-4 py-2 text-[10px] font-semibold text-white hover:bg-fuchsia-500">Thêm video ngắn</button>
+                <button type="button" onClick={discoverShorts} disabled={loading} className="mt-4 rounded-lg bg-fuchsia-600 px-4 py-2 text-[10px] font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-40">Khám phá Shorts YouTube</button>
+                <button type="button" onClick={() => setTab('discover')} className="ml-2 mt-4 rounded-lg border border-stone-700 px-4 py-2 text-[10px] text-stone-300 hover:text-white">Tìm hoặc dán link TikTok</button>
               </div>
+            )}
+            {resultMode === 'shorts' && nextPageToken && (
+              <button type="button" disabled={loading} onClick={() => void executeYouTubeRequest('shorts', nextPageToken)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-fuchsia-800/70 py-2.5 text-[10px] text-fuchsia-200 hover:bg-fuchsia-950/30 disabled:opacity-50">
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronDown className="h-3.5 w-3.5" />} Tải thêm video ngắn
+              </button>
             )}
           </div>
         )}
