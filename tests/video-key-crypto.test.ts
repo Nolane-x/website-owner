@@ -25,9 +25,14 @@ describe('AES-256-GCM secret storage', () => {
   it('rejects modified ciphertext and incorrect encryption keys', () => {
     const key = randomBytes(32);
     const payload = encryptAes256Gcm('AIzaSyExampleKeyValueForUnitTest123456789', key);
+    // Change a middle Base64URL character so the decoded ciphertext byte always changes.
+    // The final character can contain unused padding bits; changing only those bits may decode
+    // to the original bytes and make this authentication regression test flaky.
+    const tamperIndex = Math.floor(payload.ciphertext.length / 2);
+    const replacement = payload.ciphertext[tamperIndex] === 'A' ? 'B' : 'A';
     const tampered = {
       ...payload,
-      ciphertext: payload.ciphertext.slice(0, -1) + (payload.ciphertext.endsWith('A') ? 'B' : 'A'),
+      ciphertext: payload.ciphertext.slice(0, tamperIndex) + replacement + payload.ciphertext.slice(tamperIndex + 1),
     };
 
     expect(() => decryptAes256Gcm(tampered, key)).toThrow();
