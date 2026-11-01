@@ -180,13 +180,15 @@ export function createVideoLibraryItem(input: {
     platformId: input.videoId,
     canonicalUrl: input.platform === 'youtube'
       ? 'https://www.youtube.com/watch?v=' + input.videoId
-      : 'https://www.tiktok.com/@_/video/' + input.videoId,
+      : 'https://www.tiktok.com/player/v1/' + input.videoId,
     title: cleanText(input.title, 240, input.platform === 'youtube' ? 'Video YouTube' : 'Video TikTok'),
     description: cleanText(input.description, 600),
     creator: cleanText(input.creator, 120),
     thumbnailUrl: safeHttpsImage(input.thumbnailUrl),
-    durationSeconds: Number.isFinite(input.durationSeconds) && (input.durationSeconds ?? 0) >= 0
-      ? Math.min(86_400, Math.floor(input.durationSeconds!))
+    durationSeconds: typeof input.durationSeconds === 'number' &&
+      Number.isFinite(input.durationSeconds) &&
+      input.durationSeconds >= 0
+      ? Math.min(86_400, Math.floor(input.durationSeconds))
       : null,
     viewCount: Number.isSafeInteger(input.viewCount) && (input.viewCount ?? -1) >= 0
       ? Math.min(9_000_000_000_000, input.viewCount!)
