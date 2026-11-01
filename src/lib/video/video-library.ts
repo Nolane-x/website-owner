@@ -270,7 +270,7 @@ export function emptyVideoLibrary(): VideoLibraryState {
 function normalizeCreatorName(value: string): string {
   return cleanText(value, 120)
     .normalize('NFD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
@@ -654,7 +654,7 @@ export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms
   };
   for (const topicId of state.followedTopics.slice(0, 20)) {
     const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
-    add(topic?.query ?? topicId.replace(/-/g, ' '), 4.5);
+    add(topic ? topic.query + ' ' + topic.id.replace(/-/g, ' ') : topicId.replace(/-/g, ' '), 4.5);
   }
   for (const id of state.favorites.slice(0, 20)) {
     const item = byId.get(id);
@@ -674,7 +674,7 @@ export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms
   });
   const mutedTokens = new Set(state.mutedTopics.flatMap((topicId) => {
     const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
-    return topic ? recommendationTokens(topic.query + ' ' + topic.label) : [];
+    return topic ? recommendationTokens(topic.query + ' ' + topic.label + ' ' + topic.id.replace(/-/g, ' ')) : [];
   }));
   return [...weights.entries()]
     .filter(([token]) => !mutedTokens.has(token))
@@ -695,7 +695,7 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
   };
   for (const topicId of state.followedTopics.slice(0, 20)) {
     const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
-    addProfile(topic?.query ?? topicId.replace(/-/g, ' '), 4.5);
+    addProfile(topic ? topic.query + ' ' + topic.id.replace(/-/g, ' ') : topicId.replace(/-/g, ' '), 4.5);
   }
   for (const id of state.favorites.slice(0, 30)) {
     const item = byId.get(id);
@@ -716,7 +716,7 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
   const recentlyWatched = new Set(state.history.slice(0, 3).map((entry) => entry.itemId));
   const mutedTopicTokens = state.mutedTopics.map((topicId) => {
     const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
-    return topic ? new Set(recommendationTokens(topic.query + ' ' + topic.label)) : new Set<string>();
+    return topic ? new Set(recommendationTokens(topic.query + ' ' + topic.label + ' ' + topic.id.replace(/-/g, ' '))) : new Set<string>();
   });
   const unique = new Map<string, VideoLibraryItem>();
   for (const item of candidates) {
