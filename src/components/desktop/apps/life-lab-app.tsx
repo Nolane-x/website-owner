@@ -185,7 +185,7 @@ function formatPercent(value: number): string {
 export function LifeLabApp() {
   const [preferences, setPreferences] = useState<LifeLabPreferences>(readPreferences);
   const [simulation, setSimulation] = useState<LifeLabSimulation>(() =>
-    deserializeSimulation(readPreferences().lastSnapshot ?? '') ?? createSimulation('life'),
+    deserializeSimulation(preferences.lastSnapshot ?? '') ?? createSimulation(preferences.mode),
   );
   const [running, setRunning] = useState(false);
   const [hud, setHud] = useState<{ generation: number; stats: LifeLabStats }>(() => ({
