@@ -5,10 +5,13 @@ export interface OverdueTaskSummary {
   status: string;
 }
 
+export const MAX_OVERDUE_TASK_SAMPLE = 100;
+
 export interface OverdueReport {
   totalTasks: number;
   overdueCount: number;
   overdueTasks: OverdueTaskSummary[];
+  overdueTasksTruncated: boolean;
   sideEffects: false;
 }
 
@@ -51,7 +54,8 @@ export function buildOverdueReport(
     overdueCount: overdueTasks.length,
     // Keep history/API payloads bounded even when a profile has a very large backlog.
     // The count remains exact; this is only a display sample for the report.
-    overdueTasks: overdueTasks.slice(0, 100),
+    overdueTasks: overdueTasks.slice(0, MAX_OVERDUE_TASK_SAMPLE),
+    overdueTasksTruncated: overdueTasks.length > MAX_OVERDUE_TASK_SAMPLE,
     sideEffects: false,
   };
 }
