@@ -200,24 +200,51 @@ function VideoCard({
   );
 }
 
-function ApiKeyNotice({ apiKey, setApiKey }: { apiKey: string; setApiKey: (value: string) => void }) {
+function ApiKeyNotice({
+  apiKey,
+  setApiKey,
+  configured,
+  source,
+  preview,
+  saving,
+  status,
+  onSave,
+  onDelete,
+}: {
+  apiKey: string;
+  setApiKey: (value: string) => void;
+  configured: boolean;
+  source: 'personal' | 'environment' | null;
+  preview: string | null;
+  saving: boolean;
+  status: string;
+  onSave: () => void;
+  onDelete: () => void;
+}) {
   const [showKey, setShowKey] = useState(false);
   return (
     <section className="rounded-xl border border-amber-800/70 bg-amber-950/25 p-3">
       <div className="flex items-start gap-2">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-amber-100">Kết nối YouTube Data API để tìm kiếm và lấy xu hướng</p>
+          <p className="text-[11px] font-semibold text-amber-100">Kết nối YouTube Data API</p>
           <p className="mt-1 text-[10px] leading-relaxed text-amber-200/70">
-            Tạo API key miễn phí trong Google Cloud, bật YouTube Data API v3 rồi nhập bên dưới. Key chỉ nằm trong bộ nhớ cửa sổ hiện tại, không lưu vào thư viện, database hay localStorage. Có thể đặt YOUTUBE_API_KEY trên Vercel để khỏi nhập lại.
+            Key được mã hóa AES-256-GCM trước khi lưu vào Neon. Chỉ tài khoản owner được dùng; server giải mã khi gọi YouTube. Trình duyệt không lưu key vào localStorage và không nhận lại key đầy đủ.
           </p>
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className={configured ? 'rounded-full border border-emerald-800/70 bg-emerald-950/30 px-2 py-1 text-[9px] text-emerald-300' : 'rounded-full border border-amber-800/70 bg-amber-950/30 px-2 py-1 text-[9px] text-amber-200'}>
+              {configured ? source === 'environment' ? 'Key từ Vercel Environment' : 'Đã lưu key cá nhân' : 'Chưa có key'}
+            </span>
+            {configured && preview && <span className="font-mono text-[9px] text-stone-400">{preview}</span>}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
             <input
               type={showKey ? 'text' : 'password'}
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder="AIza..."
-              autoComplete="off"
+              placeholder={configured ? 'Nhập key mới để thay thế key hiện tại' : 'AIza...'}
+              autoComplete="new-password"
+              spellCheck={false}
               className="min-w-0 flex-1 rounded-lg border border-amber-900/70 bg-stone-950 px-3 py-2 text-[11px] text-stone-100 outline-none placeholder:text-stone-600 focus:border-amber-500"
               aria-label="YouTube Data API key"
             />
@@ -225,7 +252,18 @@ function ApiKeyNotice({ apiKey, setApiKey }: { apiKey: string; setApiKey: (value
               {showKey ? 'Ẩn' : 'Hiện'}
             </button>
           </div>
-          <p className="mt-1.5 text-[9px] text-amber-200/50">Nếu đã cấu hình key ở máy chủ, bạn không cần nhập ở đây.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={onSave} disabled={saving || apiKey.trim().length < 20} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-2 text-[10px] font-semibold text-stone-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40">
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+              {saving ? 'Đang lưu an toàn…' : configured ? 'Lưu key mới' : 'Lưu key'}
+            </button>
+            {source === 'personal' && (
+              <button type="button" onClick={onDelete} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg border border-red-900/70 px-3 py-2 text-[10px] text-red-300 hover:bg-red-950/40 disabled:opacity-40">
+                <Trash2 className="h-3 w-3" /> Xóa key đã lưu
+              </button>
+            )}
+          </div>
+          {status && <p role="status" className="mt-2 text-[9px] text-amber-200/80">{status}</p>}
         </div>
       </div>
     </section>
@@ -242,6 +280,11 @@ export function VideoApp() {
   const [provider, setProvider] = useState<Provider>('youtube');
   const [query, setQuery] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const [apiKeySource, setApiKeySource] = useState<'personal' | 'environment' | null>(null);
+  const [apiKeyPreview, setApiKeyPreview] = useState<string | null>(null);
+  const [apiKeySaving, setApiKeySaving] = useState(false);
+  const [apiKeyStatus, setApiKeyStatus] = useState('');
   const [showApiKeyPanel, setShowApiKeyPanel] = useState(false);
   const [needsApiKey, setNeedsApiKey] = useState(false);
   const [results, setResults] = useState<VideoLibraryItem[]>([]);
@@ -307,6 +350,28 @@ export function VideoApp() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/video-library/youtube/key', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json() as {
+          configured?: boolean;
+          source?: 'personal' | 'environment' | null;
+          preview?: string | null;
+          error?: string;
+        };
+        if (!response.ok) throw new Error(payload.error || 'Không thể đọc trạng thái YouTube API key.');
+        if (cancelled) return;
+        setApiKeyConfigured(payload.configured === true);
+        setApiKeySource(payload.source ?? null);
+        setApiKeyPreview(payload.preview ?? null);
+      })
+      .catch((cause) => {
+        if (!cancelled) setApiKeyStatus(cause instanceof Error ? cause.message : 'Không thể đọc trạng thái key.');
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     if (hydrated) saveVideoLibrary(library);
   }, [hydrated, library]);
 
@@ -333,6 +398,65 @@ export function VideoApp() {
     }, 1800);
     return () => window.clearTimeout(syncTimer);
   }, [hydrated, remoteHydrated, cloudSyncEnabled, library]);
+
+  const saveApiKey = async () => {
+    const key = apiKey.trim();
+    if (key.length < 20) {
+      setApiKeyStatus('Key cần có ít nhất 20 ký tự.');
+      return;
+    }
+    setApiKeySaving(true);
+    setApiKeyStatus('');
+    try {
+      const response = await fetch('/api/video-library/youtube/key', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: key }),
+      });
+      const payload = await response.json() as {
+        configured?: boolean;
+        source?: 'personal' | 'environment' | null;
+        preview?: string | null;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || 'Không thể lưu YouTube API key.');
+      setApiKeyConfigured(true);
+      setApiKeySource(payload.source ?? 'personal');
+      setApiKeyPreview(payload.preview ?? null);
+      setApiKey('');
+      setNeedsApiKey(false);
+      setApiKeyStatus('Đã mã hóa và lưu key vào Neon. Lần sau mở website vẫn dùng được.');
+    } catch (cause) {
+      setApiKeyStatus(cause instanceof Error ? cause.message : 'Không thể lưu YouTube API key.');
+    } finally {
+      setApiKeySaving(false);
+    }
+  };
+
+  const deleteApiKey = async () => {
+    setApiKeySaving(true);
+    setApiKeyStatus('');
+    try {
+      const response = await fetch('/api/video-library/youtube/key', { method: 'DELETE' });
+      const payload = await response.json() as {
+        configured?: boolean;
+        source?: 'personal' | 'environment' | null;
+        preview?: string | null;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || 'Không thể xóa YouTube API key.');
+      setApiKeyConfigured(payload.configured === true);
+      setApiKeySource(payload.source ?? null);
+      setApiKeyPreview(payload.preview ?? null);
+      setApiKeyStatus(payload.configured
+        ? 'Đã xóa key cá nhân. Website đang dùng key do Vercel cung cấp.'
+        : 'Đã xóa key khỏi Neon.');
+    } catch (cause) {
+      setApiKeyStatus(cause instanceof Error ? cause.message : 'Không thể xóa YouTube API key.');
+    } finally {
+      setApiKeySaving(false);
+    }
+  };
 
   const libraryItemsById = useMemo(
     () => new Map(library.items.map((item) => [item.id, item])),
@@ -401,7 +525,7 @@ export function VideoApp() {
       const response = await fetch('/api/video-library/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, query: requestQuery, regionCode: 'VN', categoryId, pageToken: pageToken || '', apiKey }),
+        body: JSON.stringify({ mode, query: requestQuery, regionCode: 'VN', categoryId, pageToken: pageToken || '' }),
       });
       const payload = await response.json() as SearchResponse & { error?: string };
       if (response.status === 428) {
@@ -628,7 +752,7 @@ export function VideoApp() {
 
       {showApiKeyPanel && (
         <div className="shrink-0 border-b border-stone-800 px-4 py-3">
-          <ApiKeyNotice apiKey={apiKey} setApiKey={setApiKey} />
+          <ApiKeyNotice apiKey={apiKey} setApiKey={setApiKey} configured={apiKeyConfigured} source={apiKeySource} preview={apiKeyPreview} saving={apiKeySaving} status={apiKeyStatus} onSave={saveApiKey} onDelete={deleteApiKey} />
         </div>
       )}
 
@@ -726,7 +850,7 @@ export function VideoApp() {
               </div>
             </section>
 
-            {needsApiKey && <ApiKeyNotice apiKey={apiKey} setApiKey={setApiKey} />}
+            {needsApiKey && <ApiKeyNotice apiKey={apiKey} setApiKey={setApiKey} configured={apiKeyConfigured} source={apiKeySource} preview={apiKeyPreview} saving={apiKeySaving} status={apiKeyStatus} onSave={saveApiKey} onDelete={deleteApiKey} />}
 
             <form onSubmit={importVideoUrl} className="rounded-xl border border-stone-800 bg-stone-900/55 p-3">
               <div className="mb-2 flex items-center gap-2"><Link2 className="h-4 w-4 text-emerald-400" /><span className="text-[10px] font-semibold text-stone-200">Thêm video bằng liên kết</span></div>
