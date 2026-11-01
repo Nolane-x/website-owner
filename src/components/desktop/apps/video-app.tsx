@@ -25,7 +25,6 @@ import {
   Sparkles,
   Trash2,
   X,
-  Youtube,
 } from 'lucide-react';
 import {
   addVideoToLibrary,
@@ -105,12 +104,12 @@ function VideoThumbnail({ item }: { item: VideoLibraryItem }) {
       {!item.thumbnailUrl && (
         <div className="absolute inset-0 flex items-center justify-center">
           {item.platform === 'youtube'
-            ? <Youtube className="h-10 w-10 text-red-500/80" />
+            ? <Play className="h-10 w-10 text-red-500/80" />
             : <Music2 className="h-10 w-10 text-pink-400/80" />}
         </div>
       )}
       <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/75 px-2 py-1 text-[9px] font-semibold text-white">
-        {item.platform === 'youtube' ? <Youtube className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-300" />}
+        {item.platform === 'youtube' ? <Play className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-300" />}
         {item.platform === 'youtube' ? 'YouTube' : 'TikTok'}
       </div>
       {item.durationSeconds !== null && (
@@ -512,7 +511,7 @@ export function VideoApp() {
             </div>
           </div>
           <div className="flex items-center gap-2 text-[9px]">
-            <span className="inline-flex items-center gap-1 rounded-full border border-red-900/60 bg-red-950/30 px-2 py-1 text-red-300"><Youtube className="h-3 w-3" /> YouTube</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-900/60 bg-red-950/30 px-2 py-1 text-red-300"><Play className="h-3 w-3" /> YouTube</span>
             <span className="inline-flex items-center gap-1 rounded-full border border-pink-900/60 bg-pink-950/30 px-2 py-1 text-pink-300"><Music2 className="h-3 w-3" /> TikTok</span>
             <button type="button" onClick={() => setShowApiKeyPanel((value) => !value)} title="Cài đặt API YouTube" className="rounded-lg border border-stone-800 p-2 text-stone-400 hover:border-stone-600 hover:text-white"><Settings2 className="h-3.5 w-3.5" /></button>
           </div>
@@ -561,7 +560,7 @@ export function VideoApp() {
 
             <section className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => setProvider('youtube')} className={provider === 'youtube' ? 'inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-[10px] font-semibold text-white' : 'inline-flex items-center gap-2 rounded-lg border border-stone-800 px-3 py-2 text-[10px] text-stone-400 hover:text-white'}><Youtube className="h-3.5 w-3.5" /> Tìm trên YouTube</button>
+                <button type="button" onClick={() => setProvider('youtube')} className={provider === 'youtube' ? 'inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-[10px] font-semibold text-white' : 'inline-flex items-center gap-2 rounded-lg border border-stone-800 px-3 py-2 text-[10px] text-stone-400 hover:text-white'}><Play className="h-3.5 w-3.5" /> Tìm trên YouTube</button>
                 <button type="button" onClick={() => setProvider('tiktok')} className={provider === 'tiktok' ? 'inline-flex items-center gap-2 rounded-lg bg-pink-600 px-3 py-2 text-[10px] font-semibold text-white' : 'inline-flex items-center gap-2 rounded-lg border border-stone-800 px-3 py-2 text-[10px] text-stone-400 hover:text-white'}><Music2 className="h-3.5 w-3.5" /> Khám phá TikTok</button>
               </div>
               <form onSubmit={submitSearch} className="flex gap-2">
@@ -667,7 +666,7 @@ export function VideoApp() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="mb-1 flex items-center gap-1.5 text-[9px] uppercase tracking-wider text-stone-500">
-                        {selectedVideo.platform === 'youtube' ? <Youtube className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-400" />}
+                        {selectedVideo.platform === 'youtube' ? <Play className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-400" />}
                         {selectedVideo.platform} · {playerStatus === 'playing' ? 'Đang phát' : playerStatus === 'error' ? 'Lỗi trình phát' : playerStatus === 'ended' ? 'Đã xem xong' : 'Sẵn sàng'}
                       </div>
                       <h2 className="text-sm font-semibold leading-relaxed text-white">{selectedVideo.title}</h2>
@@ -738,7 +737,7 @@ export function VideoApp() {
                       )}
                     </div>
                     <div className="w-full max-w-sm space-y-3">
-                      <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-stone-500">{item.platform === 'youtube' ? <Youtube className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-400" />}{item.platform} · SHORTS</div>
+                      <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-stone-500">{item.platform === 'youtube' ? <Play className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-400" />}{item.platform} · SHORTS</div>
                       <h4 className="text-sm font-semibold leading-relaxed text-white">{item.title}</h4>
                       <p className="text-[10px] text-stone-500">{item.creator}</p>
                       <div className="flex flex-wrap gap-2">
