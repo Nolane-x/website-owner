@@ -1,3 +1,5 @@
+import { normalizePublicHttpsUrl } from './radio-browser';
+
 /**
  * A page-lifetime radio player.
  *
@@ -92,22 +94,22 @@ export function normalizeRadioStreamUrl(value: string): string {
     throw new Error('Hãy nhập một URL luồng âm thanh HTTPS hợp lệ.');
   }
 
-  let url: URL;
+  let parsed: URL;
   try {
-    url = new URL(trimmed);
+    parsed = new URL(trimmed);
   } catch {
     throw new Error('URL không hợp lệ. Hãy dán địa chỉ luồng âm thanh trực tiếp.');
   }
 
-  if (url.protocol !== 'https:') {
+  if (parsed.protocol !== 'https:') {
     throw new Error('Chỉ hỗ trợ luồng HTTPS để trình duyệt không chặn nội dung hỗn hợp.');
   }
-  if (!url.hostname || url.username || url.password) {
-    throw new Error('URL luồng không hợp lệ.');
-  }
 
-  url.hash = '';
-  return url.toString();
+  const safeUrl = normalizePublicHttpsUrl(trimmed);
+  if (!safeUrl) {
+    throw new Error('URL luồng không hợp lệ hoặc trỏ tới địa chỉ mạng riêng.');
+  }
+  return safeUrl;
 }
 
 function mediaErrorMessage(audio: HTMLAudioElement): string {

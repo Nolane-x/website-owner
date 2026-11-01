@@ -15,6 +15,8 @@ import {
   subscribeRadioPlayer,
 } from '@/lib/audio/radio-player';
 import { PREFERENCE_PERSISTENCE_EVENT, reportPreferencePersistence, type PreferencePersistenceResult } from '@/lib/persistence-events';
+import { RadioBrowserPanel } from './radio-browser-panel';
+import type { RadioBrowserStation } from '@/lib/audio/radio-browser';
 
 interface AmbientTrack {
   id: AmbientSoundType;
@@ -54,7 +56,6 @@ export function MusicApp() {
   const [sourceError, setSourceError] = useState<string | null>(null);
 
   const activeSet = useMemo(() => new Set(activeLayers), [activeLayers]);
-  const selectedPreset = RADIO_STATIONS.some((station) => station.url === radioSourceUrl);
   const isRadioPlaying = radioState.status === 'playing';
   const isRadioLoading = radioState.status === 'loading';
 
@@ -134,13 +135,32 @@ export function MusicApp() {
     }
   };
 
-  const handleStationChange = (value: string) => {
-    const station = RADIO_STATIONS.find((item) => item.url === value);
-    if (!station) return;
-    setRadioSourceUrl(station.url);
-    setRadioStationName(station.name);
+  const playSelectedStation = async (url: string, name: string): Promise<boolean> => {
+    setRadioSourceUrl(url);
+    setRadioStationName(name);
     setCustomRadioUrl('');
     setSourceError(null);
+    try {
+      await playRadioStream(url, name);
+      return getRadioPlayerSnapshot().status === 'playing';
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'URL radio không hợp lệ.');
+      return false;
+    }
+  };
+
+  const handleCatalogStationPlay = async (station: RadioBrowserStation): Promise<boolean> => {
+    const started = await playSelectedStation(station.streamUrl, station.name);
+    if (started) {
+      // Best-effort directory click count; the audio bytes still flow directly
+      // from the station to the browser, never through this API route.
+      void fetch('/api/radio-browser', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stationUuid: station.id }),
+      }).catch(() => undefined);
+    }
+    return started;
   };
 
   const applyCustomRadioUrl = () => {
@@ -216,46 +236,52 @@ export function MusicApp() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label className="min-w-0">
-            <span className="block text-[10px] text-stone-500 mb-1">Chọn đài phát trực tuyến</span>
-            <select
-              value={selectedPreset ? radioSourceUrl : '__custom__'}
-              onChange={(event) => handleStationChange(event.target.value)}
-              className="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-xs text-stone-200 outline-none focus:border-emerald-500"
-              aria-label="Nguồn radio"
+        <div className="space-y-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-stone-500">Đài chọn lọc</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {RADIO_STATIONS.map((station) => {
+              const active = radioState.sourceUrl === station.url;
+              return (
+                <button
+                  key={station.id}
+                  type="button"
+                  onClick={() => void playSelectedStation(station.url, station.name)}
+                  className={active ? 'rounded-lg border border-emerald-700 bg-emerald-950/40 px-2.5 py-2 text-left' : 'rounded-lg border border-stone-800 bg-stone-950 px-2.5 py-2 text-left hover:border-stone-600'}
+                >
+                  <span className="block truncate text-[11px] font-medium text-stone-200">{station.name}</span>
+                  <span className="mt-0.5 block truncate text-[9px] text-stone-500">{station.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <RadioBrowserPanel onPlayStation={handleCatalogStationPlay} currentStreamUrl={radioState.sourceUrl} />
+
+        <div className="min-w-0">
+          <label htmlFor="custom-radio-url" className="mb-1 block text-[10px] text-stone-500">Hoặc dán URL stream HTTPS trực tiếp của một đài khác</label>
+          <div className="flex gap-2">
+            <input
+              id="custom-radio-url"
+              type="url"
+              inputMode="url"
+              value={customRadioUrl}
+              onChange={(event) => setCustomRadioUrl(event.target.value)}
+              placeholder="https://…/stream.mp3"
+              className="min-w-0 flex-1 rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-xs text-stone-200 outline-none placeholder:text-stone-600 focus:border-emerald-500"
+            />
+            <button
+              type="button"
+              onClick={applyCustomRadioUrl}
+              disabled={!customRadioUrl.trim()}
+              className="shrink-0 rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-200 transition hover:bg-stone-800 disabled:opacity-40"
             >
-              {RADIO_STATIONS.map((station) => (
-                <option key={station.id} value={station.url}>{station.name} — {station.description}</option>
-              ))}
-              {!selectedPreset && <option value="__custom__">Luồng HTTPS tùy chỉnh…</option>}
-            </select>
-          </label>
-          <div className="min-w-0">
-            <label htmlFor="custom-radio-url" className="block text-[10px] text-stone-500 mb-1">Hoặc dán URL stream HTTPS trực tiếp</label>
-            <div className="flex gap-2">
-              <input
-                id="custom-radio-url"
-                type="url"
-                inputMode="url"
-                value={customRadioUrl}
-                onChange={(event) => setCustomRadioUrl(event.target.value)}
-                placeholder="https://…/stream.mp3"
-                className="min-w-0 flex-1 rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-xs text-stone-200 outline-none placeholder:text-stone-600 focus:border-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={applyCustomRadioUrl}
-                disabled={!customRadioUrl.trim()}
-                className="shrink-0 rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-200 transition hover:bg-stone-800 disabled:opacity-40"
-              >
-                Dùng URL
-              </button>
-            </div>
+              Dùng URL
+            </button>
           </div>
         </div>
         <p className="text-[10px] leading-relaxed text-stone-500">
-          Hỗ trợ URL stream âm thanh trực tiếp HTTPS (MP3/AAC/Ogg), không phải trang web, YouTube hay link tải playlist. Âm thanh truyền trực tiếp từ đài đến trình duyệt; website không tải hoặc lưu file nhạc.
+          Radio Browser là danh bạ bên ngoài; Audio Lab chỉ tra cứu metadata và phát URL HTTPS trực tiếp. Website không proxy, tải xuống hay lưu tệp âm thanh. Một số đài có thể ngừng phát hoặc đổi URL giữa các lần kiểm tra.
         </p>
         {radioState.status === 'error' && (
           <button type="button" onClick={() => void toggleRadio()} className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300">
