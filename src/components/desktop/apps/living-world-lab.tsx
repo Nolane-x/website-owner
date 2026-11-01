@@ -778,7 +778,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
               <select aria-label="Loại địa hình để vẽ" value={brushBiome} onChange={(event) => setBrushBiome(event.target.value as BiomeId)} disabled={!editingTerrain || running || fastForwarding} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-[8px] text-stone-200 disabled:opacity-40">
                 {BIOMES.map((biome) => <option key={biome.id} value={biome.id}>{biome.name}</option>)}
               </select>
-              <label className="flex items-center gap-2 text-[8px] text-stone-500">Cỡ cọ <input type="range" min={1} max={4} value={brushRadius} disabled={!editingTerrain || running} onChange={(event) => setBrushRadius(Number(event.target.value))} className="w-16 accent-cyan-200 disabled:opacity-40" /><span className="font-mono text-stone-300">{brushRadius}</span></label>
+              <label className="flex items-center gap-2 text-[8px] text-stone-500">Cỡ cọ <input type="range" min={1} max={4} value={brushRadius} disabled={!editingTerrain || running || fastForwarding} onChange={(event) => setBrushRadius(Number(event.target.value))} className="w-16 accent-cyan-200 disabled:opacity-40" /><span className="font-mono text-stone-300">{brushRadius}</span></label>
               <span className="ml-auto text-[8px] text-stone-600">{editingTerrain ? 'Kéo trên bản đồ để sơn ô đất trống; cá thể không bị ghi đè.' : 'Tạm dừng mô phỏng để chỉnh sửa địa hình.'}</span>
             </div>
 
@@ -789,7 +789,10 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
               <button type="button" onClick={advanceOnce} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><StepForward className="h-3.5 w-3.5" /> Một thế hệ</button>
               <button type="button" onClick={() => { void fastForward(100); }} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-200/20 bg-cyan-200/10 px-3 py-2.5 text-[10px] text-cyan-50 disabled:opacity-40">+100 thế hệ</button>
               <button type="button" onClick={() => { void fastForward(1000); }} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200/20 bg-violet-200/10 px-3 py-2.5 text-[10px] text-violet-50 disabled:opacity-40">+1.000 thế hệ</button>
-              {fastForwarding ? <span className="min-w-[94px] text-[8px] font-mono text-cyan-100">Đang tua {fastProgress}%</span> : null}
+              {fastForwarding ? <>
+                <span className="min-w-[94px] text-[8px] font-mono text-cyan-100">Đang tua {fastProgress}%</span>
+                <button type="button" onClick={() => { batchCancelledRef.current = true; setFastForwarding(false); setFastProgress(0); }} className="rounded-lg border border-rose-200/20 bg-rose-200/10 px-2 py-1.5 text-[8px] text-rose-100">Hủy tua</button>
+              </> : null}
               <button type="button" onClick={createRandomWorld} disabled={fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Thế giới mới</button>
               <div className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
                 <Activity className="h-3.5 w-3.5 text-cyan-100" />
