@@ -505,6 +505,39 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   }, [compareLeft, compareRight, experiments]);
 
   const researchNotes = useMemo(() => buildResearchNotes(world, stats), [world, stats]);
+  const lineageSummary = useMemo(() => {
+    const groups = new Map<number, { id: number; species: SpeciesId; population: number; metabolism: number; vision: number; sociality: number; immunity: number; efficiency: number }>();
+    for (const animal of world.organisms) {
+      const current = groups.get(animal.lineageId) ?? {
+        id: animal.lineageId,
+        species: animal.species,
+        population: 0,
+        metabolism: 0,
+        vision: 0,
+        sociality: 0,
+        immunity: 0,
+        efficiency: 0,
+      };
+      current.population++;
+      current.metabolism += animal.genome.metabolism;
+      current.vision += animal.genome.vision;
+      current.sociality += animal.genome.sociality;
+      current.immunity += animal.genome.immunity;
+      current.efficiency += animal.genome.efficiency;
+      groups.set(animal.lineageId, current);
+    }
+    return [...groups.values()]
+      .map((lineage) => ({
+        ...lineage,
+        metabolism: lineage.metabolism / lineage.population,
+        vision: lineage.vision / lineage.population,
+        sociality: lineage.sociality / lineage.population,
+        immunity: lineage.immunity / lineage.population,
+        efficiency: lineage.efficiency / lineage.population,
+      }))
+      .sort((left, right) => right.population - left.population || left.id - right.id)
+      .slice(0, 12);
+  }, [world.organisms]);
   const maxPopulation = Math.max(1, ...populationHistory.map((sample) => Object.values(sample.counts).reduce((sum, value) => sum + value, 0)));
   const seasonName = SEASONS.find((entry) => entry.id === world.season)?.name ?? world.season;
   const weatherName = WEATHER.find((entry) => entry.id === world.weather)?.name ?? world.weather;
@@ -727,6 +760,17 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
                 <div className="border-t border-white/10 pt-2">
                   {SPECIES.map((species) => <div key={species.id} className="flex justify-between py-0.5"><span className="text-stone-500">{species.short}</span><span className="font-mono text-stone-200">{comparison.diff.species[species.id] > 0 ? '+' : ''}{comparison.diff.species[species.id]}</span></div>)}
                 </div>
+                <div className="border-t border-white/10 pt-2">
+                  <p className="mb-1 text-[8px] font-semibold uppercase tracking-wider text-violet-100/80">Chênh lệch đặc tính gene · B − A</p>
+                  {([
+                    ['Trao đổi chất', comparison.diff.traitDifferences.metabolism ?? 0],
+                    ['Tầm nhìn', comparison.diff.traitDifferences.vision ?? 0],
+                    ['Xã hội', comparison.diff.traitDifferences.sociality ?? 0],
+                    ['Miễn dịch', comparison.diff.traitDifferences.immunity ?? 0],
+                    ['Hiệu quả thức ăn', comparison.diff.traitDifferences.efficiency ?? 0],
+                    ['Độc lực', comparison.diff.traitDifferences.virulence ?? 0],
+                  ] as Array<[string, number]>).map(([label, value]) => <div key={label} className="flex justify-between py-0.5"><span className="text-stone-500">{label}</span><span className="font-mono text-stone-200">{value > 0 ? '+' : ''}{value.toFixed(2)}</span></div>)}
+                </div>
               </div>
             </div> : <p className="mt-3 rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[8px] text-stone-600">Lưu ít nhất hai thí nghiệm để xem chênh lệch.</p>}
           </section>
@@ -757,6 +801,28 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
               ] as Array<[string, string]>).map(([label, value]) => <div key={label} className="flex items-center justify-between text-[8px]"><span className="text-stone-500">{label}</span><span className="font-mono text-stone-200">{value}</span></div>)}
             </div>
             <p className="mt-3 border-t border-white/10 pt-3 text-[8px] leading-relaxed text-stone-600">Các giá trị là trung bình trên toàn bộ cá thể còn sống, không tách theo loài. Muốn kết luận gene nào được chọn lọc, cần so sánh cùng một loài qua nhiều mốc thời gian.</p>
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <div className="flex items-center justify-between gap-2"><p className="text-[9px] font-semibold text-violet-100">Các dòng gene đang tồn tại</p><span className="font-mono text-[8px] text-stone-500">{stats.lineageDiversity} dòng</span></div>
+              <div className="mt-2 space-y-1.5">
+                {lineageSummary.map((lineage) => {
+                  const species = SPECIES.find((entry) => entry.id === lineage.species);
+                  return <div key={lineage.id} className="rounded-lg border border-white/[0.06] bg-black/15 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5 truncate text-[8px] text-stone-300"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: species?.color ?? '#c4b5fd' }} />Dòng L{lineage.id} · {species?.short ?? lineage.species}</span>
+                      <span className="font-mono text-[9px] text-white">{lineage.population}</span>
+                    </div>
+                    <div className="mt-1 grid grid-cols-3 gap-1 text-[7px] text-stone-600">
+                      <span>Meta {lineage.metabolism.toFixed(2)}</span>
+                      <span>Vision {lineage.vision.toFixed(1)}</span>
+                      <span>Social {(lineage.sociality * 100).toFixed(0)}%</span>
+                    </div>
+                  </div>;
+                })}
+                {lineageSummary.length === 0 ? <p className="text-[8px] text-stone-600">Không còn dòng gene sống.</p> : null}
+              </div>
+              {stats.lineageDiversity > lineageSummary.length ? <p className="mt-2 text-[8px] text-stone-600">Đang hiển thị 12 dòng có quần thể lớn nhất.</p> : null}
+              <p className="mt-2 text-[8px] leading-relaxed text-stone-600">Mã dòng gene là nhãn theo dõi di truyền nội bộ. Dòng mới hình thành do đột biến đủ lớn; đây chưa phải phân loài sinh học với cách ly sinh sản.</p>
+            </div>
           </section>
         </aside>
       </div>
