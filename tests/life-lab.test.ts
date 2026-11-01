@@ -47,11 +47,11 @@ describe('Life Lab simulation engine', () => {
     ]);
     const first = stepSimulation(initial);
     expect(first.cells[2 * initial.width + 2]).toBe(1);
-    expect(first.cells[2 * initial.width + 1]).toBe(2);
-    expect(first.cells[2 * initial.width + 3]).toBe(2);
+    expect(first.cells[initial.width + 2]).toBe(2);
+    expect(first.cells[3 * initial.width + 2]).toBe(2);
     const second = stepSimulation(first);
     expect(second.cells[2 * initial.width + 2]).toBe(2);
-    expect(second.cells[2 * initial.width + 1]).toBe(0);
+    expect(second.cells[initial.width + 2]).toBe(0);
   });
 
   it('spreads forest fire locally and clears burning cells on the next step', () => {
@@ -83,7 +83,7 @@ describe('Life Lab simulation engine', () => {
       ...createEmptySimulation('ant', 8, 8),
       antX: 11,
       antY: 0,
-      antDirection: 1 as const,
+      antDirection: 0 as const,
     };
     const next = stepSimulation(initial);
     expect(next.antX).toBe(0);
