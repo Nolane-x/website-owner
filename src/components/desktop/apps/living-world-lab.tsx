@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowLeft,
+  Dna,
   GitBranch,
   History,
   Leaf,
@@ -456,7 +457,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
       snapshot,
       generation: restored.generation,
       seed: restored.seed,
-      savedAt: Date.now(),
+      savedAt: 0,
     };
     setExperiments((items) => [branch, ...items.filter((item) => item.id !== branch.id)].slice(0, MAX_EXPERIMENTS));
   };
