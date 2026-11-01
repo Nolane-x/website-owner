@@ -738,7 +738,7 @@ export function VideoApp() {
                       )}
                     </div>
                     <div className="w-full max-w-sm space-y-3">
-                      <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-stone-500">{item.platform === 'youtube' ? <Youtube className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-400 />}{item.platform} · SHORTS</div>
+                      <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-stone-500">{item.platform === 'youtube' ? <Youtube className="h-3 w-3 text-red-400" /> : <Music2 className="h-3 w-3 text-pink-400" />}{item.platform} · SHORTS</div>
                       <h4 className="text-sm font-semibold leading-relaxed text-white">{item.title}</h4>
                       <p className="text-[10px] text-stone-500">{item.creator}</p>
                       <div className="flex flex-wrap gap-2">
