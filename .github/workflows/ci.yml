@@ -217,10 +217,17 @@ jobs:
             }
 
             const fix = vulnerability.fixAvailable;
+            const installedVersion = lock.packages?.['node_modules/' + expected.fix.name]?.version;
+            const installedMajor = typeof installedVersion === 'string' ? Number(installedVersion.match(/^(\d+)/)?.[1]) : NaN;
+            const suggestedMajor = fix && typeof fix === 'object' && typeof fix.version === 'string'
+              ? Number(fix.version.match(/^(\d+)/)?.[1])
+              : NaN;
             return Boolean(fix && typeof fix === 'object' &&
               fix.name === expected.fix.name &&
-              fix.version === expected.fix.version &&
-              fix.isSemVerMajor === true);
+              fix.isSemVerMajor === true &&
+              Number.isInteger(installedMajor) &&
+              Number.isInteger(suggestedMajor) &&
+              suggestedMajor < installedMajor);
           }
 
           const unapproved = entries.filter(([name, vulnerability]) =>
@@ -248,7 +255,7 @@ jobs:
           if (entries.length === 0) {
             console.log('Full dependency audit: no reported vulnerabilities.');
           } else {
-            console.warn('REVIEWED EXCEPTIONS: (1) GHSA-vfj7-8cjw-p6xm in the exact dev-only braces → micromatch → fast-glob → @next/eslint-plugin-next → eslint-config-next chain; npm proposes only a breaking major downgrade. (2) GHSA-g3hv-75wg-m249 in the exact dev-only minimatch/ESLint/TypeScript-ESLint dependency graph; every affected lockfile node is dev:true and npm proposes only breaking downgrades to ESLint 4.0.0 or eslint-config-next 0.2.4. Production dependencies are separately gated by npm audit --omit=dev. Recheck exact nodes, paths, severities, fixes, and advisory ranges whenever the lockfile or upstream packages change.');
+            console.warn('REVIEWED EXCEPTIONS: (1) GHSA-vfj7-8cjw-p6xm in the exact dev-only braces → micromatch → fast-glob → @next/eslint-plugin-next → eslint-config-next chain; npm proposes only a breaking major downgrade. (2) GHSA-g3hv-75wg-m249 in the exact dev-only minimatch/ESLint/TypeScript-ESLint dependency graph; every affected lockfile node is dev:true and npm proposes only breaking major downgrades. Suggested versions may change as npm advisories evolve; the gate verifies a major downgrade from the installed package. Production dependencies are separately gated by npm audit --omit=dev. Recheck exact nodes, paths, severities, fixes, and advisory ranges whenever the lockfile or upstream packages change.');
           }
           NODE
 

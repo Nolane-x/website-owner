@@ -299,6 +299,43 @@ export function normalizeVideoLibrary(value: unknown): VideoLibraryState {
   return { items, favorites, watchLater, history, playlists };
 }
 
+/** Merge a local snapshot with the cloud snapshot without losing unique saved items. */
+export function mergeVideoLibraries(primary: VideoLibraryState, secondary: VideoLibraryState): VideoLibraryState {
+  const items = [
+    ...primary.items,
+    ...secondary.items.filter((item) => !primary.items.some((saved) => saved.id === item.id)),
+  ];
+
+  const historyByItemId = new Map<string, VideoWatchRecord>();
+  for (const entry of [...secondary.history, ...primary.history]) {
+    const existing = historyByItemId.get(entry.itemId);
+    if (!existing || entry.watchedAt >= existing.watchedAt) historyByItemId.set(entry.itemId, entry);
+  }
+
+  const playlistsById = new Map<string, VideoPlaylist>();
+  for (const playlist of [...secondary.playlists, ...primary.playlists]) {
+    const existing = playlistsById.get(playlist.id);
+    if (!existing) {
+      playlistsById.set(playlist.id, playlist);
+      continue;
+    }
+    const newer = playlist.updatedAt >= existing.updatedAt ? playlist : existing;
+    playlistsById.set(playlist.id, {
+      ...newer,
+      itemIds: [...new Set([...playlist.itemIds, ...existing.itemIds])],
+      updatedAt: Math.max(playlist.updatedAt, existing.updatedAt),
+    });
+  }
+
+  return normalizeVideoLibrary({
+    items,
+    favorites: [...primary.favorites, ...secondary.favorites],
+    watchLater: [...primary.watchLater, ...secondary.watchLater],
+    history: [...historyByItemId.values()].sort((a, b) => b.watchedAt - a.watchedAt),
+    playlists: [...playlistsById.values()],
+  });
+}
+
 export function loadVideoLibrary(): VideoLibraryState {
   if (typeof window === 'undefined') return emptyVideoLibrary();
   try {
@@ -411,4 +448,99 @@ export function toggleVideoInPlaylist(
       return { ...playlist, itemIds, updatedAt: Date.now() };
     }),
   };
+}
+
+
+const RECOMMENDATION_STOP_WORDS = new Set([
+  'video', 'youtube', 'tiktok', 'shorts', 'short', 'official', 'music',
+  'the', 'and', 'for', 'with', 'from', 'this', 'that', 'you', 'your',
+  'cua', 'voi', 'nhung', 'cac', 'mot', 'nhieu', 'trong', 'duoc', 'cho',
+  'nhu', 'khi', 'tai', 'sao', 'la', 'va', 'co', 'khong', 'nay', 'do',
+  've', 'den', 'tren', 'duoi', 'cach', 'phan', 'tap', 'hoc',
+]);
+
+function recommendationTokens(value: string): string[] {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .match(/[a-z0-9]{3,}/g)?.filter((token) => !RECOMMENDATION_STOP_WORDS.has(token)) ?? [];
+}
+
+/** Build a compact YouTube query from the owner's saved interests for fresh recommendations. */
+export function buildVideoRecommendationQuery(state: VideoLibraryState, maxTerms = 5): string {
+  const safeLimit = Number.isFinite(maxTerms) ? Math.max(0, Math.min(8, Math.floor(maxTerms))) : 5;
+  if (safeLimit === 0) return '';
+  const byId = new Map(state.items.map((item) => [item.id, item]));
+  const weights = new Map<string, number>();
+  const add = (value: string, weight: number) => {
+    for (const token of new Set(recommendationTokens(value))) {
+      weights.set(token, (weights.get(token) ?? 0) + weight);
+    }
+  };
+  for (const id of state.favorites.slice(0, 20)) {
+    const item = byId.get(id);
+    if (item) { add(item.title, 4); add(item.creator, 1.8); }
+  }
+  for (const id of state.watchLater.slice(0, 20)) {
+    const item = byId.get(id);
+    if (item) { add(item.title, 3); add(item.creator, 1.2); }
+  }
+  state.history.slice(0, 10).forEach((entry, index) => {
+    const item = byId.get(entry.itemId);
+    if (item) {
+      const weight = Math.max(0.8, 2 - index * 0.12);
+      add(item.title, weight);
+      add(item.creator, weight * 0.55);
+    }
+  });
+  return [...weights.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, safeLimit)
+    .map(([token]) => token)
+    .join(' ');
+}
+
+/** Rank provider candidates using only local favorites, watch-later and history metadata. */
+export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: VideoLibraryState, limit = 8): VideoLibraryItem[] {
+  const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.min(24, Math.floor(limit))) : 8;
+  if (safeLimit === 0 || candidates.length === 0) return [];
+  const byId = new Map(state.items.map((item) => [item.id, item]));
+  const profile = new Map<string, number>();
+  const addProfile = (text: string, weight: number) => {
+    for (const token of new Set(recommendationTokens(text))) profile.set(token, (profile.get(token) ?? 0) + weight);
+  };
+  for (const id of state.favorites.slice(0, 30)) {
+    const item = byId.get(id);
+    if (item) { addProfile(item.title, 4); addProfile(item.creator, 2.5); addProfile(item.description, 0.8); }
+  }
+  for (const id of state.watchLater.slice(0, 30)) {
+    const item = byId.get(id);
+    if (item) { addProfile(item.title, 3); addProfile(item.creator, 2); addProfile(item.description, 0.6); }
+  }
+  state.history.slice(0, 15).forEach((entry, index) => {
+    const item = byId.get(entry.itemId);
+    if (!item) return;
+    const weight = Math.max(0.75, 2.5 - index * 0.12);
+    addProfile(item.title, weight);
+    addProfile(item.creator, weight * 0.65);
+    addProfile(item.description, weight * 0.25);
+  });
+  const recentlyWatched = new Set(state.history.slice(0, 3).map((entry) => entry.itemId));
+  const unique = new Map<string, VideoLibraryItem>();
+  for (const item of candidates) if (item && !recentlyWatched.has(item.id)) unique.set(item.id, item);
+  const now = Date.now();
+  return [...unique.values()].map((item, originalIndex) => {
+    const titleTokens = new Set(recommendationTokens(item.title));
+    const creatorTokens = new Set(recommendationTokens(item.creator));
+    const descriptionTokens = new Set(recommendationTokens(item.description));
+    let score = 0;
+    for (const token of titleTokens) score += (profile.get(token) ?? 0) * 3;
+    for (const token of creatorTokens) score += (profile.get(token) ?? 0) * 2;
+    for (const token of descriptionTokens) score += (profile.get(token) ?? 0) * 0.35;
+    score += Math.log10((item.viewCount ?? 0) + 1) * 0.22;
+    if (item.publishedAt) {
+      const ageDays = Math.max(0, (now - Date.parse(item.publishedAt)) / 86_400_000);
+      score += Math.max(0, 1.2 - ageDays / 45);
+    }
+    return { item, score, originalIndex };
+  }).sort((a, b) => b.score - a.score || a.originalIndex - b.originalIndex)
+    .slice(0, safeLimit).map(({ item }) => item);
 }

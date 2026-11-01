@@ -12,6 +12,7 @@ interface YouTubePlayerInstance {
   pauseVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   setVolume: (volume: number) => void;
+  mute: () => void;
 }
 
 interface YouTubePlayerEvent {
@@ -97,7 +98,7 @@ function playerErrorMessage(code: number): string {
   return 'YouTube không thể phát video này trong trình nhúng.';
 }
 
-function YouTubePlayer({ item, onProgress, onStateChange }: VideoPlayerProps) {
+function YouTubePlayer({ item, shortMode = false, onProgress, onStateChange }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayerInstance | null>(null);
   const callbacksRef = useRef({ onProgress, onStateChange });
@@ -138,6 +139,10 @@ function YouTubePlayer({ item, onProgress, onStateChange }: VideoPlayerProps) {
               setReady(true);
               setError(null);
               callbacksRef.current.onStateChange?.('ready');
+              if (shortMode) {
+                event.target.mute();
+                event.target.playVideo();
+              }
             },
             onStateChange: (event) => {
               if (cancelled) return;
@@ -182,7 +187,7 @@ function YouTubePlayer({ item, onProgress, onStateChange }: VideoPlayerProps) {
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [item.platformId]);
+  }, [item.platformId, shortMode]);
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl bg-black">
@@ -204,12 +209,12 @@ function YouTubePlayer({ item, onProgress, onStateChange }: VideoPlayerProps) {
   );
 }
 
-function TikTokPlayer({ item, onProgress, onStateChange }: VideoPlayerProps) {
+function TikTokPlayer({ item, shortMode = false, onProgress, onStateChange }: VideoPlayerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const callbacksRef = useRef({ onProgress, onStateChange });
   const [error, setError] = useState<string | null>(null);
   const embedUrl = 'https://www.tiktok.com/player/v1/' + item.platformId +
-    '?controls=1&progress_bar=1&play_button=1&volume_control=1&fullscreen_button=1&timestamp=1&description=1&music_info=1&autoplay=0&loop=0&rel=0';
+    '?controls=1&progress_bar=1&play_button=1&volume_control=1&fullscreen_button=1&timestamp=1&description=1&music_info=1&autoplay=' + (shortMode ? '1&muted=1' : '0') + '&loop=0&rel=0';
 
   useEffect(() => {
     callbacksRef.current = { onProgress, onStateChange };

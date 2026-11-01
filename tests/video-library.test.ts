@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addVideoToLibrary,
+  buildVideoRecommendationQuery,
   createVideoLibraryItem,
   createVideoPlaylist,
   emptyVideoLibrary,
@@ -9,6 +10,8 @@ import {
   parseIsoDuration,
   parseVideoUrl,
   recordVideoProgress,
+  mergeVideoLibraries,
+  rankVideoRecommendations,
   removeVideoFromLibrary,
   setVideoShort,
   toggleVideoFavorite,
@@ -80,6 +83,63 @@ describe('Video Library URL parsing', () => {
       needsResolve: true,
     });
     expect(parseVideoUrl('https://tiktok.com.evil.example/@creator/video/' + TIKTOK_ID)).toBeNull();
+  });
+});
+
+describe('Video Library cloud merge', () => {
+  it('keeps unique local and cloud videos, saved sets, history and playlist membership', () => {
+    const localItem = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Local video' })!;
+    const cloudItem = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Cloud video' })!;
+    const local = addVideoToLibrary(emptyVideoLibrary(), localItem);
+    const cloud = addVideoToLibrary(emptyVideoLibrary(), cloudItem);
+    const localWithFavorite = toggleVideoFavorite(local, localItem.id);
+    const cloudWithLater = toggleVideoWatchLater(cloud, cloudItem.id);
+    const localPlaylist = createVideoPlaylist(localWithFavorite, 'Local playlist');
+    const localPlaylistWithItem = toggleVideoInPlaylist(localPlaylist, localPlaylist.playlists[0].id, localItem.id);
+    const cloudPlaylist = createVideoPlaylist(cloudWithLater, 'Cloud playlist');
+    const cloudPlaylistWithItem = toggleVideoInPlaylist(cloudPlaylist, cloudPlaylist.playlists[0].id, cloudItem.id);
+    const localHistory = recordVideoProgress(localPlaylistWithItem, localItem.id, 12, 60);
+    const cloudHistory = recordVideoProgress(cloudPlaylistWithItem, cloudItem.id, 24, 60);
+    const merged = mergeVideoLibraries(localHistory, cloudHistory);
+
+    expect(merged.items.map((item) => item.id)).toEqual([localItem.id, cloudItem.id]);
+    expect(merged.favorites).toContain(localItem.id);
+    expect(merged.watchLater).toContain(cloudItem.id);
+    expect(merged.history.map((entry) => entry.itemId)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
+    expect(merged.playlists).toHaveLength(2);
+    expect(merged.playlists.flatMap((playlist) => playlist.itemIds)).toEqual(expect.arrayContaining([localItem.id, cloudItem.id]));
+  });
+});
+
+describe('Video Library recommendations', () => {
+  it('ranks matching interests above unrelated popularity and excludes recently watched videos', () => {
+    const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning with neural networks', creator: 'AI Research Lab' })!;
+    const recent = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Neural networks explained in depth', creator: 'AI Research Lab' })!;
+    const relevant = createVideoLibraryItem({ platform: 'youtube', videoId: 'jNQXAC9IVRw', title: 'Deep learning neural network tutorial', creator: 'AI Research Lab', viewCount: 1200 })!;
+    const popular = createVideoLibraryItem({ platform: 'youtube', videoId: '9bZkp7q19f0', title: 'Unrelated comedy compilation', creator: 'Entertainment channel', viewCount: 900000000 })!;
+    let state = addVideoToLibrary(emptyVideoLibrary(), favorite);
+    state = addVideoToLibrary(state, recent);
+    state = toggleVideoFavorite(state, favorite.id);
+    state = recordVideoProgress(state, recent.id, 30, 100);
+    const ranked = rankVideoRecommendations([popular, recent, relevant], state, 5);
+    expect(ranked.map((item) => item.id)).toEqual([relevant.id, popular.id]);
+  });
+
+  it('builds a focused YouTube query from favorites, watch-later and viewing history', () => {
+    const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning neural networks', creator: 'AI Research Lab' })!;
+    const saved = addVideoToLibrary(emptyVideoLibrary(), favorite);
+    const interested = toggleVideoFavorite(saved, favorite.id);
+    const query = buildVideoRecommendationQuery(interested, 4);
+    expect(query).toContain('learning');
+    expect(query).toContain('neural');
+    expect(query.split(' ')).toHaveLength(4);
+    expect(buildVideoRecommendationQuery(emptyVideoLibrary())).toBe('');
+  });
+
+  it('uses popularity as a cold-start signal and respects the requested result limit', () => {
+    const low = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'New discovery', viewCount: 10 })!;
+    const high = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Popular discovery', viewCount: 100000 })!;
+    expect(rankVideoRecommendations([low, high], emptyVideoLibrary(), 1).map((item) => item.id)).toEqual([high.id]);
   });
 });
 
