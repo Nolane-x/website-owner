@@ -25,6 +25,7 @@ import {
   Shield,
   Hourglass,
   Calculator,
+  Clapperboard,
 } from 'lucide-react';
 
 interface DockApp {
@@ -136,6 +137,12 @@ const DOCK_APPS: DockApp[] = [
     title: 'Sound Lab & Lo-Fi',
     icon: <Radio className="w-5 h-5 text-rose-400" />,
     color: 'hover:bg-rose-500/20',
+  },
+  {
+    appId: 'video',
+    title: 'Video Library · YouTube & TikTok',
+    icon: <Clapperboard className="w-5 h-5 text-fuchsia-300" />,
+    color: 'hover:bg-fuchsia-500/20',
   },
   {
     appId: 'wallpapers',
