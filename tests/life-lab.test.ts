@@ -35,9 +35,9 @@ describe('Life Lab simulation engine', () => {
     ]);
     const horizontal = stepSimulation(initial);
     expect([...horizontal.cells].filter(Boolean)).toHaveLength(3);
-    expect(horizontal.cells[2 * 5 + 1]).toBe(1);
-    expect(horizontal.cells[2 * 5 + 2]).toBe(1);
-    expect(horizontal.cells[2 * 5 + 3]).toBe(1);
+    expect(horizontal.cells[2 * initial.width + 1]).toBe(1);
+    expect(horizontal.cells[2 * initial.width + 2]).toBe(1);
+    expect(horizontal.cells[2 * initial.width + 3]).toBe(1);
     expect(stepSimulation(horizontal).cells).toEqual(initial.cells);
   });
 
@@ -46,12 +46,12 @@ describe('Life Lab simulation engine', () => {
       [2, 1, 1], [2, 3, 1],
     ]);
     const first = stepSimulation(initial);
-    expect(first.cells[2 * 5 + 2]).toBe(1);
-    expect(first.cells[2 * 5 + 1]).toBe(2);
-    expect(first.cells[2 * 5 + 3]).toBe(2);
+    expect(first.cells[2 * initial.width + 2]).toBe(1);
+    expect(first.cells[2 * initial.width + 1]).toBe(2);
+    expect(first.cells[2 * initial.width + 3]).toBe(2);
     const second = stepSimulation(first);
-    expect(second.cells[2 * 5 + 2]).toBe(2);
-    expect(second.cells[2 * 5 + 1]).toBe(0);
+    expect(second.cells[2 * initial.width + 2]).toBe(2);
+    expect(second.cells[2 * initial.width + 1]).toBe(0);
   });
 
   it('spreads forest fire locally and clears burning cells on the next step', () => {
@@ -59,9 +59,9 @@ describe('Life Lab simulation engine', () => {
       [2, 2, 2], [3, 2, 1], [4, 4, 1],
     ]);
     const burning = stepSimulation(initial, () => 0);
-    expect(burning.cells[2 * 5 + 2]).toBe(0);
-    expect(burning.cells[2 * 5 + 3]).toBe(2);
-    expect(burning.cells[4 * 5 + 4]).toBe(1);
+    expect(burning.cells[2 * initial.width + 2]).toBe(0);
+    expect(burning.cells[2 * initial.width + 3]).toBe(2);
+    expect(burning.cells[4 * initial.width + 4]).toBe(1);
   });
 
   it("makes Langton's ant turn, flip a tile and move", () => {
@@ -81,7 +81,7 @@ describe('Life Lab simulation engine', () => {
   it('wraps the ant at world boundaries without leaving the grid', () => {
     const initial = {
       ...createEmptySimulation('ant', 8, 8),
-      antX: 7,
+      antX: 11,
       antY: 0,
       antDirection: 1 as const,
     };
@@ -115,11 +115,11 @@ describe('Life Lab simulation engine', () => {
       [0, 0, 1], [1, 0, 1], [2, 0, 2], [3, 3, 2],
     ]);
     const stats = getSimulationStats(state);
-    expect(stats.total).toBe(16);
+    expect(stats.total).toBe(144);
     expect(stats.states[1]).toBe(2);
     expect(stats.states[2]).toBe(2);
     expect(stats.active).toBe(4);
-    expect(stats.density).toBe(0.25);
+    expect(stats.density).toBe(4 / 144);
   });
 
   it('round-trips a world snapshot and rejects malformed or oversized data', () => {
