@@ -949,6 +949,34 @@ export function stepLivingWorld(world: LivingWorld): LivingWorld {
     }
   }
 
+  // Parasites may have been processed before their host moved or died later
+  // in this same shuffled generation. Reconcile every host link against the
+  // final positions before returning a snapshot.
+  for (let index = 0; index < organisms.length; index++) {
+    const parasite = organisms[index];
+    if (!alive[index] || parasite.species !== 'parasite' || parasite.hostId < 0) continue;
+    const hostIndex = idToIndex.get(parasite.hostId);
+    if (hostIndex !== undefined && alive[hostIndex]) {
+      const host = organisms[hostIndex];
+      parasite.x = host.x;
+      parasite.y = host.y;
+      continue;
+    }
+
+    parasite.hostId = -1;
+    const freePosition = findNeighborPosition(parasite, occupancy, world, random);
+    if (freePosition) {
+      parasite.x = freePosition.x;
+      parasite.y = freePosition.y;
+      occupancy[indexOf(parasite.x, parasite.y, world.width)] = index;
+    } else {
+      alive[index] = false;
+      deathsNow++;
+      const remains = indexOf(parasite.x, parasite.y, world.width);
+      detritus[remains] = Math.min(15, detritus[remains] + 1);
+    }
+  }
+
   const survivors = organisms.filter((_, index) => alive[index]);
   const previousCounts = countsOf(world.organisms);
   const nextCounts = countsOf(survivors);
