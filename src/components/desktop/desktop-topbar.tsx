@@ -168,6 +168,12 @@ export function DesktopTopbar({
           >
             Dev Lab
           </button>
+          <button
+            onClick={() => openWindow('life-lab')}
+            className="px-2 py-0.5 rounded hover:bg-stone-800 hover:text-emerald-300 transition"
+          >
+            Life Lab
+          </button>
         </div>
       </div>
 
