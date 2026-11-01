@@ -532,7 +532,7 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
   const unique = new Map<string, VideoLibraryItem>();
   for (const item of candidates) if (item && !recentlyWatched.has(item.id)) unique.set(item.id, item);
   const now = Date.now();
-  return [...unique.values()].map((item, originalIndex) => {
+  const ranked = [...unique.values()].map((item, originalIndex) => {
     const titleTokens = new Set(recommendationTokens(item.title));
     const creatorTokens = new Set(recommendationTokens(item.creator));
     const descriptionTokens = new Set(recommendationTokens(item.description));
