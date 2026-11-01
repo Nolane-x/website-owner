@@ -44,6 +44,22 @@ describe('Evolution Lab Living World engine', () => {
     expect(world.season).toBe('spring');
   });
 
+  it('carves a connected water corridor across every column of the generated map', () => {
+    const world = createLivingWorld(90210, 60, 36, { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const centerline: number[] = [];
+    for (let x = 0; x < world.width; x++) {
+      const waterRows: number[] = [];
+      for (let y = 0; y < world.height; y++) {
+        if (world.biomes[y * world.width + x] === 4) waterRows.push(y);
+      }
+      expect(waterRows.length).toBeGreaterThan(0);
+      centerline.push(waterRows[Math.floor(waterRows.length / 2)]);
+    }
+    for (let x = 1; x < centerline.length; x++) {
+      expect(Math.abs(centerline[x] - centerline[x - 1])).toBeLessThanOrEqual(2);
+    }
+  });
+
   it('creates a deterministic world and keeps its random stream reproducible over many generations', () => {
     let left = createLivingWorld(20261101, 48, 30, { grazer: 22, hunter: 5, omnivore: 7, parasite: 4, microbe: 12 });
     let right = createLivingWorld(20261101, 48, 30, { grazer: 22, hunter: 5, omnivore: 7, parasite: 4, microbe: 12 });
@@ -71,6 +87,17 @@ describe('Evolution Lab Living World engine', () => {
     const next = stepLivingWorld(world);
     expect(next.season).toBe('summer');
     expect(next.eventLog.some((event) => event.type === 'season' && event.generation === 80)).toBe(true);
+  });
+
+  it('cycles through all four seasons and returns to spring', () => {
+    let world = createLivingWorld(120, 32, 20, { grazer: 1, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const expected = ['summer', 'autumn', 'winter', 'spring'] as const;
+    for (const season of expected) {
+      world = { ...world, generation: world.generation + (80 - (world.generation % 80)) - 1 };
+      world = stepLivingWorld(world);
+      expect(world.season).toBe(season);
+      expect(world.eventLog.some((event) => event.type === 'season' && event.generation === world.generation)).toBe(true);
+    }
   });
 
   it('lets rain restore more vegetation than drought under the same seeded random stream', () => {
@@ -180,6 +207,28 @@ describe('Evolution Lab Living World engine', () => {
     expect(nextParasite!.hostId).toBe(host.id);
   });
 
+  it('enforces lifespan and metabolic cost for parasites attached to a living host', () => {
+    const base = createLivingWorld(77, 32, 20, { grazer: 1, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const host = makeOrganism(base.organisms[0], { energy: 140, age: 20, genome: { immunity: 1 } });
+    const parasite = makeOrganism(host, {
+      id: host.id + 10,
+      species: 'parasite',
+      energy: 0.1,
+      age: 300,
+      hostId: host.id,
+      genome: { metabolism: 1.6, virulence: 0, fertility: 0.008 },
+    });
+    const world = withChanges(base, {
+      organisms: [host, parasite],
+      nextId: host.id + 20,
+      rules: { ...base.rules, diseasePressure: 0, metabolism: 3, reproductionThreshold: 150 },
+    });
+    const next = stepLivingWorld(world);
+    expect(next.organisms.some((animal) => animal.id === parasite.id)).toBe(false);
+    expect(next.organisms.some((animal) => animal.id === host.id)).toBe(true);
+    expect(next.deaths).toBe(1);
+  });
+
   it('lets microbes consume detritus and improve soil fertility', () => {
     const base = createLivingWorld(19, 32, 20, { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 1 });
     const microbe = makeOrganism(base.organisms[0], { x: 8, y: 8, energy: 55, age: 3 });
@@ -197,6 +246,22 @@ describe('Evolution Lab Living World engine', () => {
     const next = stepLivingWorld(world);
     expect(next.detritus[position]).toBeLessThan(10);
     expect(next.fertility[position]).toBeGreaterThan(80);
+  });
+
+  it('turns wildfire damage into detritus in forest tiles', () => {
+    const base = createLivingWorld(1234, 40, 24, { grazer: 0, hunter: 0, omnivore: 0, parasite: 0, microbe: 0 });
+    const biomes = new Uint8Array(base.biomes.length).fill(1);
+    const world = withChanges(base, {
+      biomes,
+      food: new Uint8Array(base.food.length).fill(15),
+      detritus: new Uint8Array(base.detritus.length),
+      weather: 'wildfire',
+      weatherRemaining: 8,
+      rules: { ...base.rules, foodRegrowth: 0.001 },
+    });
+    const next = stepLivingWorld(world);
+    expect(next.food.reduce((sum, value) => sum + value, 0)).toBeLessThan(world.food.reduce((sum, value) => sum + value, 0));
+    expect(next.detritus.reduce((sum, value) => sum + value, 0)).toBeGreaterThan(0);
   });
 
   it('supports reproduction with bounded inherited mutations across ten gene dimensions', () => {
