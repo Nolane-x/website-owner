@@ -55,10 +55,21 @@ export function normalizeMusicPreferences(value: unknown): MusicPreferences {
   const volumes = { ...defaults.volumes };
   for (const type of TYPES) volumes[type] = safeVolume(rawVolumes[type], defaults.volumes[type]);
 
-  const radioSourceUrl = safeRadioSource(raw.radioSourceUrl);
-  const radioStationName = typeof raw.radioStationName === 'string' && raw.radioStationName.trim()
-    ? raw.radioStationName.trim().slice(0, 80)
-    : (radioSourceUrl === DEFAULT_RADIO_STATION.url ? DEFAULT_RADIO_STATION.name : 'Luồng tùy chỉnh');
+  const rawRadioSourceUrl = typeof raw.radioSourceUrl === 'string' ? raw.radioSourceUrl : null;
+  const radioSourceUrl = safeRadioSource(rawRadioSourceUrl);
+  const radioSourceIsValid = rawRadioSourceUrl === null || (() => {
+    try {
+      normalizeRadioStreamUrl(rawRadioSourceUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  const radioStationName = !radioSourceIsValid
+    ? DEFAULT_RADIO_STATION.name
+    : typeof raw.radioStationName === 'string' && raw.radioStationName.trim()
+      ? raw.radioStationName.trim().slice(0, 80)
+      : (radioSourceUrl === DEFAULT_RADIO_STATION.url ? DEFAULT_RADIO_STATION.name : 'Luồng tùy chỉnh');
 
   return {
     volumes,
