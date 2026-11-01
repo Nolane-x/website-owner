@@ -281,7 +281,9 @@ function videoCreatorKeys(item: VideoLibraryItem): string[] {
   const keys: string[] = [];
   if (item.creatorId && YOUTUBE_CHANNEL_ID.test(item.creatorId)) keys.push('yt:' + item.creatorId);
   const normalizedName = normalizeCreatorName(item.creator);
-  if (normalizedName) keys.push('name:' + normalizedName);
+  if (normalizedName && normalizedName !== 'youtube' && normalizedName !== 'tiktok') {
+    keys.push('name:' + normalizedName);
+  }
   return keys;
 }
 
@@ -714,6 +716,14 @@ export function rankVideoRecommendations(candidates: VideoLibraryItem[], state: 
     addProfile(item.creator, weight * 0.65);
     addProfile(item.description, weight * 0.25);
   });
+  // Explicitly muted interests override positive signals from follows,
+  // favorites, watch-later and viewing history.
+  const mutedProfileTokens = new Set(state.mutedTopics.flatMap((topicId) => {
+    const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
+    return topic ? recommendationTokens(topic.query + ' ' + topic.label + ' ' + topic.id.replace(/-/g, ' ')) : [];
+  }));
+  for (const token of mutedProfileTokens) profile.delete(token);
+
   const recentlyWatched = new Set(state.history.slice(0, 3).map((entry) => entry.itemId));
   const mutedTopicTokens = state.mutedTopics.map((topicId) => {
     const topic = VIDEO_TOPICS.find((candidate) => candidate.id === topicId);
