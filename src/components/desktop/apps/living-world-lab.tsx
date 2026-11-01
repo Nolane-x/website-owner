@@ -478,6 +478,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
 
   const createWorld = (seed: number) => {
     setRunning(false);
+    setEditingTerrain(false);
     const next = createLivingWorld(seed, 72, 44, populations);
     commitWorld(next);
     setSeedInput(String(next.seed));
@@ -499,6 +500,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
   const fastForward = async (generations: number) => {
     if (running || fastForwarding) return;
     setRunning(false);
+    setEditingTerrain(false);
     setFastForwarding(true);
     setFastProgress(0);
     batchCancelledRef.current = false;
@@ -562,6 +564,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
     const restored = deserializeLivingWorld(checkpoint.snapshot);
     if (!restored) return;
     setRunning(false);
+    setEditingTerrain(false);
     commitWorld(restored);
     lastCheckpointRef.current = restored.generation;
     const snapshot = serializeLivingWorld(restored);
@@ -580,6 +583,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
     const restored = deserializeLivingWorld(experiment.snapshot);
     if (!restored) return;
     setRunning(false);
+    setEditingTerrain(false);
     commitWorld(restored);
     lastCheckpointRef.current = restored.generation;
     setSeedInput(String(restored.seed));
@@ -768,7 +772,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
                   ['food', 'Thức ăn'],
                   ['climate', 'Khí hậu'],
                 ] as Array<[MapLayer, string]>).map(([value, label]) => (
-                  <button key={value} type="button" onClick={() => setLayer(value)} aria-pressed={layer === value} className={layer === value ? 'rounded-md border border-cyan-200/35 bg-cyan-200/20 px-2 py-1 text-[8px] text-cyan-50' : 'rounded-md border border-white/10 bg-black/65 px-2 py-1 text-[8px] text-stone-300 backdrop-blur'}>{label}</button>
+                  <button key={value} type="button" onClick={() => { setEditingTerrain(false); setLayer(value); }} aria-pressed={layer === value} className={layer === value ? 'rounded-md border border-cyan-200/35 bg-cyan-200/20 px-2 py-1 text-[8px] text-cyan-50' : 'rounded-md border border-white/10 bg-black/65 px-2 py-1 text-[8px] text-stone-300 backdrop-blur'}>{label}</button>
                 ))}
               </div>
             </div>
@@ -783,7 +787,7 @@ export function LivingWorldLab({ onBack }: { onBack: () => void }) {
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button type="button" disabled={fastForwarding} onClick={() => running ? pauseWorld() : setRunning(true)} className={running ? 'inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-2.5 text-[10px] font-semibold text-amber-100 disabled:opacity-40' : 'inline-flex items-center gap-2 rounded-xl bg-cyan-200 px-4 py-2.5 text-[10px] font-semibold text-[#071216] hover:bg-cyan-100 disabled:opacity-40'}>
+              <button type="button" disabled={fastForwarding} onClick={() => { if (running) pauseWorld(); else { setEditingTerrain(false); setRunning(true); } }} className={running ? 'inline-flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-2.5 text-[10px] font-semibold text-amber-100 disabled:opacity-40' : 'inline-flex items-center gap-2 rounded-xl bg-cyan-200 px-4 py-2.5 text-[10px] font-semibold text-[#071216] hover:bg-cyan-100 disabled:opacity-40'}>
                 {running ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}{running ? 'Tạm dừng' : 'Cho thế giới tiến hóa'}
               </button>
               <button type="button" onClick={advanceOnce} disabled={running || fastForwarding} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[10px] text-stone-300 disabled:opacity-40"><StepForward className="h-3.5 w-3.5" /> Một thế hệ</button>
