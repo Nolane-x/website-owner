@@ -9,6 +9,7 @@ import {
   parseIsoDuration,
   parseVideoUrl,
   recordVideoProgress,
+  rankVideoRecommendations,
   removeVideoFromLibrary,
   setVideoShort,
   toggleVideoFavorite,
@@ -80,6 +81,27 @@ describe('Video Library URL parsing', () => {
       needsResolve: true,
     });
     expect(parseVideoUrl('https://tiktok.com.evil.example/@creator/video/' + TIKTOK_ID)).toBeNull();
+  });
+});
+
+describe('Video Library recommendations', () => {
+  it('ranks matching interests above unrelated popularity and excludes recently watched videos', () => {
+    const favorite = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'Machine learning with neural networks', creator: 'AI Research Lab' })!;
+    const recent = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Neural networks explained in depth', creator: 'AI Research Lab' })!;
+    const relevant = createVideoLibraryItem({ platform: 'youtube', videoId: 'jNQXAC9IVRw', title: 'Deep learning neural network tutorial', creator: 'AI Research Lab', viewCount: 1200 })!;
+    const popular = createVideoLibraryItem({ platform: 'youtube', videoId: '9bZkp7q19f0', title: 'Unrelated comedy compilation', creator: 'Entertainment channel', viewCount: 900000000 })!;
+    let state = addVideoToLibrary(emptyVideoLibrary(), favorite);
+    state = addVideoToLibrary(state, recent);
+    state = toggleVideoFavorite(state, favorite.id);
+    state = recordVideoProgress(state, recent.id, 30, 100);
+    const ranked = rankVideoRecommendations([popular, recent, relevant], state, 5);
+    expect(ranked.map((item) => item.id)).toEqual([relevant.id, popular.id]);
+  });
+
+  it('uses popularity as a cold-start signal and respects the requested result limit', () => {
+    const low = createVideoLibraryItem({ platform: 'youtube', videoId: 'dQw4w9WgXcQ', title: 'New discovery', viewCount: 10 })!;
+    const high = createVideoLibraryItem({ platform: 'youtube', videoId: 'M7lc1UVf-VE', title: 'Popular discovery', viewCount: 100000 })!;
+    expect(rankVideoRecommendations([low, high], emptyVideoLibrary(), 1).map((item) => item.id)).toEqual([high.id]);
   });
 });
 
