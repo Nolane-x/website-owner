@@ -146,15 +146,20 @@ export function paintSimulation(
   x: number,
   y: number,
   brushRadius = 0,
+  targetState?: number,
 ): LifeLabSimulation {
   const centerX = Math.max(0, Math.min(state.width - 1, Math.floor(x)));
   const centerY = Math.max(0, Math.min(state.height - 1, Math.floor(y)));
   const radius = Math.max(0, Math.min(4, Math.floor(brushRadius)));
   const cells = new Uint8Array(state.cells);
   const centerIndex = indexOf(centerX, centerY, state.width);
+  const maxState = state.mode === 'brain' || state.mode === 'forest' ? 2 : 1;
+  const desired = Number.isFinite(targetState)
+    ? Math.max(0, Math.min(maxState, Math.floor(targetState as number)))
+    : null;
 
   if (state.mode === 'ant') {
-    cells[centerIndex] = cells[centerIndex] === 0 ? 1 : 0;
+    cells[centerIndex] = desired === null ? (cells[centerIndex] === 0 ? 1 : 0) : desired;
     return { ...state, cells };
   }
 
@@ -166,7 +171,8 @@ export function paintSimulation(
       if (px < 0 || px >= state.width || py < 0 || py >= state.height) continue;
       const index = indexOf(px, py, state.width);
       const current = cells[index];
-      if (state.mode === 'life') cells[index] = current === 1 ? 0 : 1;
+      if (desired !== null) cells[index] = desired;
+      else if (state.mode === 'life') cells[index] = current === 1 ? 0 : 1;
       else if (state.mode === 'brain') cells[index] = (current + 1) % 3;
       else cells[index] = current === 1 ? 2 : current === 2 ? 0 : 1;
     }
