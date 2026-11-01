@@ -1340,9 +1340,14 @@ export function deserializeLivingWorld(value: unknown): LivingWorld | null {
         lineageId: numeric.lineageId,
       });
     }
-    const validIds = new Set(organisms.map((animal) => animal.id));
+    const organismsById = new Map(organisms.map((animal) => [animal.id, animal]));
     for (const animal of organisms) {
-      if (animal.hostId >= 0 && (!validIds.has(animal.hostId) || !organisms.some((host) => host.id === animal.hostId && (host.species === 'grazer' || host.species === 'omnivore')))) return null;
+      if (animal.hostId < 0) continue;
+      const host = organismsById.get(animal.hostId);
+      // Attached parasites occupy their host's cell and must remain colocated.
+      // A valid host ID alone is not enough to accept a spatially inconsistent snapshot.
+      if (!host || (host.species !== 'grazer' && host.species !== 'omnivore')
+        || animal.x !== host.x || animal.y !== host.y) return null;
     }
     if (ids.size > 0 && parsed.nextId <= Math.max(...ids)) return null;
     const eventLog = Array.isArray(parsed.eventLog) ? parsed.eventLog.slice(-MAX_EVENTS) : [];
