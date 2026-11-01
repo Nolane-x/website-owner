@@ -31,8 +31,24 @@ jobs:
           set -euo pipefail
           npm pkg set "dependencies.next=16.4.3" "dependencies.zod=^4.6.6" "devDependencies.eslint-config-next=16.4.3"
           npm install --package-lock-only --ignore-scripts
-          npm audit fix --package-lock-only --ignore-scripts
+          npm audit fix --package-lock-only --ignore-scripts || true
           npm audit --omit=dev --audit-level=moderate
+          npm audit --json > /tmp/npm-audit.json || true
+          node <<'NODE'
+          const report = JSON.parse(require('node:fs').readFileSync('/tmp/npm-audit.json', 'utf8'));
+          for (const [name, item] of Object.entries(report.vulnerabilities || {})) {
+            console.log(JSON.stringify({
+              name,
+              severity: item.severity,
+              isDirect: item.isDirect,
+              nodes: item.nodes,
+              fixAvailable: item.fixAvailable,
+              via: (item.via || []).map((entry) => typeof entry === 'string'
+                ? entry
+                : { title: entry.title, url: entry.url, range: entry.range }),
+            }));
+          }
+          NODE
 
       - name: Commit patched lockfile
         shell: bash
