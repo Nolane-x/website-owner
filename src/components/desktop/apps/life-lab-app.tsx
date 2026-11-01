@@ -198,6 +198,7 @@ export function LifeLabApp() {
   const simulationRef = useRef(simulation);
   const preferencesRef = useRef(preferences);
   const paintingRef = useRef(false);
+  const paintModeRef = useRef<number | null>(null);
 
   const activeMode = useMemo(
     () => LIFE_LAB_MODES.find((entry) => entry.id === simulation.mode) ?? LIFE_LAB_MODES[0],
@@ -311,9 +312,30 @@ export function LifeLabApp() {
     const bounds = canvas.getBoundingClientRect();
     const x = Math.floor(((event.clientX - bounds.left) / bounds.width) * simulationRef.current.width);
     const y = Math.floor(((event.clientY - bounds.top) / bounds.height) * simulationRef.current.height);
-    const next = paintSimulation(simulationRef.current, x, y, preferencesRef.current.brushRadius);
+    const next = paintSimulation(
+      simulationRef.current,
+      x,
+      y,
+      preferencesRef.current.brushRadius,
+      paintModeRef.current ?? undefined,
+    );
     simulationRef.current = next;
     drawWorld(canvas, next);
+  };
+
+  const beginPaint = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.min(simulationRef.current.width - 1,
+      Math.floor(((event.clientX - bounds.left) / bounds.width) * simulationRef.current.width)));
+    const y = Math.max(0, Math.min(simulationRef.current.height - 1,
+      Math.floor(((event.clientY - bounds.top) / bounds.height) * simulationRef.current.height)));
+    const current = simulationRef.current.cells[y * simulationRef.current.width + x];
+    paintModeRef.current = current === 0 ? 1 : 0;
+    paintingRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    paintAt(event);
   };
 
   const savePaintedWorld = () => {
@@ -437,11 +459,7 @@ export function LifeLabApp() {
                   height={720}
                   role="img"
                   aria-label={activeMode.name + ' simulation. Click or drag to paint the world.'}
-                  onPointerDown={(event) => {
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    paintingRef.current = true;
-                    paintAt(event);
-                  }}
+                  onPointerDown={beginPaint}
                   onPointerMove={(event) => {
                     if (paintingRef.current) paintAt(event);
                   }}
@@ -450,11 +468,13 @@ export function LifeLabApp() {
                     paintingRef.current = false;
                     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
                     if (wasPainting) savePaintedWorld();
+                    paintModeRef.current = null;
                   }}
                   onPointerCancel={(event) => {
                     const wasPainting = paintingRef.current;
                     paintingRef.current = false;
                     if (wasPainting) savePaintedWorld();
+                    paintModeRef.current = null;
                   }}
                   className="block h-auto max-h-[54vh] w-full touch-none cursor-crosshair object-contain"
                 />
