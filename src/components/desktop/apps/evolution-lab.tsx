@@ -201,9 +201,9 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
   const [history, setHistory] = useState<number[]>(() => [getEcosystemStats(world).population]);
   const [saved, setSaved] = useState<SavedEcosystem[]>(readSavedExperiments);
   const [experimentName, setExperimentName] = useState('');
-  const [seedInput, setSeedInput] = useState('20261101');
-  const [grazerInput, setGrazerInput] = useState(34);
-  const [hunterInput, setHunterInput] = useState(7);
+  const [seedInput, setSeedInput] = useState(() => String(world.seed));
+  const [grazerInput, setGrazerInput] = useState(() => getEcosystemStats(world).grazers);
+  const [hunterInput, setHunterInput] = useState(() => getEcosystemStats(world).hunters);
   const [settingsOpen, setSettingsOpen] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const worldRef = useRef(world);
@@ -329,7 +329,10 @@ export function EvolutionLab({ onBack }: { onBack: () => void }) {
     if (!restored) return;
     setRunning(false);
     commitWorld(restored);
+    const restoredStats = getEcosystemStats(restored);
     setSeedInput(String(restored.seed));
+    setGrazerInput(restoredStats.grazers);
+    setHunterInput(restoredStats.hunters);
     try {
       localStorage.setItem(ACTIVE_KEY, experiment.snapshot);
     } catch {
