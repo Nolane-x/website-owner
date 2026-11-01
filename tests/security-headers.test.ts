@@ -22,6 +22,22 @@ describe('global content security policy', () => {
     expect(policy).not.toContain('media-src *');
   });
 
+  it('allows only the official YouTube and TikTok video embed origins', async () => {
+    const headers = await nextConfig.headers?.();
+    const globalHeaders = headers?.find((entry) => entry.source === '/(.*)')?.headers ?? [];
+    const policy = globalHeaders.find((entry) => entry.key.toLowerCase() === 'content-security-policy')?.value ?? '';
+    const frameSource = policy.split(';').map((part) => part.trim()).find((part) => part.startsWith('frame-src ')) ?? '';
+    const scriptSource = policy.split(';').map((part) => part.trim()).find((part) => part.startsWith('script-src ')) ?? '';
+
+    expect(frameSource).toContain('https://www.youtube.com');
+    expect(frameSource).toContain('https://www.youtube-nocookie.com');
+    expect(frameSource).toContain('https://www.tiktok.com');
+    expect(frameSource).not.toContain('*');
+    expect(scriptSource).toContain('https://www.youtube.com');
+    expect(scriptSource).not.toContain('https://www.tiktok.com');
+    expect(scriptSource).not.toContain('unsafe-eval');
+  });
+
   it('retains baseline browser security headers', async () => {
     const headers = await nextConfig.headers?.();
     const globalHeaders = headers?.find((entry) => entry.source === '/(.*)')?.headers ?? [];
