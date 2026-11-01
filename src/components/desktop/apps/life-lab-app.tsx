@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BrainCircuit,
+  Dna,
   Bug,
   Flame,
   Gauge,
@@ -32,6 +33,7 @@ import {
   type LifeLabSimulation,
   type LifeLabStats,
 } from '@/lib/life-lab/simulation';
+import { EvolutionLab } from '@/components/desktop/apps/evolution-lab';
 
 const STORAGE_KEY = 'webos:life-lab:v1';
 const MAX_EXPERIMENTS = 8;
@@ -187,6 +189,7 @@ export function LifeLabApp() {
     deserializeSimulation(preferences.lastSnapshot ?? '') ?? createSimulation(preferences.mode),
   );
   const [running, setRunning] = useState(false);
+  const [activeWorkspace, setActiveWorkspace] = useState<'automata' | 'evolution'>('automata');
   const [hud, setHud] = useState<{ generation: number; stats: LifeLabStats }>(() => ({
     generation: simulation.generation,
     stats: getSimulationStats(simulation),
@@ -386,6 +389,16 @@ export function LifeLabApp() {
 
   const currentStates = hud.stats.states;
 
+  if (activeWorkspace === 'evolution') {
+    return (
+      <div className="h-full min-h-0 overflow-y-auto bg-[#081012] text-stone-200">
+        <div className="mx-auto flex min-h-full max-w-[1500px] flex-col gap-4 p-3 sm:p-5">
+          <EvolutionLab onBack={() => setActiveWorkspace('automata')} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-[#081012] text-stone-200">
       <div className="mx-auto flex min-h-full max-w-[1500px] flex-col gap-4 p-3 sm:p-5">
@@ -408,6 +421,9 @@ export function LifeLabApp() {
             <span className="text-stone-700">/</span>
             <span className="font-mono">G{hud.generation.toLocaleString('vi-VN')}</span>
           </div>
+          <button type="button" onClick={() => { if (running) toggleRunning(); setActiveWorkspace('evolution'); }} className="inline-flex items-center gap-2 rounded-xl border border-lime-300/25 bg-lime-300/10 px-3 py-2 text-[9px] font-semibold text-lime-100 transition hover:bg-lime-300/15">
+            <Dna className="h-3.5 w-3.5" /> Evolution Lab <span className="rounded bg-lime-200/15 px-1 py-0.5 text-[7px] uppercase tracking-wider">New</span>
+          </button>
         </header>
 
         <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Chọn thế giới mô phỏng">
