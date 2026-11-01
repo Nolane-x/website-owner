@@ -135,21 +135,23 @@ export function MusicApp() {
     }
   };
 
-  const playSelectedStation = async (url: string, name: string) => {
+  const playSelectedStation = async (url: string, name: string): Promise<boolean> => {
     setRadioSourceUrl(url);
     setRadioStationName(name);
     setCustomRadioUrl('');
     setSourceError(null);
     try {
       await playRadioStream(url, name);
+      return getRadioPlayerSnapshot().status === 'playing';
     } catch (error) {
       setSourceError(error instanceof Error ? error.message : 'URL radio không hợp lệ.');
+      return false;
     }
   };
 
-  const handleCatalogStationPlay = async (station: RadioBrowserStation) => {
-    await playSelectedStation(station.streamUrl, station.name);
-    if (getRadioPlayerSnapshot().status === 'playing') {
+  const handleCatalogStationPlay = async (station: RadioBrowserStation): Promise<boolean> => {
+    const started = await playSelectedStation(station.streamUrl, station.name);
+    if (started) {
       // Best-effort directory click count; the audio bytes still flow directly
       // from the station to the browser, never through this API route.
       void fetch('/api/radio-browser', {
@@ -158,6 +160,7 @@ export function MusicApp() {
         body: JSON.stringify({ stationUuid: station.id }),
       }).catch(() => undefined);
     }
+    return started;
   };
 
   const applyCustomRadioUrl = () => {
