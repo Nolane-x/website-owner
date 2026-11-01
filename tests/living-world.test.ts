@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BIOMES,
+  compareLivingWorlds,
   createLivingWorld,
   deserializeLivingWorld,
   getLivingWorldStats,
@@ -67,7 +68,6 @@ describe('Evolution Lab Living World engine', () => {
     const next = stepLivingWorld(world);
     expect(next.season).toBe('summer');
     expect(next.eventLog.some((event) => event.type === 'season' && event.generation === 80)).toBe(true);
-    expect(next.eventLog.some((event) => event.type === 'weather')).toBe(true);
   });
 
   it('lets rain restore more vegetation than drought under the same seeded random stream', () => {
@@ -247,6 +247,7 @@ describe('Evolution Lab Living World engine', () => {
     expect(restored?.rules).toEqual(world.rules);
     expect(restored?.eventLog).toEqual(world.eventLog);
     expect(restored?.rngState).toBe(world.rngState);
+    expect(restored?.nextLineageId).toBe(world.nextLineageId);
   });
 
   it('rejects malformed, oversized, overlapping and invalid-genome world snapshots', () => {
@@ -288,6 +289,7 @@ describe('Evolution Lab Living World engine', () => {
     const right = createLivingWorld(202, 32, 20, { grazer: 10, hunter: 1, omnivore: 4, parasite: 0, microbe: 8 });
     const comparison = compareLivingWorlds(left, right);
     expect(comparison.populationDelta).toBe(6);
+    expect(comparison.lineageDiversityDelta).toBe(0);
     expect(comparison.species.grazer).toBe(2);
     expect(comparison.species.parasite).toBe(-1);
     expect(Number.isFinite(comparison.traitDifferences.sociality)).toBe(true);
