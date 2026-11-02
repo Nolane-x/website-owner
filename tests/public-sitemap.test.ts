@@ -121,6 +121,7 @@ describe('public sitemap privacy boundary', () => {
     expect(urls).not.toContain(origin + '/articles/' + unlistedArticleSlug);
     expect(urls).not.toContain(origin + '/articles/' + deletedArticleSlug);
     expect(urls).not.toContain(origin + '/projects/' + publicResourceSlug);
+    expect(urls).not.toContain(origin + '/articles/' + publicResourceSlug);
     expect(urls).not.toContain(origin + '/p/' + privatePageSlug);
     expect(urls).not.toContain(origin + '/collections/' + privateCollectionSlug);
     expect(urls).not.toContain(origin + '/admin/login');
