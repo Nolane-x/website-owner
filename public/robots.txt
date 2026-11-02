@@ -6,3 +6,4 @@ Allow: /resources
 Disallow: /admin/
 Disallow: /api/
 Disallow: /api/admin/
+Sitemap: https://caominhquan.vercel.app/sitemap.xml
