@@ -22,9 +22,8 @@ function resolveSiteOrigin(): string {
 
 function contentPath(type: string): string | null {
   if (type === 'project') return '/projects';
-  if (type === 'resource' || type === 'link') return null;
-  // The public article detail route renders all other published content types.
-  return '/articles';
+  if (['note', 'article', 'document', 'bookmark', 'gallery', 'code'].includes(type)) return '/articles';
+  return null;
 }
 
 export async function generatePublicSitemap(): Promise<MetadataRoute.Sitemap> {
